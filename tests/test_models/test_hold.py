@@ -125,3 +125,29 @@ def test_position_creation() -> None:
     pos = Position(row=2, col=7)
     assert pos.row == 2
     assert pos.col == 7
+
+
+def test_position_deserialisation_dict() -> None:
+    """Position désérialisable depuis dict (JSON-ready)."""
+    data = {"row": 2, "col": 5}
+    pos = Position.model_validate(data)
+    assert pos.row == 2
+    assert pos.col == 5
+
+
+def test_hold_deserialisation_dict() -> None:
+    """Hold désérialisable depuis dict (JSON-ready)."""
+    data = {
+        "id": "B3",
+        "level": 2,
+        "tags": ["sloper"],
+        "position": {"row": 1, "col": 2},
+        "active": True,
+    }
+    hold = Hold.model_validate(data)
+    assert hold.id == "B3"
+    assert hold.level == 2
+    assert hold.tags == ["sloper"]
+    assert hold.position.row == 1
+    assert hold.position.col == 2
+    assert hold.active is True

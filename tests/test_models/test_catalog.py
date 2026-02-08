@@ -54,3 +54,44 @@ def test_catalog_grid_requis() -> None:
     """Catalog exige grid."""
     with pytest.raises(ValidationError):
         Catalog(holds=[])
+
+
+def test_catalog_positions_hors_grille_rejetees() -> None:
+    """Hold avec position hors bounds de la grille rejeté."""
+    holds = [
+        Hold(id="A1", level=1, tags=[], position=Position(row=0, col=0)),
+        Hold(id="X9", level=2, tags=[], position=Position(row=5, col=9)),  # hors 4x8
+    ]
+    with pytest.raises(ValueError, match="hors grille"):
+        Catalog(holds=holds, grid=GridDimensions(rows=4, cols=8))
+
+
+def test_catalog_ids_dupliques_rejetes() -> None:
+    """Hold avec id dupliqué rejeté."""
+    holds = [
+        Hold(id="A1", level=1, tags=[], position=Position(row=0, col=0)),
+        Hold(id="A1", level=2, tags=[], position=Position(row=0, col=1)),
+    ]
+    with pytest.raises(ValueError, match="dupliqué"):
+        Catalog(holds=holds, grid=GridDimensions(rows=4, cols=8))
+
+
+def test_catalog_deserialisation_dict() -> None:
+    """Catalog désérialisable depuis dict (JSON-ready)."""
+    data = {
+        "holds": [
+            {
+                "id": "A1",
+                "level": 2,
+                "tags": [],
+                "position": {"row": 0, "col": 0},
+                "active": True,
+            },
+        ],
+        "grid": {"rows": 4, "cols": 8},
+    }
+    catalog = Catalog.model_validate(data)
+    assert len(catalog.holds) == 1
+    assert catalog.holds[0].id == "A1"
+    assert catalog.grid.rows == 4
+    assert catalog.grid.cols == 8
