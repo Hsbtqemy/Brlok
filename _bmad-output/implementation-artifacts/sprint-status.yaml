@@ -1,0 +1,77 @@
+# generated: 2026-02-08
+# project: Brlok
+# project_key: NOKEY
+# tracking_system: file-system
+# story_location: {project-root}/_bmad-output/implementation-artifacts
+
+# STATUS DEFINITIONS:
+# ==================
+# Epic Status:
+#   - backlog: Epic not yet started
+#   - in-progress: Epic actively being worked on
+#   - done: All stories in epic completed
+#
+# Epic Status Transitions:
+#   - backlog → in-progress: Automatically when first story is created (via create-story)
+#   - in-progress → done: Manually when all stories reach 'done' status
+#
+# Story Status:
+#   - backlog: Story only exists in epic file
+#   - ready-for-dev: Story file created in stories folder
+#   - in-progress: Developer actively working on implementation
+#   - review: Ready for code review (via Dev's code-review workflow)
+#   - done: Story completed
+#
+# Retrospective Status:
+#   - optional: Can be completed but not required
+#   - done: Retrospective has been completed
+#
+# WORKFLOW NOTES:
+# ===============
+# - Epic transitions to 'in-progress' automatically when first story is created
+# - Stories can be worked in parallel if team capacity allows
+# - SM typically creates next story after previous one is 'done' to incorporate learnings
+# - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
+
+generated: "2026-02-08"
+project: Brlok
+project_key: NOKEY
+tracking_system: file-system
+story_location: "_bmad-output/implementation-artifacts"
+
+development_status:
+  epic-1: in-progress
+  1-1-initialisation-du-projet: review
+  1-2-modeles-de-donnees-hold-et-catalog: review
+  1-3-persistance-du-catalogue: ready-for-dev
+  1-4-consultation-du-catalogue: ready-for-dev
+  1-5-modification-de-la-difficulte-d-une-prise: ready-for-dev
+  1-6-modification-des-tags-d-une-prise: ready-for-dev
+  1-7-activer-ou-desactiver-une-prise: ready-for-dev
+  epic-1-retrospective: optional
+
+  epic-2: backlog
+  2-1-modeles-block-et-session: backlog
+  2-2-generateur-de-seances-contraintes-de-niveau-et-exclusion: backlog
+  2-3-contraintes-de-tags: backlog
+  2-4-contrainte-de-variete: backlog
+  epic-2-retrospective: optional
+
+  epic-3: backlog
+  3-1-visualisation-du-pan-avec-les-prises: backlog
+  3-2-visualisation-de-la-sequence-d-un-bloc: backlog
+  3-3-mode-seance-bloc-en-cours-et-navigation: backlog
+  epic-3-retrospective: optional
+
+  epic-4: backlog
+  4-1-stockage-des-favoris: backlog
+  4-2-ajouter-un-bloc-aux-favoris: backlog
+  4-3-consulter-la-liste-des-favoris: backlog
+  4-4-reutiliser-un-bloc-favori-dans-une-seance: backlog
+  epic-4-retrospective: optional
+
+  epic-5: backlog
+  5-1-export-txt: backlog
+  5-2-export-markdown: backlog
+  5-3-export-json: backlog
+  epic-5-retrospective: optional
