@@ -1,0 +1,84 @@
+{
+  "version": 1,
+  "updated_at": "2026-02-09T11:10:49.649226",
+  "templates": [
+    {
+      "id": "47d24731",
+      "name": "40/20 classique",
+      "blocks_config": [
+        {
+          "level": "modéré",
+          "work_s": 40,
+          "rest_s": 20,
+          "rounds": 3
+        },
+        {
+          "level": "modéré",
+          "work_s": 40,
+          "rest_s": 20,
+          "rounds": 3
+        },
+        {
+          "level": "modéré",
+          "work_s": 40,
+          "rest_s": 20,
+          "rounds": 3
+        },
+        {
+          "level": "modéré",
+          "work_s": 40,
+          "rest_s": 20,
+          "rounds": 3
+        },
+        {
+          "level": "modéré",
+          "work_s": 40,
+          "rest_s": 20,
+          "rounds": 3
+        }
+      ],
+      "blocks_count": 5,
+      "holds_per_block": 5,
+      "distribution_pattern": "uniforme"
+    },
+    {
+      "id": "a4519e99",
+      "name": "Difficile - Progressive [50/28x3]",
+      "blocks_config": [
+        {
+          "level": "difficile",
+          "work_s": 50,
+          "rest_s": 28,
+          "rounds": 3
+        },
+        {
+          "level": "difficile",
+          "work_s": 50,
+          "rest_s": 28,
+          "rounds": 3
+        },
+        {
+          "level": "difficile",
+          "work_s": 50,
+          "rest_s": 28,
+          "rounds": 3
+        },
+        {
+          "level": "difficile",
+          "work_s": 50,
+          "rest_s": 28,
+          "rounds": 3
+        },
+        {
+          "level": "difficile",
+          "work_s": 50,
+          "rest_s": 28,
+          "rounds": 3
+        }
+      ],
+      "blocks_count": 5,
+      "holds_per_block": 12,
+      "distribution_pattern": "progressive"
+    }
+  ]
+}

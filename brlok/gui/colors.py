@@ -11,6 +11,7 @@ LEVEL_COLORS_SATURATED: dict[int, str] = {
     3: "#ffeb3b",  # Jaune
     4: "#ff9800",  # Orange
     5: "#f44336",  # Rouge
+    6: "#b71c1c",  # Rouge foncé (niveau 6 pieds)
 }
 
 # Couleurs pâles (hors bloc)
@@ -20,6 +21,7 @@ LEVEL_COLORS_PALE: dict[int, str] = {
     3: "#fffde7",
     4: "#fff3e0",
     5: "#ffebee",
+    6: "#ffcdd2",  # Rouge très pâle (niveau 6 pieds)
 }
 
 INACTIVE_COLOR = "#e0e0e0"

@@ -35,7 +35,7 @@ def generate(
     blocks: int | None = typer.Option(None, "--blocks", "-b", help="Nombre de blocs"),
     enchainements: int | None = typer.Option(None, "--enchainements", "-e", help="Nombre de prises par bloc"),
     template: str | None = typer.Option(None, "--template", "-T", help="Template à utiliser (nom ou id)"),
-    tags: str | None = typer.Option(None, "--tags", "-t", help="Tags obligatoires (forcer), ex. crimp,sloper"),
+    tags: str | None = typer.Option(None, "--tags", "-t", help="Tags à inclure (filtrer), ex. crimp,sloper"),
     exclude_tags: str | None = typer.Option(None, "--exclude-tags", help="Tags exclus (filtrer), ex. sloper"),
     variety: bool = typer.Option(False, "--variety", "-v", help="Éviter les répétitions de prises dans les blocs"),
     output: Path | None = typer.Option(None, "--output", "-o", help="Fichier de sortie (txt, md ou json)"),
@@ -75,7 +75,7 @@ def generate(
     if blocks_count is None:
         blocks_count = 5
     if n_enchainements is None:
-        n_enchainements = 5
+        n_enchainements = 10
 
     if not (1 <= target_level <= 5):
         typer.echo("Niveau invalide : doit être entre 1 et 5", err=True)

@@ -5,6 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Callable
 
+from pydantic import ValidationError
 from PySide6.QtCore import Qt, QTimer, Signal
 from PySide6.QtGui import QMouseEvent
 from PySide6.QtWidgets import (
@@ -47,7 +48,8 @@ class _DoubleClickLabel(QLabel):
         self.doubleClicked.emit()
         event.accept()
         super().mouseDoubleClickEvent(event)
-from brlok.storage.import_ods import import_catalog_from_ods
+from brlok.storage.import_ods import export_catalog_to_ods, import_catalog_from_ods
+from brlok.storage.catalog_store import export_catalog_to_json, load_catalog_from_json
 from brlok.storage.catalog_ops import (
     add_hold,
     remove_hold,
@@ -128,13 +130,21 @@ class CatalogWidget(QWidget):
         for btn in (
             ("Modifier les prises", self._on_modify_holds),
             ("Ajouter une prise", self._on_add_hold_clicked),
-            ("Importer depuis ODS…", self._on_import_ods),
             ("Nouveau catalogue", self._on_new_catalog),
         ):
             b = QPushButton(btn[0])
             b.clicked.connect(btn[1])
             b.setMinimumHeight(32)
             btn_layout.addWidget(b)
+        import_export_btn = QPushButton("Import / Export catalogue")
+        import_export_menu = QMenu()
+        import_export_menu.addAction("Importer depuis ODS…", self._on_import_ods)
+        import_export_menu.addAction("Importer depuis JSON…", self._on_import_json)
+        import_export_menu.addAction("Exporter en JSON…", self._on_export_json)
+        import_export_menu.addAction("Exporter en ODS…", self._on_export_ods)
+        import_export_btn.setMenu(import_export_menu)
+        import_export_btn.setMinimumHeight(32)
+        btn_layout.addWidget(import_export_btn)
         if self._on_set_default:
             set_default_btn = QPushButton("Définir comme défaut")
             set_default_btn.setToolTip("Ce catalogue sera chargé au prochain démarrage")
@@ -154,6 +164,11 @@ class CatalogWidget(QWidget):
         list_label = QLabel("Prises:")
         list_label.setStyleSheet("font-weight: bold;")
         list_layout.addWidget(list_label)
+        self._search_edit = QLineEdit()
+        self._search_edit.setPlaceholderText("Rechercher (ID, tags)…")
+        self._search_edit.setClearButtonEnabled(True)
+        self._search_edit.textChanged.connect(self._on_catalog_search_changed)
+        list_layout.addWidget(self._search_edit)
 
         self._table = QTableWidget()
         self._table.setColumnCount(4)
@@ -215,7 +230,7 @@ class CatalogWidget(QWidget):
         self._show_modify_holds_dialog()
 
     def _refresh_foot_edits(self) -> None:
-        """Met à jour les labels pieds depuis catalog.foot_grid et foot_levels."""
+        """Met à jour les labels pieds depuis catalog.foot_grid, couleur selon foot_levels."""
         if not hasattr(self, "_foot_labels"):
             return
         grid = self._catalog.foot_grid
@@ -225,7 +240,8 @@ class CatalogWidget(QWidget):
             if r < len(grid) and grid[r] and c < len(grid[r]):
                 val = str(grid[r][c]) if grid[r][c] else ""
             lev = foot_levels[r][c] if r < len(foot_levels) and c < len(foot_levels[r]) else 1
-            lbl.setText(f"{val} ({lev})" if val else "")
+            lbl.setText(val)
+            lbl.setStyleSheet(get_cell_style(val or "·", lev, True, False) if val else get_cell_style("·", 2, True, False))
 
     def _on_foot_double_click(self, row: int, col: int) -> None:
         """Double-clic : dialogue pour choisir la spec."""
@@ -248,7 +264,12 @@ class CatalogWidget(QWidget):
         self._catalog = self._catalog.model_copy(update={"foot_grid": grid, "foot_levels": levels})
         lbl = self._foot_labels.get((row, col))
         if lbl:
-            lbl.setText(f"{value.strip()} ({levels[row][col]})" if value.strip() else "")
+            lbl.setText(value.strip())
+            lbl.setStyleSheet(
+                get_cell_style(value.strip(), levels[row][col], True, False)
+                if value.strip()
+                else get_cell_style("·", 2, True, False)
+            )
         if self._on_save:
             self._on_save(self._catalog)
 
@@ -462,27 +483,29 @@ class CatalogWidget(QWidget):
         except ValueError as e:
             QMessageBox.warning(self, "Erreur", str(e))
 
+    def _get_import_export_dir(self) -> str:
+        """Répertoire par défaut pour les dialogues import/export."""
+        from PySide6.QtCore import QStandardPaths
+        docs = QStandardPaths.writableLocation(QStandardPaths.StandardLocation.DocumentsLocation)
+        return docs if docs else str(Path.home())
+
     def _on_import_ods(self) -> None:
         """Ouvre une boîte de dialogue pour importer un catalogue depuis ODS."""
         from PySide6.QtWidgets import QFileDialog, QMessageBox
 
+        parent = self.window()
         path, _ = QFileDialog.getOpenFileName(
-            self,
+            parent,
             "Importer depuis ODS",
-            "",
+            self._get_import_export_dir(),
             "Fichiers ODS (*.ods);;Tous les fichiers (*)",
         )
+        path = str(path).strip() if path else ""
         if not path:
             return
         try:
             self._catalog = import_catalog_from_ods(Path(path))
-            self._grid_label.setText(f"Grille: {self._catalog.grid.rows}×{self._catalog.grid.cols}")
-            left_layout = self._left_panel.layout()
-            left_layout.removeWidget(self._grid_widget)
-            self._grid_widget.deleteLater()
-            self._grid_widget = self._make_grid_view()
-            left_layout.insertWidget(0, self._grid_widget)
-            self._refresh_table()
+            self._replace_catalog_ui()
             if self._on_save:
                 self._on_save(self._catalog)
             QMessageBox.information(
@@ -491,8 +514,90 @@ class CatalogWidget(QWidget):
                 f"Catalogue importé : {len(self._catalog.holds)} prises, "
                 f"grille {self._catalog.grid.rows}×{self._catalog.grid.cols}.",
             )
-        except ValueError as e:
+        except Exception as e:
             QMessageBox.critical(self, "Erreur d'import", str(e))
+
+    def _on_import_json(self) -> None:
+        """Importe un catalogue depuis un fichier JSON."""
+        from PySide6.QtWidgets import QFileDialog, QMessageBox
+
+        parent = self.window()
+        path, _ = QFileDialog.getOpenFileName(
+            parent,
+            "Importer depuis JSON",
+            self._get_import_export_dir(),
+            "Fichiers JSON (*.json);;Tous les fichiers (*)",
+        )
+        path = str(path).strip() if path else ""
+        if not path:
+            return
+        try:
+            self._catalog = load_catalog_from_json(Path(path))
+            self._replace_catalog_ui()
+            if self._on_save:
+                self._on_save(self._catalog)
+            QMessageBox.information(
+                self,
+                "Import réussi",
+                f"Catalogue importé : {len(self._catalog.holds)} prises, "
+                f"grille {self._catalog.grid.rows}×{self._catalog.grid.cols}.",
+            )
+        except Exception as e:
+            QMessageBox.critical(self, "Erreur d'import", str(e))
+
+    def _on_export_json(self) -> None:
+        """Exporte le catalogue vers un fichier JSON."""
+        from PySide6.QtWidgets import QFileDialog, QMessageBox
+
+        parent = self.window()
+        path, _ = QFileDialog.getSaveFileName(
+            parent,
+            "Exporter le catalogue",
+            self._get_import_export_dir(),
+            "Fichiers JSON (*.json);;Tous les fichiers (*)",
+        )
+        path = str(path).strip() if path else ""
+        if not path:
+            return
+        if not path.lower().endswith(".json"):
+            path = path + ".json"
+        try:
+            export_catalog_to_json(self._catalog, Path(path))
+            QMessageBox.information(self, "Export", f"Catalogue exporté dans {path}")
+        except Exception as e:
+            QMessageBox.critical(self, "Erreur d'export", str(e))
+
+    def _on_export_ods(self) -> None:
+        """Exporte le catalogue vers un fichier ODS."""
+        from PySide6.QtWidgets import QFileDialog, QMessageBox
+
+        parent = self.window()
+        path, _ = QFileDialog.getSaveFileName(
+            parent,
+            "Exporter le catalogue",
+            self._get_import_export_dir(),
+            "Fichiers ODS (*.ods);;Tous les fichiers (*)",
+        )
+        path = str(path).strip() if path else ""
+        if not path:
+            return
+        if not path.lower().endswith(".ods"):
+            path = path + ".ods"
+        try:
+            export_catalog_to_ods(self._catalog, Path(path))
+            QMessageBox.information(self, "Export", f"Catalogue exporté dans {path}")
+        except Exception as e:
+            QMessageBox.critical(self, "Erreur d'export", str(e))
+
+    def _replace_catalog_ui(self) -> None:
+        """Met à jour l'UI après remplacement du catalogue (import ODS/JSON)."""
+        self._grid_label.setText(f"Grille: {self._catalog.grid.rows}×{self._catalog.grid.cols}")
+        left_layout = self._left_panel.layout()
+        left_layout.removeWidget(self._grid_widget)
+        self._grid_widget.deleteLater()
+        self._grid_widget = self._make_grid_view()
+        left_layout.insertWidget(0, self._grid_widget)
+        self._refresh_table()
 
     def _on_new_catalog(self) -> None:
         """Crée un nouveau catalogue et l'ajoute à la collection (7.1)."""
@@ -566,6 +671,26 @@ class CatalogWidget(QWidget):
                 if cell:
                     cell.setBackground(bg)
         self._table.blockSignals(False)
+        self._apply_catalog_search_filter()
+
+    def _on_catalog_search_changed(self, text: str) -> None:
+        self._apply_catalog_search_filter()
+
+    def _apply_catalog_search_filter(self) -> None:
+        """Filtre la table des prises par ID ou tags."""
+        if not hasattr(self, "_search_edit") or not hasattr(self, "_sorted_holds"):
+            return
+        search = self._search_edit.text().strip().lower()
+        for i in range(self._table.rowCount()):
+            if i >= len(self._sorted_holds):
+                break
+            hold = self._sorted_holds[i]
+            match = (
+                not search
+                or search in hold.id.lower()
+                or search in ",".join(hold.tags).lower()
+            )
+            self._table.setRowHidden(i, not match)
 
     def _on_item_changed(self, item: QTableWidgetItem) -> None:
         """Checkbox Actif toggle → mise à jour et sauvegarde."""
@@ -696,7 +821,6 @@ class CatalogWidget(QWidget):
         sep.setFixedHeight(SEPARATOR_HEIGHT)
         self._grid_layout.addWidget(sep, rows, 0, 1, cols)
 
-        foot_style = get_cell_style("·", 2, True, False)
         self._foot_labels: dict[tuple[int, int], QLabel] = {}
         foot_levels = getattr(self._catalog, "foot_levels", None) or [[1] * cols for _ in range(FOOT_GRID_ROWS)]
         for r in range(FOOT_GRID_ROWS):
@@ -705,10 +829,10 @@ class CatalogWidget(QWidget):
                 if r < len(self._catalog.foot_grid) and self._catalog.foot_grid[r] and c < len(self._catalog.foot_grid[r]):
                     val = str(self._catalog.foot_grid[r][c]) if self._catalog.foot_grid[r][c] else ""
                 lev = foot_levels[r][c] if r < len(foot_levels) and c < len(foot_levels[r]) else 1
-                display = f"{val} ({lev})" if val else ""
-                lbl = _DoubleClickLabel(display)
+                lbl = _DoubleClickLabel(val)
                 lbl.setFixedSize(cell_w, cell_h)
                 lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+                foot_style = get_cell_style(val or "·", lev, True, False) if val else get_cell_style("·", 2, True, False)
                 lbl.setStyleSheet(foot_style)
                 lbl.setToolTip("Double-clic ou clic droit pour modifier")
                 lbl.doubleClicked.connect(lambda _r=r, _c=c: self._on_foot_double_click(_r, _c))

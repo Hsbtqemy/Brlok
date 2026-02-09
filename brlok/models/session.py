@@ -18,7 +18,7 @@ class SessionConstraints(BaseModel):
     )
     required_tags: list[str] = Field(
         default_factory=list,
-        description="Tags obligatoires (forcer)",
+        description="Tags à inclure (filtrer)",
     )
     excluded_tags: list[str] = Field(
         default_factory=list,

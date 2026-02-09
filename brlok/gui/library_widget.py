@@ -59,11 +59,13 @@ class LibraryWidget(QWidget):
         self._filter_group = QButtonGroup()
         for days, label in [(7, "7 jours"), (30, "30 jours"), (None, "Tout")]:
             rb = QRadioButton(label)
+            rb.blockSignals(True)
             self._filter_group.addButton(rb)
             rb.setProperty("days", days)
             filter_bar.addWidget(rb)
             if days is None:
                 rb.setChecked(True)
+            rb.blockSignals(False)
         filter_bar.addWidget(QLabel("  Recherche :"))
         self._search_edit = QLineEdit()
         self._search_edit.setPlaceholderText("Filtrer…")
@@ -166,9 +168,12 @@ class LibraryWidget(QWidget):
         else:
             for block in blocks:
                 seq = " → ".join(h.id for h in block.holds)
-                label = seq
-                if block.comment:
-                    label += f" — {block.comment}"
+                if block.title:
+                    label = f"{block.title} — {seq}"
+                else:
+                    label = seq
+                    if block.comment:
+                        label += f" — {block.comment}"
                 item = QListWidgetItem(label)
                 item.setData(Qt.ItemDataRole.UserRole, ("block", block))
                 self._fav_list.addItem(item)
@@ -415,11 +420,20 @@ class LibraryWidget(QWidget):
         elif action == act_export:
             self._on_export_clicked()
         elif action == act_fav:
+            from brlok.storage.favorites_store import make_favorite_title
+            prev = load_favorites()
             added = 0
-            for block in cs.session.blocks:
-                prev = load_favorites()
-                add_favorite(block, prev)
-                added += 1
+            target_level = cs.session.constraints.target_level if cs.session.constraints else None
+            for i, block in enumerate(cs.session.blocks):
+                title = make_favorite_title(
+                    target_level=target_level,
+                    date=cs.date,
+                    block_index=i,
+                )
+                new_list = add_favorite(block, prev, title=title)
+                if len(new_list) > len(prev):
+                    added += 1
+                prev = new_list
             QMessageBox.information(
                 self, "Favoris",
                 f"{added} bloc(s) ajouté(s) aux favoris.",

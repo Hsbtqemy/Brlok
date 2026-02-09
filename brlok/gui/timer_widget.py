@@ -25,6 +25,10 @@ class IntervalTimerWidget(QWidget):
     MODE_PYRAMIDE = "pyramide"
     MODE_EMOM = "emom"
 
+    CHRONO_COUNTDOWN = "countdown"
+    CHRONO_COUNTUP = "countup"
+    CHRONO_NONE = "none"
+
     def __init__(
         self,
         parent: QWidget | None = None,
@@ -33,6 +37,7 @@ class IntervalTimerWidget(QWidget):
         rest_s: int = 20,
         rounds: int = 3,
         compact: bool = False,
+        chrono_mode: str = "countdown",
     ) -> None:
         super().__init__(parent)
         self._compact = compact
@@ -41,6 +46,7 @@ class IntervalTimerWidget(QWidget):
         self._rounds = rounds
         self._work_min = 20
         self._work_max = 60
+        self._chrono_mode = chrono_mode
         self._mode = self.MODE_40_20
         self._timer = QTimer(self)
         self._timer.timeout.connect(self._tick)
@@ -54,6 +60,8 @@ class IntervalTimerWidget(QWidget):
     def _build_ui(self) -> None:
         layout = QVBoxLayout(self)
 
+        self._config_container = QWidget()
+        config_inner = QVBoxLayout(self._config_container)
         self._mode_combo = QComboBox()
         self._mode_combo.addItems([self.MODE_40_20, "Pyramide", "EMOM"])
         self._mode_combo.currentTextChanged.connect(self._on_mode_changed)
@@ -92,7 +100,8 @@ class IntervalTimerWidget(QWidget):
             config_layout.addWidget(QLabel("Rounds:"))
             config_layout.addWidget(self._rounds_spin)
             config_layout.addStretch()
-        layout.addLayout(config_layout)
+        config_inner.addLayout(config_layout)
+        layout.addWidget(self._config_container)
 
         self._pyramide_layout = QHBoxLayout()
         self._pyramide_layout.addWidget(QLabel("Travail min (s):"))
@@ -150,6 +159,17 @@ class IntervalTimerWidget(QWidget):
 
         self._update_display()
         self._on_mode_changed(self._mode_combo.currentText())
+        self._update_chrono_mode_ui()
+
+    def _update_chrono_mode_ui(self) -> None:
+        """Affiche/masque la config selon le mode chrono."""
+        if self._chrono_mode == self.CHRONO_COUNTUP:
+            self._config_container.setVisible(False)
+            self._pyramide_widget.setVisible(False)
+            self._phase_label.setText("Minuteur")
+        else:
+            self._config_container.setVisible(True)
+            self._on_mode_changed(self._mode_combo.currentText())
 
     def _get_mode(self) -> str:
         text = self._mode_combo.currentText()
@@ -198,6 +218,7 @@ class IntervalTimerWidget(QWidget):
         rounds: int,
         work_min: int | None = None,
         work_max: int | None = None,
+        chrono_mode: str | None = None,
     ) -> None:
         """Applique travail/repos/rounds (ex. depuis un template)."""
         if not self._timer.isActive():
@@ -211,6 +232,9 @@ class IntervalTimerWidget(QWidget):
                 self._work_min_spin.setValue(work_min)
             if work_max is not None:
                 self._work_max_spin.setValue(work_max)
+            if chrono_mode is not None:
+                self._chrono_mode = chrono_mode
+                self._update_chrono_mode_ui()
 
     def _on_config_changed(self) -> None:
         if not self._timer.isActive():
@@ -228,30 +252,39 @@ class IntervalTimerWidget(QWidget):
         self._rounds = self._rounds_spin.value()
         self._work_min = self._work_min_spin.value()
         self._work_max = self._work_max_spin.value()
-        self._mode_combo.setEnabled(False)
-        self._work_spin.setEnabled(False)
-        self._rest_spin.setEnabled(False)
-        self._rounds_spin.setEnabled(False)
-        self._work_min_spin.setEnabled(False)
-        self._work_max_spin.setEnabled(False)
-        self._start_btn.setEnabled(False)
-        self._stop_btn.setEnabled(True)
-        self._current_round = 1
-        self._total_elapsed_s = 0.0
-        work, rest = self._get_work_rest_for_round(1)
-        self._remaining_s = work
-        self._phase = "work"
+        if self._chrono_mode == self.CHRONO_COUNTUP:
+            self._start_btn.setEnabled(False)
+            self._stop_btn.setEnabled(True)
+            self._current_round = 0
+            self._total_elapsed_s = 0.0
+            self._phase = "countup"
+            self._remaining_s = 0
+        else:
+            self._mode_combo.setEnabled(False)
+            self._work_spin.setEnabled(False)
+            self._rest_spin.setEnabled(False)
+            self._rounds_spin.setEnabled(False)
+            self._work_min_spin.setEnabled(False)
+            self._work_max_spin.setEnabled(False)
+            self._start_btn.setEnabled(False)
+            self._stop_btn.setEnabled(True)
+            self._current_round = 1
+            self._total_elapsed_s = 0.0
+            work, rest = self._get_work_rest_for_round(1)
+            self._remaining_s = work
+            self._phase = "work"
         self._update_display()
         self._timer.start(1000)
 
     def _on_stop(self) -> None:
         self._timer.stop()
-        self._mode_combo.setEnabled(True)
-        self._work_spin.setEnabled(True)
-        self._rest_spin.setEnabled(True)
-        self._rounds_spin.setEnabled(True)
-        self._work_min_spin.setEnabled(True)
-        self._work_max_spin.setEnabled(True)
+        if self._chrono_mode != self.CHRONO_COUNTUP:
+            self._mode_combo.setEnabled(True)
+            self._work_spin.setEnabled(True)
+            self._rest_spin.setEnabled(True)
+            self._rounds_spin.setEnabled(True)
+            self._work_min_spin.setEnabled(True)
+            self._work_max_spin.setEnabled(True)
         self._start_btn.setEnabled(True)
         self._stop_btn.setEnabled(False)
         self._phase = ""
@@ -259,9 +292,12 @@ class IntervalTimerWidget(QWidget):
 
     def _tick(self) -> None:
         self._total_elapsed_s += 1
-        self._remaining_s -= 1
-        if self._remaining_s <= 0:
-            self._on_interval_end()
+        if self._chrono_mode == self.CHRONO_COUNTUP:
+            self._remaining_s = int(self._total_elapsed_s)
+        else:
+            self._remaining_s -= 1
+            if self._remaining_s <= 0:
+                self._on_interval_end()
         self._update_display()
 
     def _on_interval_end(self) -> None:
@@ -323,11 +359,20 @@ class IntervalTimerWidget(QWidget):
         QT.singleShot(200, lambda: self._display_frame.setStyleSheet(old))
 
     def _update_display(self) -> None:
+        time_fs = 36 if self._compact else 72
+        if self._chrono_mode == self.CHRONO_COUNTUP:
+            elapsed = int(self._total_elapsed_s)
+            m, s = elapsed // 60, elapsed % 60
+            self._time_label.setText(f"{m:02d}:{s:02d}")
+            self._phase_label.setText("Minuteur")
+            self._time_label.setStyleSheet(
+                f"font-size: {time_fs}pt; font-weight: bold; color: #4ade80;"
+            )
+            return
         m = self._remaining_s // 60
         s = self._remaining_s % 60
         self._time_label.setText(f"{m:02d}:{s:02d}")
         mode = self._get_mode()
-        time_fs = 36 if self._compact else 72
         if self._phase == "work":
             self._phase_label.setText(f"Travail — Round {self._current_round}/{self._rounds}")
             self._time_label.setStyleSheet(

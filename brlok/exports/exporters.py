@@ -31,7 +31,7 @@ def export_txt(session: Session, path: Path, catalog: Catalog | None = None) -> 
     if session.constraints.target_level is not None:
         lines.append(f"Niveau cible: {session.constraints.target_level}")
     if session.constraints.required_tags:
-        lines.append(f"Tags obligatoires: {', '.join(session.constraints.required_tags)}")
+        lines.append(f"Tags à inclure: {', '.join(session.constraints.required_tags)}")
     if session.constraints.excluded_tags:
         lines.append(f"Tags exclus: {', '.join(session.constraints.excluded_tags)}")
     if session.constraints.variety:
@@ -67,7 +67,7 @@ def export_markdown(session: Session, path: Path, catalog: Catalog | None = None
     if session.constraints.target_level is not None:
         lines.append(f"- **Niveau cible:** {session.constraints.target_level}")
     if session.constraints.required_tags:
-        lines.append(f"- **Tags obligatoires:** {', '.join(session.constraints.required_tags)}")
+        lines.append(f"- **Tags à inclure:** {', '.join(session.constraints.required_tags)}")
     if session.constraints.excluded_tags:
         lines.append(f"- **Tags exclus:** {', '.join(session.constraints.excluded_tags)}")
     if session.constraints.variety:
@@ -150,7 +150,7 @@ def export_pdf(session: Session, path: Path) -> None:
     if session.constraints.required_tags:
         story.append(
             Paragraph(
-                f"<b>Tags obligatoires :</b> {', '.join(session.constraints.required_tags)}",
+                f"<b>Tags à inclure :</b> {', '.join(session.constraints.required_tags)}",
                 styles["Normal"],
             )
         )

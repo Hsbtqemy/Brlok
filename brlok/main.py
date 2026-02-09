@@ -23,13 +23,16 @@ def _run_gui() -> None:
     """Ouvre la fenêtre GUI PySide6."""
     from PySide6.QtWidgets import QApplication
 
+    from brlok.gui.icon import get_app_icon
     from brlok.gui.main_window import BrlokMainWindow
     from brlok.gui.theme import get_theme_manager
 
     app = QApplication(sys.argv)
+    app.setWindowIcon(get_app_icon())
     theme = get_theme_manager()
     app.setStyleSheet(theme.get_stylesheet())
     window = BrlokMainWindow()
+    window.setWindowIcon(get_app_icon())
     window.show()
     sys.exit(app.exec())
 

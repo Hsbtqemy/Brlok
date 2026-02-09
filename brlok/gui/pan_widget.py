@@ -54,7 +54,8 @@ class PanWidget(QWidget):
         self._rebuild_grid()
 
     def _refresh_foot_labels(self) -> None:
-        """Remplit les labels pieds depuis catalog.foot_grid et foot_levels."""
+        """Remplit les labels pieds depuis catalog.foot_grid, couleur selon foot_levels."""
+        from brlok.gui.colors import get_cell_style, EMPTY_COLOR, BORDER_DEFAULT, TEXT_ON_LIGHT
         grid = self._catalog.foot_grid
         foot_levels = getattr(self._catalog, "foot_levels", None) or [[1] * 6 for _ in range(4)]
         for (r, c), lbl in self._foot_labels.items():
@@ -62,7 +63,13 @@ class PanWidget(QWidget):
             if r < len(grid) and grid[r] and c < len(grid[r]):
                 val = str(grid[r][c]) if grid[r][c] else ""
             lev = foot_levels[r][c] if r < len(foot_levels) and c < len(foot_levels[r]) else 1
-            lbl.setText(f"{val} ({lev})" if val else "")
+            lbl.setText(val)
+            if val:
+                lbl.setStyleSheet(get_cell_style(val, lev, True, False))
+            else:
+                lbl.setStyleSheet(
+                    f"border: 2px solid {BORDER_DEFAULT}; background: {EMPTY_COLOR}; color: {TEXT_ON_LIGHT};"
+                )
 
     def set_highlight(self, hold_ids: set[str], block_hold_order: dict[str, int] | None = None) -> None:
         """Met à jour les prises à surligner et l'ordre dans le bloc."""
@@ -142,13 +149,11 @@ class PanWidget(QWidget):
             sep.setFrameShadow(QFrame.Shadow.Sunken)
             sep.setFixedHeight(SEPARATOR_HEIGHT)
             self._grid_layout.addWidget(sep, rows, 0, 1, cols)
-            foot_style = get_cell_style("·", 2, True, False)
             self._foot_labels: dict[tuple[int, int], QLabel] = {}
             for r in range(FOOT_GRID_ROWS):
                 for c in range(cols):
                     lbl = QLabel("")
                     lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
-                    lbl.setStyleSheet(foot_style)
                     self._grid_layout.addWidget(lbl, rows + 1 + r, c)
                     self._foot_labels[(r, c)] = lbl
             self._foot_rows = FOOT_GRID_ROWS

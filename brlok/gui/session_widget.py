@@ -40,7 +40,7 @@ class SessionWidget(QWidget):
         session: Session | None = None,
         parent: QWidget | None = None,
         *,
-        on_generate: Callable[[int, int, int, str | None], object | None] | None = None,
+        on_generate: Callable[[int, int, int, int, str | None], object | None] | None = None,
         on_favorites_changed: Callable[[], None] | None = None,
         on_end_session: Callable[[Session, dict[int, str]], None] | None = None,
     ) -> None:
@@ -69,6 +69,10 @@ class SessionWidget(QWidget):
         """Met à jour le catalogue (après édition dans l'onglet Catalogue)."""
         self._catalog = catalog
         self._pan.set_catalog(catalog)
+
+    def refresh_templates(self) -> None:
+        """Recharge la liste des templates dans le formulaire de génération."""
+        self._generate_form.refresh_templates()
 
     def _build_ui(self) -> None:
         layout = QVBoxLayout(self)
@@ -112,7 +116,7 @@ class SessionWidget(QWidget):
         self._generate_form = GenerateSessionForm(
             default_level=2,
             default_blocks=5,
-            default_enchainements=5,
+            default_enchainements=10,
         )
         self._generate_form.setVisible(bool(self._on_generate))
         gen_layout.addWidget(self._generate_form)
@@ -226,9 +230,21 @@ class SessionWidget(QWidget):
         layout.addWidget(self._session_container)
         self._refresh()
 
-    def set_timer_params(self, work_s: int, rest_s: int, rounds: int) -> None:
+    def set_timer_params(
+        self,
+        work_s: int,
+        rest_s: int,
+        rounds: int,
+        chrono_mode: str = "countdown",
+    ) -> None:
         """Applique les paramètres du timer (ex. depuis un template 8.1)."""
-        self._timer_widget.set_params(work_s, rest_s, rounds)
+        self._timer_widget.set_params(work_s, rest_s, rounds, chrono_mode=chrono_mode)
+        if chrono_mode == "none":
+            self._toggle_timer_btn.setVisible(False)
+            self._timer_panel.setVisible(False)
+        else:
+            self._toggle_timer_btn.setVisible(True)
+            self._toggle_timer_btn.setText("⏱ Afficher timer 40/20" if chrono_mode == "countdown" else "⏱ Afficher minuteur")
 
     def _on_more_menu(self) -> None:
         """Menu ⋯ Plus : Exporter, Refaire, Fin de séance, Favoris."""
@@ -253,6 +269,7 @@ class SessionWidget(QWidget):
             form = self._generate_form
             result = self._on_generate(
                 form.target_level,
+                form.level_tolerance,
                 form.blocks_count,
                 form.enchainements,
                 form.selected_template_id,
@@ -329,12 +346,17 @@ class SessionWidget(QWidget):
         if not self._session or not self._session.blocks:
             return
         from PySide6.QtWidgets import QMessageBox
-        from brlok.storage.favorites_store import add_favorite
+        from brlok.storage.favorites_store import add_favorite, make_favorite_title
         block = self._session.blocks[self._block_index]
-        add_favorite(block)
+        target_level = self._session.constraints.target_level if self._session.constraints else None
+        title = make_favorite_title(
+            target_level=target_level,
+            block_index=self._block_index,
+        )
+        add_favorite(block, title=title)
         QMessageBox.information(
             self, "Favori ajouté",
-            f"Bloc ajouté aux favoris : {' → '.join(h.id for h in block.holds)}",
+            f"Bloc ajouté aux favoris : {title}\n{' → '.join(h.id for h in block.holds)}",
         )
         if self._on_favorites_changed:
             self._on_favorites_changed()

@@ -23,7 +23,7 @@ def load_templates() -> list[SessionTemplate]:
     """Charge la liste des templates. Crée un template 40/20 par défaut si vide."""
     path = _get_path()
     if not path.exists():
-        _ensure_default_template()
+        _ensure_default_templates()
         return load_templates()
     try:
         with open(path, encoding="utf-8") as f:
@@ -38,14 +38,43 @@ def load_templates() -> list[SessionTemplate]:
         except ValidationError:
             pass
     if not result:
-        _ensure_default_template()
+        _ensure_default_templates()
         return load_templates()
     return result
 
 
-def _ensure_default_template() -> None:
-    """Crée un template 40/20 par défaut si aucun n'existe."""
-    add_template("40/20 classique", blocks_count=5, holds_per_block=5)
+def _ensure_default_templates() -> None:
+    """Crée des templates de base par difficulté si aucun n'existe."""
+    from brlok.config.difficulty import DIFFICULTY_PROFILES, get_distribution_short_label
+    from brlok.models.session_template import BlockConfig
+
+    templates_to_add = []
+    for difficulty_name, _, _ in DIFFICULTY_PROFILES:
+        level_str = difficulty_name.strip().lower()
+        blocks_config = [
+            BlockConfig(level=level_str, work_s=40, rest_s=20, rounds=3)
+            for _ in range(5)
+        ]
+        dist_label = get_distribution_short_label("uniforme")
+        name = f"{difficulty_name} - {dist_label} [40/20x3]"
+        templates_to_add.append((name, blocks_config))
+
+    path = _get_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    templates = []
+    for name, blocks_config in templates_to_add:
+        t = SessionTemplate(
+            id=str(uuid.uuid4())[:8],
+            name=name,
+            blocks_config=blocks_config,
+            blocks_count=5,
+            holds_per_block=10,
+            distribution_pattern="uniforme",
+        )
+        templates.append(t)
+    save_templates(templates)
+
+
 
 
 def save_templates(templates: list[SessionTemplate]) -> None:
@@ -68,7 +97,8 @@ def add_template(
     name: str,
     blocks_config: list | None = None,
     blocks_count: int = 5,
-    holds_per_block: int = 5,
+    holds_per_block: int = 10,
+    distribution_pattern: str = "uniforme",
 ) -> SessionTemplate:
     """Ajoute un template. blocks_config par défaut : 40/20."""
     from brlok.models.session_template import BlockConfig
@@ -83,6 +113,7 @@ def add_template(
         blocks_config=config,
         blocks_count=blocks_count,
         holds_per_block=holds_per_block,
+        distribution_pattern=distribution_pattern,
     )
     templates = []
     path = _get_path()
@@ -131,6 +162,33 @@ def remove_template(template_id: str) -> bool:
         return False
     save_templates(kept)
     return True
+
+
+def update_template(
+    template_id: str,
+    blocks_config: list | None = None,
+    blocks_count: int | None = None,
+    holds_per_block: int | None = None,
+    distribution_pattern: str | None = None,
+) -> bool:
+    """Met à jour un template. Retourne True si modifié."""
+    templates = load_templates()
+    for i, t in enumerate(templates):
+        if t.id == template_id:
+            updates = {}
+            if blocks_config is not None:
+                updates["blocks_config"] = blocks_config
+            if blocks_count is not None:
+                updates["blocks_count"] = blocks_count
+            if holds_per_block is not None:
+                updates["holds_per_block"] = holds_per_block
+            if distribution_pattern is not None:
+                updates["distribution_pattern"] = distribution_pattern
+            if updates:
+                templates[i] = t.model_copy(update=updates)
+                save_templates(templates)
+            return True
+    return False
 
 
 def rename_template(template_id: str, new_name: str) -> bool:

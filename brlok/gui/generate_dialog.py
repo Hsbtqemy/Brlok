@@ -23,7 +23,7 @@ class GenerateSessionForm(QFrame):
         *,
         default_level: int = 2,
         default_blocks: int = 5,
-        default_enchainements: int = 5,
+        default_enchainements: int = 10,
     ) -> None:
         super().__init__(parent)
         layout = QFormLayout(self)
@@ -34,11 +34,18 @@ class GenerateSessionForm(QFrame):
         self._template_combo.currentIndexChanged.connect(self._on_template_changed)
         layout.addRow("Template :", self._template_combo)
 
-        self._level_spin = QSpinBox()
-        self._level_spin.setRange(1, 5)
-        self._level_spin.setValue(default_level)
-        self._level_spin.setToolTip("Niveau cible des prises (1-5)")
-        layout.addRow("Niveau cible :", self._level_spin)
+        self._difficulty_combo = QComboBox()
+        self._difficulty_combo.setMinimumWidth(150)
+        from brlok.config.difficulty import DIFFICULTY_PROFILES
+        for name, _, _ in DIFFICULTY_PROFILES:
+            self._difficulty_combo.addItem(name)
+        modere_idx = next(
+            (i for i, (n, _, _) in enumerate(DIFFICULTY_PROFILES) if n == "Modéré"),
+            2,
+        )
+        self._difficulty_combo.setCurrentIndex(modere_idx)
+        self._difficulty_combo.setToolTip("Niveau général : plage des prises éligibles")
+        layout.addRow("Difficulté :", self._difficulty_combo)
 
         self._blocks_spin = QSpinBox()
         self._blocks_spin.setRange(1, 20)
@@ -54,7 +61,15 @@ class GenerateSessionForm(QFrame):
 
     @property
     def target_level(self) -> int:
-        return self._level_spin.value()
+        from brlok.config.difficulty import get_difficulty_params
+        name = self._difficulty_combo.currentText()
+        return get_difficulty_params(name)[0]
+
+    @property
+    def level_tolerance(self) -> int:
+        from brlok.config.difficulty import get_difficulty_params
+        name = self._difficulty_combo.currentText()
+        return get_difficulty_params(name)[1]
 
     @property
     def blocks_count(self) -> int:
@@ -69,6 +84,10 @@ class GenerateSessionForm(QFrame):
         """ID du template sélectionné ou None."""
         return self._template_combo.currentData()
 
+    def refresh_templates(self) -> None:
+        """Recharge la liste des templates (appelé quand modifiée dans Configuration)."""
+        self._refresh_templates()
+
     def _refresh_templates(self) -> None:
         """Charge les templates dans le combo."""
         from brlok.storage.templates_store import load_templates
@@ -78,9 +97,11 @@ class GenerateSessionForm(QFrame):
             self._template_combo.addItem(t.name, t.id)
 
     def _on_template_changed(self) -> None:
-        """Applique le template sélectionné aux champs."""
+        """Applique le template sélectionné aux champs, ou réinitialise aux valeurs par défaut."""
         tid = self._template_combo.currentData()
         if not tid:
+            self._blocks_spin.setValue(5)
+            self._enchainements_spin.setValue(10)
             return
         from brlok.storage.templates_store import get_template
         t = get_template(tid)
@@ -98,7 +119,7 @@ class GenerateSessionDialog(QDialog):
         *,
         default_level: int = 2,
         default_blocks: int = 5,
-        default_enchainements: int = 5,
+        default_enchainements: int = 10,
     ) -> None:
         super().__init__(parent)
         self.setWindowTitle("Générer une séance")
@@ -132,3 +153,7 @@ class GenerateSessionDialog(QDialog):
     @property
     def selected_template_id(self) -> str | None:
         return self._form.selected_template_id
+
+    @property
+    def level_tolerance(self) -> int:
+        return self._form.level_tolerance

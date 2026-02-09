@@ -1,12 +1,19 @@
 # -*- coding: utf-8 -*-
 """Tests du stockage des favoris."""
 import json
+from datetime import datetime
 from pathlib import Path
 from unittest.mock import patch
 
 from brlok.models import Block, Hold, Position
 
-from brlok.storage.favorites_store import add_favorite, load_favorites, remove_favorite, save_favorites
+from brlok.storage.favorites_store import (
+    add_favorite,
+    load_favorites,
+    make_favorite_title,
+    remove_favorite,
+    save_favorites,
+)
 
 
 def test_save_json_contains_version(tmp_path: Path) -> None:
@@ -80,3 +87,28 @@ def test_add_favorite_duplicate_ignored(tmp_path: Path) -> None:
         result = add_favorite(block2)
         assert len(result) == 1
         assert load_favorites()[0].holds[0].id == "A1"
+
+
+def test_make_favorite_title() -> None:
+    """make_favorite_title génère date, difficulté, index."""
+    t = make_favorite_title(target_level=3, block_index=2)
+    assert "Modéré" in t
+    assert "#3" in t
+    t2 = make_favorite_title(
+        target_level=1,
+        date=datetime(2025, 2, 8, 10, 30),
+        block_index=0,
+    )
+    assert "2025-02-08" in t2
+    assert "Très facile" in t2
+    assert "#1" in t2
+
+
+def test_add_favorite_with_title(tmp_path: Path) -> None:
+    """add_favorite avec title enregistre le bloc avec titre."""
+    with patch("brlok.storage.favorites_store._get_favorites_path", return_value=tmp_path / "favorites.json"):
+        block = Block(holds=[Hold(id="A1", level=2, tags=[], position=Position(row=0, col=0))])
+        add_favorite(block, title="2025-02-08 Modéré #1")
+        loaded = load_favorites()
+        assert len(loaded) == 1
+        assert loaded[0].title == "2025-02-08 Modéré #1"

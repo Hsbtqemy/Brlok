@@ -1,43 +1,101 @@
 # Brlok
 
-Application d'entraînement bloc et pan - génération de séances.
+Application d'entraînement bloc sur pan domestique — génération de séances, pilotage en temps réel, exports.
 
-## État du projet (fév. 2026)
+**Stack :** Python 3.8+, PySide6, Typer. Compatible macOS, Windows, Linux.
 
-| Epic | Statut | Notes |
-|------|--------|-------|
-| 1. Catalogue | ✅ done | Modèles, persistance, import ODS |
-| 2. Génération | ✅ done | Contraintes niveau, tags, variété |
-| 3. Vue séance | ✅ done | Pan, séquence, navigation |
-| 4. Favoris | ✅ done | Ajout, liste, réutilisation |
-| 5. Export | ✅ done | TXT, MD, JSON, PDF |
-| 6. UX | ✅ done | Ratio grille, couleurs, panneau séquence |
-| 7. Données | ✅ done | Multi-pan, commentaires, historique, modification séquence |
-| 8. Avancé | ✅ done | Template, timer 40/20, meilleur temps |
-
-**Dernières modifications :** CRUD templates (remove, rename), timer pyramides/EMOM + son, pause entre blocs ; CLI `brlok template remove`, `brlok template rename`.
+---
 
 ## Installation
 
 ```bash
 python -m venv .venv
-source .venv/bin/activate  # Windows: .venv\Scripts\activate
+source .venv/bin/activate   # Windows : .venv\Scripts\activate
 pip install -e ".[dev]"
 ```
 
-Pour exécuter les tests : `pytest`
+Tests : `pytest`
 
-## Données (XDG)
+---
 
-Stockage dans `~/.local/share/brlok/` (Linux), `~/Library/Application Support/brlok/` (macOS), `%APPDATA%\brlok\` (Windows) :
+## Lancement
 
-- **catalog_collection.json** — catalogues multi-pan (Epic 7.1)
-- **favorites.json** — blocs favoris
-- **sessions_history.json** — historique des séances (Epic 7.4)
-- **session_templates.json** — templates de séance (Epic 8.1)
-- **best_times.json** — meilleurs temps par séquence (Epic 8.2)
+- **GUI** : `python -m brlok` ou `python launch_brlok.py`
+- **CLI** : `brlok --help`
 
-## Usage
+### Lancement rapide (double-clic)
 
-- **GUI** : `python -m brlok`
-- **CLI** : `brlok generate --help`, `brlok generate --template "40/20 classique"`, `brlok template list`, `brlok template remove`, `brlok template rename`, `brlok catalog catalogs`, `brlok history list`, `brlok best-times list`
+- **macOS** : `brlok.command` — installe les dépendances si besoin, puis lance l'app
+- **Windows** : `brlok.bat` — idem
+
+---
+
+## Fonctionnalités
+
+| Épic | Statut | Description |
+|------|--------|-------------|
+| 1. Catalogue | ✅ | Modèles, persistance, import ODS |
+| 2. Génération | ✅ | Contraintes niveau, tags, variété |
+| 3. Vue séance | ✅ | Pan, séquence, navigation, ratio grille, couleurs |
+| 4. Favoris | ✅ | Ajout, liste, réutilisation |
+| 5. Export | ✅ | TXT, MD, JSON, PDF |
+| 6. UX | ✅ | Ratio grille, code couleur, panneau séquence |
+| 7. Données | ✅ | Multi-pan, commentaires, historique, modification séquence |
+| 8. Avancé | ✅ | Templates, timer 40/20 pyramides EMOM, meilleur temps |
+
+---
+
+## Données (stockage XDG)
+
+`~/.local/share/brlok/` (Linux), `~/Library/Application Support/brlok/` (macOS), `%APPDATA%\brlok\` (Windows) :
+
+| Fichier | Description |
+|---------|-------------|
+| `catalog_collection.json` | Catalogues multi-pan |
+| `favorites.json` | Blocs favoris |
+| `sessions_history.json` | Historique des séances |
+| `session_templates.json` | Templates de séance |
+| `best_times.json` | Meilleurs temps par séquence |
+
+---
+
+## CLI
+
+```bash
+# Génération
+brlok generate --level 2 --blocks 5 --enchainements 10
+brlok generate --template "40/20 classique" --output session.json
+
+# Catalogues
+brlok catalog catalogs          # Liste des catalogues
+brlok catalog use "Pan maison"  # Sélectionner un catalogue
+brlok catalog list              # Prises du catalogue actif
+brlok catalog import pan.ods    # Import ODS
+
+# Favoris
+brlok favorites list
+
+# Historique
+brlok history list
+brlok history show <id>
+
+# Meilleurs temps
+brlok best-times list
+
+# Templates
+brlok template list
+brlok template remove "40/20"
+brlok template rename "40/20" "40/20 classique"
+
+# Export
+brlok export txt session.json -o session.txt
+brlok export md session.json -o session.md
+brlok export json session.json -o session.json
+brlok export pdf session.json -o session.pdf
+```
+
+---
+
+## Licence
+
+MIT

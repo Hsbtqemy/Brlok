@@ -276,6 +276,52 @@ def test_generate_session_variety_contrainte_enregistree() -> None:
     assert session.constraints.variety is True
 
 
+def test_generate_session_distribution_progressive() -> None:
+    """Avec distribution progressive, les prises vont du facile au difficile."""
+    holds = [
+        Hold(id=f"A{i}", level=1 + (i % 5), tags=[], position=Position(row=i // 6, col=i % 6))
+        for i in range(12)
+    ]
+    catalog = Catalog(holds=holds, grid=GridDimensions(rows=4, cols=6))
+    session = generate_session(
+        catalog,
+        target_level=3,
+        blocks_count=1,
+        holds_per_block=5,
+        distribution_pattern="progressive",
+        seed=42,
+    )
+    assert len(session.blocks) == 1
+    block = session.blocks[0]
+    levels = [h.level for h in block.holds]
+    assert levels == sorted(levels), "Progressive : niveaux doivent être croissants"
+
+
+def test_generate_session_per_block_levels() -> None:
+    """Per_block_levels : chaque bloc utilise sa plage de niveau."""
+    holds = [
+        Hold(id="A1", level=2, tags=[], position=Position(row=0, col=0)),
+        Hold(id="B2", level=2, tags=[], position=Position(row=1, col=1)),
+        Hold(id="C3", level=4, tags=[], position=Position(row=2, col=2)),
+        Hold(id="D4", level=4, tags=[], position=Position(row=3, col=0)),
+    ]
+    catalog = Catalog(holds=holds, grid=GridDimensions(rows=4, cols=6))
+    per_block = [(2, 1), (4, 1)]  # bloc 1: 1-3, bloc 2: 3-5
+    session = generate_session(
+        catalog,
+        target_level=3,
+        blocks_count=2,
+        holds_per_block=2,
+        per_block_levels=per_block,
+        seed=7,
+    )
+    assert len(session.blocks) >= 2
+    for h in session.blocks[0].holds:
+        assert 1 <= h.level <= 3
+    for h in session.blocks[1].holds:
+        assert 3 <= h.level <= 5
+
+
 def test_generate_session_performance_nfr1() -> None:
     """Génération < 5 s pour un pan typique (NFR1)."""
     import time

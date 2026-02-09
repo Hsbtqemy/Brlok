@@ -14,6 +14,24 @@ from brlok.models import Block
 logger = logging.getLogger(__name__)
 
 
+def make_favorite_title(
+    target_level: int | None = None,
+    date: datetime | None = None,
+    block_index: int | None = None,
+) -> str:
+    """Génère un titre pour un favori : date, difficulté, etc."""
+    from brlok.config.difficulty import get_difficulty_display_name
+
+    parts: list[str] = []
+    d = date or datetime.now()
+    parts.append(d.strftime("%Y-%m-%d"))
+    if target_level is not None:
+        parts.append(get_difficulty_display_name(target_level))
+    if block_index is not None:
+        parts.append(f"#{(block_index + 1)}")
+    return " ".join(parts)
+
+
 def _get_favorites_path() -> Path:
     """Chemin du fichier favoris."""
     from brlok.config.paths import get_favorites_path
@@ -75,15 +93,23 @@ def remove_favorite(block_index: int, existing: list[Block] | None = None) -> li
     return blocks
 
 
-def add_favorite(block: Block, existing: list[Block] | None = None) -> list[Block]:
+def add_favorite(
+    block: Block,
+    existing: list[Block] | None = None,
+    title: str | None = None,
+) -> list[Block]:
     """Ajoute un bloc aux favoris. Retourne la nouvelle liste.
 
     Ignore si un bloc identique (même séquence de prises) est déjà en favoris.
+    Si title est fourni, il est utilisé pour le bloc (sinon garde block.title).
     """
     blocks = (existing or load_favorites()).copy()
     key = _block_sequence_key(block)
     if any(_block_sequence_key(b) == key for b in blocks):
         return blocks
-    blocks.append(block)
+    to_add = block
+    if title is not None:
+        to_add = block.model_copy(update={"title": title})
+    blocks.append(to_add)
     save_favorites(blocks)
     return blocks

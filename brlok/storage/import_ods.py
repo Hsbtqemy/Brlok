@@ -151,3 +151,33 @@ def import_catalog_from_ods(path: Path) -> Catalog:
         )
 
     return Catalog(holds=holds, grid=DEFAULT_GRID)
+
+
+def export_catalog_to_ods(catalog: Catalog, path: Path) -> None:
+    """Exporte un catalogue vers un fichier ODS (Liste prises, Niveau).
+
+    Compatible avec l'import : feuille avec colonnes « Liste prises » et « Niveau ».
+    """
+    from odf.opendocument import OpenDocumentSpreadsheet
+    from odf.table import Table, TableCell, TableRow
+    from odf.text import P
+
+    doc = OpenDocumentSpreadsheet()
+    table = Table(name="Liste prises")
+    row0 = TableRow()
+    for text in ("Liste prises", "Niveau"):
+        tc = TableCell()
+        tc.addElement(P(text=text))
+        row0.addElement(tc)
+    table.addElement(row0)
+    for hold in sorted(catalog.holds, key=lambda h: (h.position.row, h.position.col)):
+        row = TableRow()
+        level_str = str(hold.level) if hold.active else "99"
+        for text in (hold.id, level_str):
+            tc = TableCell()
+            tc.addElement(P(text=text))
+            row.addElement(tc)
+        table.addElement(row)
+    doc.spreadsheet.addElement(table)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    doc.save(str(path))

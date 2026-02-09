@@ -22,6 +22,10 @@ class Block(BaseModel):
         default=None,
         description="Commentaire optionnel (7.2)",
     )
+    title: str | None = Field(
+        default=None,
+        description="Titre optionnel (ex. pour favoris : date, difficulté)",
+    )
 
     @model_validator(mode="after")
     def validate_non_empty(self) -> "Block":

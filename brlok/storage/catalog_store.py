@@ -133,6 +133,39 @@ def load_catalog() -> Catalog:
     return _load_catalog_legacy()
 
 
+def export_catalog_to_json(catalog: Catalog, path: Path) -> None:
+    """Exporte un catalogue vers un fichier JSON (backup, partage)."""
+    catalog = _normalize_catalog_to_fixed_grid(catalog)
+    data = catalog.model_dump(mode="json")
+    file_data = {
+        "version": 1,
+        "updated_at": datetime.now().isoformat(),
+        "holds": data["holds"],
+        "grid": data["grid"],
+        "foot_grid": data.get("foot_grid", _default_foot_grid()),
+        "foot_levels": data.get("foot_levels", _default_foot_levels()),
+    }
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(file_data, f, ensure_ascii=False, indent=2)
+
+
+def load_catalog_from_json(path: Path) -> Catalog:
+    """Charge un catalogue depuis un fichier JSON (import)."""
+    with open(path, encoding="utf-8") as f:
+        data = json.load(f)
+    if "holds" not in data or "grid" not in data:
+        raise ValueError("Format JSON invalide : holds et grid requis")
+    catalog_data = {
+        "holds": data["holds"],
+        "grid": data["grid"],
+        "foot_grid": data.get("foot_grid", _default_foot_grid()),
+        "foot_levels": data.get("foot_levels", _default_foot_levels()),
+    }
+    catalog = Catalog.model_validate(catalog_data)
+    return _normalize_catalog_to_fixed_grid(catalog)
+
+
 def _load_catalog_legacy() -> Catalog:
     """Charge depuis catalog.json (legacy)."""
     path = _get_catalog_path()

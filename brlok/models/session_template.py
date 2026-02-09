@@ -27,4 +27,8 @@ class SessionTemplate(BaseModel):
         description="Configuration par bloc (niveau, timing)",
     )
     blocks_count: int = Field(default=5, ge=1, le=20, description="Nombre de blocs")
-    holds_per_block: int = Field(default=5, ge=1, le=20, description="Prises par bloc")
+    holds_per_block: int = Field(default=10, ge=1, le=20, description="Prises par bloc")
+    distribution_pattern: str = Field(
+        default="uniforme",
+        description="Répartition des prises dans un bloc (uniforme, progressive, pyramide, etc.)",
+    )
