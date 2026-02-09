@@ -17,6 +17,7 @@ from PySide6.QtWidgets import (
     QLineEdit,
     QMenu,
     QPushButton,
+    QScrollArea,
     QSizePolicy,
     QSplitter,
     QSpinBox,
@@ -130,25 +131,27 @@ class SessionWidget(QWidget):
         gen_layout.addStretch()
         right_layout.addWidget(self._generate_panel)
 
-        # Sidebar séance (visible quand séance en cours)
+        # Sidebar séance (visible quand séance en cours) — scrollable pour écrans portables
         self._sidebar = QFrame()
         self._sidebar.setObjectName("Sidebar")
         self._sidebar.setMinimumWidth(280)
         self._sidebar.setMaximumWidth(420)
-        sidebar_layout = QVBoxLayout(self._sidebar)
+        sidebar_content = QWidget()
+        sidebar_layout = QVBoxLayout(sidebar_content)
+        sidebar_layout.setContentsMargins(0, 0, 0, 0)
         self._sequence_panel_label = QLabel("Séquence du bloc")
         self._sequence_panel_label.setObjectName("SectionTitle")
         sidebar_layout.addWidget(self._sequence_panel_label)
         self._sequence_items_label = QLabel("")
-        self._sequence_items_label.setStyleSheet("font-size: 18pt; padding: 4px 0;")
+        self._sequence_items_label.setStyleSheet("font-size: 16pt; padding: 2px 0;")
         self._sequence_items_label.setWordWrap(True)
         self._sequence_items_label.setAlignment(Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignLeft)
         sidebar_layout.addWidget(self._sequence_items_label)
-        sidebar_layout.addSpacing(12)
+        sidebar_layout.addSpacing(8)
         self._toggle_timer_btn = QPushButton("⏱ Afficher timer 40/20")
         self._toggle_timer_btn.setToolTip("Lancer un timer travail/repos (40s/20s)")
         self._toggle_timer_btn.clicked.connect(self._toggle_timer_panel)
-        self._toggle_timer_btn.setStyleSheet("padding: 8px;")
+        self._toggle_timer_btn.setStyleSheet("padding: 6px;")
         sidebar_layout.addWidget(self._toggle_timer_btn)
         self._timer_panel = QFrame()
         self._timer_panel.setObjectName("TimerPanel")
@@ -158,7 +161,7 @@ class SessionWidget(QWidget):
         timer_layout.addWidget(self._timer_widget)
         self._timer_panel.setVisible(False)
         sidebar_layout.addWidget(self._timer_panel)
-        sidebar_layout.addSpacing(12)
+        sidebar_layout.addSpacing(8)
         comment_label = QLabel("Commentaire :")
         comment_label.setObjectName("Muted")
         sidebar_layout.addWidget(comment_label)
@@ -178,6 +181,14 @@ class SessionWidget(QWidget):
         pause_layout.addStretch()
         sidebar_layout.addWidget(self._pause_row)
         sidebar_layout.addStretch()
+        scroll = QScrollArea()
+        scroll.setWidget(sidebar_content)
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.Shape.NoFrame)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        scroll_layout = QVBoxLayout(self._sidebar)
+        scroll_layout.setContentsMargins(0, 0, 0, 0)
+        scroll_layout.addWidget(scroll)
         right_layout.addWidget(self._sidebar)
         splitter.addWidget(self._right_panel)
         splitter.setSizes([520, 350])

@@ -80,6 +80,8 @@ class IntervalTimerWidget(QWidget):
 
         if self._compact:
             config_layout = QGridLayout()
+            config_layout.setSpacing(4)
+            config_layout.setContentsMargins(0, 0, 0, 2)
             config_layout.addWidget(QLabel("Mode:"), 0, 0)
             config_layout.addWidget(self._mode_combo, 0, 1)
             config_layout.addWidget(QLabel("Rounds:"), 0, 2)
@@ -88,7 +90,6 @@ class IntervalTimerWidget(QWidget):
             config_layout.addWidget(self._work_spin, 1, 1)
             config_layout.addWidget(QLabel("Repos:"), 1, 2)
             config_layout.addWidget(self._rest_spin, 1, 3)
-            config_layout.setContentsMargins(0, 0, 0, 4)
         else:
             config_layout = QHBoxLayout()
             config_layout.addWidget(QLabel("Mode:"))
@@ -104,13 +105,14 @@ class IntervalTimerWidget(QWidget):
         layout.addWidget(self._config_container)
 
         self._pyramide_layout = QHBoxLayout()
-        self._pyramide_layout.addWidget(QLabel("Travail min (s):"))
+        self._pyramide_layout.setSpacing(4)
+        self._pyramide_layout.addWidget(QLabel("Travail min:"))
         self._work_min_spin = QSpinBox()
         self._work_min_spin.setRange(5, 120)
         self._work_min_spin.setValue(20)
         self._work_min_spin.valueChanged.connect(self._on_config_changed)
         self._pyramide_layout.addWidget(self._work_min_spin)
-        self._pyramide_layout.addWidget(QLabel("Travail max (s):"))
+        self._pyramide_layout.addWidget(QLabel("Travail max:"))
         self._work_max_spin = QSpinBox()
         self._work_max_spin.setRange(5, 300)
         self._work_max_spin.setValue(60)
@@ -122,22 +124,23 @@ class IntervalTimerWidget(QWidget):
         layout.addWidget(self._pyramide_widget)
 
         self._display_frame = QFrame()
-        pad = 8 if self._compact else 20
+        pad = 4 if self._compact else 20
         rad = 6 if self._compact else 12
         self._display_frame.setStyleSheet(
             f"background: #1a1a2e; border-radius: {rad}px; padding: {pad}px;"
         )
         disp_layout = QVBoxLayout(self._display_frame)
+        disp_layout.setSpacing(2 if self._compact else 8)
         self._time_label = QLabel("00:00")
-        time_fs = 36 if self._compact else 72
+        time_fs = 26 if self._compact else 72
         self._time_label.setStyleSheet(
             f"font-size: {time_fs}pt; font-weight: bold; color: #eee;"
         )
         self._time_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self._time_label.setMinimumHeight(72 if self._compact else 120)
+        self._time_label.setMinimumHeight(48 if self._compact else 120)
         disp_layout.addWidget(self._time_label)
         self._phase_label = QLabel("")
-        phase_fs = 12 if self._compact else 24
+        phase_fs = 10 if self._compact else 24
         self._phase_label.setStyleSheet(f"font-size: {phase_fs}pt; color: #aaa;")
         self._phase_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         disp_layout.addWidget(self._phase_label)
@@ -146,13 +149,13 @@ class IntervalTimerWidget(QWidget):
         btn_layout = QHBoxLayout()
         self._start_btn = QPushButton("▶ Démarrer")
         self._start_btn.clicked.connect(self._on_start)
-        self._start_btn.setMinimumHeight(32 if self._compact else 44)
-        self._start_btn.setStyleSheet("font-size: 11pt;" if self._compact else "font-size: 14pt;")
+        self._start_btn.setMinimumHeight(28 if self._compact else 44)
+        self._start_btn.setStyleSheet("font-size: 10pt;" if self._compact else "font-size: 14pt;")
         btn_layout.addWidget(self._start_btn)
         self._stop_btn = QPushButton("⏹ Arrêter")
         self._stop_btn.clicked.connect(self._on_stop)
         self._stop_btn.setEnabled(False)
-        self._stop_btn.setMinimumHeight(32 if self._compact else 44)
+        self._stop_btn.setMinimumHeight(28 if self._compact else 44)
         self._stop_btn.setStyleSheet("font-size: 11pt;" if self._compact else "")
         btn_layout.addWidget(self._stop_btn)
         layout.addLayout(btn_layout)
