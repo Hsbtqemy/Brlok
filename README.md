@@ -54,8 +54,18 @@ Tests : `pytest`
 | `catalog_collection.json` | Catalogues multi-pan |
 | `favorites.json` | Blocs favoris |
 | `sessions_history.json` | Historique des séances |
-| `session_templates.json` | Templates de séance |
+| `templates.json` | Templates de séance |
 | `best_times.json` | Meilleurs temps par séquence |
+
+### Dossier drop (import automatique)
+
+Déposez des fichiers dans **`import/`** (à la racine du projet) : au démarrage, Brlok les importe et les fusionne avec vos données, puis les déplace dans `import/imported/`.
+
+| Fichier à déposer | Fusion |
+|-------------------|--------|
+| `favorites.json` | Blocs ajoutés aux favoris (sans doublon) |
+| `templates.json` | Templates ajoutés (sans doublon de nom) |
+| `catalog_collection.json` | Chaque catalogue ajouté avec préfixe « Importé - » |
 
 ---
 

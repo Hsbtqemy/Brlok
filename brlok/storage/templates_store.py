@@ -77,6 +77,50 @@ def _ensure_default_templates() -> None:
 
 
 
+def merge_templates_from_file(path: Path) -> int:
+    """Fusionne les templates du fichier avec les templates existants.
+    Retourne le nombre de templates ajoutés. Exclut les doublons de nom."""
+    if not path.exists():
+        return 0
+    try:
+        with open(path, encoding="utf-8") as f:
+            data = json.load(f)
+    except (json.JSONDecodeError, OSError):
+        return 0
+    items = data.get("templates", [])
+    if not items:
+        return 0
+    existing = load_templates()
+    seen_names = {t.name.strip().lower() for t in existing}
+    added = 0
+    for item in items:
+        try:
+            t = SessionTemplate.model_validate(item)
+            t = t.model_copy(update={"id": str(uuid.uuid4())[:8]})
+            if t.name.strip().lower() not in seen_names:
+                existing.append(t)
+                seen_names.add(t.name.strip().lower())
+                added += 1
+        except ValidationError:
+            pass
+    if added:
+        save_templates(existing)
+    return added
+
+
+def export_templates_to_file(path: Path) -> None:
+    """Exporte les templates vers un fichier JSON."""
+    from datetime import datetime
+    templates = load_templates()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump({
+            "version": 1,
+            "updated_at": datetime.now().isoformat(),
+            "templates": [t.model_dump(mode="json") for t in templates],
+        }, f, ensure_ascii=False, indent=2)
+
+
 def save_templates(templates: list[SessionTemplate]) -> None:
     """Sauvegarde les templates."""
     path = _get_path()

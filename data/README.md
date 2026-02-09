@@ -6,4 +6,6 @@ Copie des templates, favoris et catalogues pour sauvegarde / partage.
 - `favorites.json` — blocs favoris
 - `catalog_collection.json` — catalogues multi-pan
 
-Pour restaurer : copier ces fichiers vers le répertoire de données Brlok (voir README principal).
+**Restaurer :**
+- Copier ces fichiers vers le répertoire de données Brlok (voir README principal), ou
+- Les déposer dans le dossier `import/` à la racine du projet : au démarrage, Brlok les importe et fusionne

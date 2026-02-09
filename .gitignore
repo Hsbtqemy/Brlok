@@ -23,6 +23,7 @@ dist/
 
 # User data
 Entraînement pan.ods
+import/imported/
 
 # Testing
 .pytest_cache/

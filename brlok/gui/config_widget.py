@@ -5,9 +5,12 @@ from __future__ import annotations
 from typing import Callable
 
 from PySide6.QtCore import Qt
+from pathlib import Path
+
 from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
+    QFileDialog,
     QFormLayout,
     QFrame,
     QGroupBox,
@@ -15,11 +18,15 @@ from PySide6.QtWidgets import (
     QInputDialog,
     QLabel,
     QLineEdit,
+    QMenu,
+    QMessageBox,
     QPushButton,
     QSpinBox,
     QVBoxLayout,
     QWidget,
 )
+
+from brlok.storage.templates_store import export_templates_to_file, merge_templates_from_file
 
 
 class ConfigWidget(QWidget):
@@ -64,6 +71,12 @@ class ConfigWidget(QWidget):
         self._save_template_btn.setToolTip("Sauvegarder la configuration actuelle comme nouveau template")
         self._save_template_btn.clicked.connect(self._on_save_as_template)
         template_row.addWidget(self._save_template_btn)
+        import_export_btn = QPushButton("Import / Export templates")
+        import_export_menu = QMenu(self)
+        import_export_menu.addAction("Importer depuis JSON…").triggered.connect(self._on_import_templates)
+        import_export_menu.addAction("Exporter en JSON…").triggered.connect(self._on_export_templates)
+        import_export_btn.setMenu(import_export_menu)
+        template_row.addWidget(import_export_btn)
         seq_layout.addRow("Template :", template_row)
         self._blocks_spin = QSpinBox()
         self._blocks_spin.setRange(1, 20)
@@ -191,6 +204,50 @@ class ConfigWidget(QWidget):
         val = self._chrono_mode_combo.currentData()
         if val:
             QSettings("brlok", "brlok").setValue("chrono_mode", val)
+
+    def _get_import_export_dir(self) -> str:
+        from PySide6.QtCore import QStandardPaths
+        docs = QStandardPaths.writableLocation(QStandardPaths.StandardLocation.DocumentsLocation)
+        return docs if docs else str(Path.home())
+
+    def _on_import_templates(self) -> None:
+        path, _ = QFileDialog.getOpenFileName(
+            self.window(),
+            "Importer des templates",
+            self._get_import_export_dir(),
+            "Fichiers JSON (*.json);;Tous les fichiers (*)",
+        )
+        if not path:
+            return
+        try:
+            added = merge_templates_from_file(Path(path))
+            self._refresh_templates()
+            if self._on_templates_changed:
+                self._on_templates_changed()
+            QMessageBox.information(
+                self,
+                "Import templates",
+                f"{added} template(s) importé(s) et fusionnés." if added else "Aucun nouveau template (doublons de nom exclus).",
+            )
+        except Exception as e:
+            QMessageBox.critical(self, "Erreur d'import", str(e))
+
+    def _on_export_templates(self) -> None:
+        path, _ = QFileDialog.getSaveFileName(
+            self.window(),
+            "Exporter les templates",
+            self._get_import_export_dir(),
+            "Fichiers JSON (*.json);;Tous les fichiers (*)",
+        )
+        if not path:
+            return
+        if not path.lower().endswith(".json"):
+            path = path + ".json"
+        try:
+            export_templates_to_file(Path(path))
+            QMessageBox.information(self, "Export", f"Templates exportés dans {path}")
+        except Exception as e:
+            QMessageBox.critical(self, "Erreur d'export", str(e))
 
     def _update_save_buttons_state(self) -> None:
         """Active/désactive le bouton Mettre à jour selon qu'un template est sélectionné."""

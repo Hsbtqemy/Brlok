@@ -17,16 +17,17 @@ from brlok.storage.favorites_store import (
 
 
 def test_save_json_contains_version(tmp_path: Path) -> None:
-    """JSON sauvegardé contient version et blocks (FR22)."""
+    """JSON sauvegardé contient version et by_catalog (v2, favoris par catalogue)."""
     with patch("brlok.storage.favorites_store._get_favorites_path", return_value=tmp_path / "favorites.json"):
         blocks = [
             Block(holds=[Hold(id="A1", level=2, tags=[], position=Position(row=0, col=0))]),
         ]
-        save_favorites(blocks)
+        save_favorites("test", blocks)
         with open(tmp_path / "favorites.json", encoding="utf-8") as f:
             data = json.load(f)
         assert "version" in data
-        assert "blocks" in data
+        assert "by_catalog" in data
+        assert "test" in data["by_catalog"]
 
 
 def test_save_and_load_favorites(tmp_path: Path) -> None:
@@ -39,8 +40,8 @@ def test_save_and_load_favorites(tmp_path: Path) -> None:
                 Hold(id="C3", level=3, tags=[], position=Position(row=2, col=2)),
             ]),
         ]
-        save_favorites(blocks)
-        loaded = load_favorites()
+        save_favorites("test", blocks)
+        loaded = load_favorites("test")
         assert len(loaded) == 2
         assert len(loaded[0].holds) == 1
         assert loaded[0].holds[0].id == "A1"
@@ -51,16 +52,16 @@ def test_save_and_load_favorites(tmp_path: Path) -> None:
 def test_load_empty_returns_list(tmp_path: Path) -> None:
     """Fichier absent → liste vide."""
     with patch("brlok.storage.favorites_store._get_favorites_path", return_value=tmp_path / "absent.json"):
-        assert load_favorites() == []
+        assert load_favorites("test") == []
 
 
 def test_add_favorite(tmp_path: Path) -> None:
     """add_favorite ajoute et sauvegarde."""
     with patch("brlok.storage.favorites_store._get_favorites_path", return_value=tmp_path / "favorites.json"):
         block = Block(holds=[Hold(id="A1", level=2, tags=[], position=Position(row=0, col=0))])
-        result = add_favorite(block)
+        result = add_favorite(block, catalog_id="test")
         assert len(result) == 1
-        assert load_favorites()[0].holds[0].id == "A1"
+        assert load_favorites("test")[0].holds[0].id == "A1"
 
 
 def test_remove_favorite(tmp_path: Path) -> None:
@@ -68,10 +69,10 @@ def test_remove_favorite(tmp_path: Path) -> None:
     with patch("brlok.storage.favorites_store._get_favorites_path", return_value=tmp_path / "favorites.json"):
         b1 = Block(holds=[Hold(id="A1", level=2, tags=[], position=Position(row=0, col=0))])
         b2 = Block(holds=[Hold(id="B2", level=2, tags=[], position=Position(row=1, col=1))])
-        add_favorite(b1)
-        add_favorite(b2)
-        remove_favorite(0)
-        loaded = load_favorites()
+        add_favorite(b1, catalog_id="test")
+        add_favorite(b2, catalog_id="test")
+        remove_favorite(0, catalog_id="test")
+        loaded = load_favorites("test")
         assert len(loaded) == 1
         assert loaded[0].holds[0].id == "B2"
 
@@ -81,12 +82,12 @@ def test_add_favorite_duplicate_ignored(tmp_path: Path) -> None:
     with patch("brlok.storage.favorites_store._get_favorites_path", return_value=tmp_path / "favorites.json"):
         hold = Hold(id="A1", level=2, tags=[], position=Position(row=0, col=0))
         block = Block(holds=[hold])
-        add_favorite(block)
+        add_favorite(block, catalog_id="test")
         # Même séquence (A1), positions différentes — ignoré
         block2 = Block(holds=[Hold(id="A1", level=3, tags=["x"], position=Position(row=1, col=1))])
-        result = add_favorite(block2)
+        result = add_favorite(block2, catalog_id="test")
         assert len(result) == 1
-        assert load_favorites()[0].holds[0].id == "A1"
+        assert load_favorites("test")[0].holds[0].id == "A1"
 
 
 def test_make_favorite_title() -> None:
@@ -108,7 +109,7 @@ def test_add_favorite_with_title(tmp_path: Path) -> None:
     """add_favorite avec title enregistre le bloc avec titre."""
     with patch("brlok.storage.favorites_store._get_favorites_path", return_value=tmp_path / "favorites.json"):
         block = Block(holds=[Hold(id="A1", level=2, tags=[], position=Position(row=0, col=0))])
-        add_favorite(block, title="2025-02-08 Modéré #1")
-        loaded = load_favorites()
+        add_favorite(block, catalog_id="test", title="2025-02-08 Modéré #1")
+        loaded = load_favorites("test")
         assert len(loaded) == 1
         assert loaded[0].title == "2025-02-08 Modéré #1"

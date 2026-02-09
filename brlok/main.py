@@ -21,11 +21,14 @@ def main() -> None:
 
 def _run_gui() -> None:
     """Ouvre la fenêtre GUI PySide6."""
-    from PySide6.QtWidgets import QApplication
+    from PySide6.QtWidgets import QApplication, QMessageBox
 
     from brlok.gui.icon import get_app_icon
     from brlok.gui.main_window import BrlokMainWindow
     from brlok.gui.theme import get_theme_manager
+    from brlok.storage.drop_import import process_drop_folder
+
+    processed = process_drop_folder()
 
     app = QApplication(sys.argv)
     app.setWindowIcon(get_app_icon())
@@ -34,6 +37,12 @@ def _run_gui() -> None:
     window = BrlokMainWindow()
     window.setWindowIcon(get_app_icon())
     window.show()
+    if processed:
+        QMessageBox.information(
+            window,
+            "Import automatique",
+            f"{len(processed)} fichier(s) importé(s) depuis import/ :\n" + "\n".join(f"  • {f}" for f in processed),
+        )
     sys.exit(app.exec())
 
 

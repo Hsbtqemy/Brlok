@@ -69,6 +69,29 @@ def _verify_imports() -> bool:
 
 def _launch_app() -> int:
     """Lance l'application Brlok."""
+    # Sur macOS : filtre stderr pour supprimer TSMSendMessageToUIServer (message système bénin)
+    if sys.platform == "darwin":
+        import threading
+
+        proc = subprocess.Popen(
+            [sys.executable, "-m", "brlok"],
+            cwd=PROJECT_ROOT,
+            stdout=sys.stdout,
+            stderr=subprocess.PIPE,
+            text=True,
+        )
+
+        def _filter_stderr():
+            if proc.stderr:
+                for line in proc.stderr:
+                    if "TSMSendMessageToUIServer" not in line:
+                        sys.stderr.write(line)
+                        sys.stderr.flush()
+
+        t = threading.Thread(target=_filter_stderr, daemon=True)
+        t.start()
+        proc.wait()
+        return proc.returncode or 0
     return subprocess.call(
         [sys.executable, "-m", "brlok"],
         cwd=PROJECT_ROOT,

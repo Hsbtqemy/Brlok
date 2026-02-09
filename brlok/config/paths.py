@@ -49,3 +49,13 @@ def get_best_times_path() -> Path:
 def get_catalog_collection_path() -> Path:
     """Chemin du fichier catalog_collection.json (7.1)."""
     return get_data_dir() / "catalog_collection.json"
+
+
+def get_drop_folder_path() -> Path:
+    """Dossier où déposer des fichiers pour import automatique au démarrage.
+    Repertoire « import/ » à la racine du projet (data/import/ à côté de data/).
+    Fichiers reconnus : favorites.json, templates.json, catalog_collection.json
+    """
+    # Racine du projet : brlok/config/paths.py → parent.parent.parent = racine
+    _project_root = Path(__file__).resolve().parent.parent.parent
+    return _project_root / "import"

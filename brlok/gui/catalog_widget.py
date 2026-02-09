@@ -26,6 +26,7 @@ from PySide6.QtWidgets import (
     QScrollArea,
     QSplitter,
     QSpinBox,
+    QToolButton,
     QTableWidget,
     QTableWidgetItem,
     QVBoxLayout,
@@ -72,6 +73,7 @@ class CatalogWidget(QWidget):
         on_save: Callable[[Catalog], None] | None = None,
         on_new_catalog: Callable[[Catalog, str], None] | None = None,
         on_set_default: Callable[[], None] | None = None,
+        on_remove_catalog: Callable[[], None] | None = None,
         catalog_combo: QComboBox | None = None,
     ) -> None:
         super().__init__(parent)
@@ -79,9 +81,17 @@ class CatalogWidget(QWidget):
         self._on_save = on_save
         self._cb_new_catalog = on_new_catalog
         self._on_set_default = on_set_default
+        self._on_remove_catalog = on_remove_catalog
         self._catalog_combo = catalog_combo
         self._sorted_holds: list = []
+        self._list_panel_expanded = True
+        self._list_panel_saved_width = 350
         self._build_ui()
+
+    def set_remove_catalog_enabled(self, enabled: bool) -> None:
+        """Active/désactive le bouton Supprimer ce catalogue."""
+        if self._remove_catalog_btn:
+            self._remove_catalog_btn.setEnabled(enabled)
 
     def set_catalog(self, catalog: Catalog) -> None:
         """Met à jour le catalogue affiché (7.1)."""
@@ -155,19 +165,36 @@ class CatalogWidget(QWidget):
             set_default_btn.clicked.connect(self._on_set_default)
             set_default_btn.setMinimumHeight(32)
             btn_layout.addWidget(set_default_btn)
+        self._remove_catalog_btn = None
+        if self._on_remove_catalog:
+            self._remove_catalog_btn = QPushButton("Supprimer ce catalogue")
+            self._remove_catalog_btn.setToolTip("Retirer ce catalogue de la collection (impossible s'il n'en reste qu'un)")
+            self._remove_catalog_btn.clicked.connect(self._on_remove_catalog)
+            self._remove_catalog_btn.setMinimumHeight(32)
+            btn_layout.addWidget(self._remove_catalog_btn)
         right_layout.addLayout(btn_layout)
         reset_foot_btn = QPushButton("Réinitialiser Pieds")
         reset_foot_btn.clicked.connect(self._on_reset_foot_grid)
         reset_foot_btn.setMinimumHeight(32)
         right_layout.addWidget(reset_foot_btn)
 
-        # Liste des prises
+        # Liste des prises (rétractable)
         self._list_frame = QFrame()
         self._list_frame.setFrameStyle(QFrame.Shape.StyledPanel)
         list_layout = QVBoxLayout(self._list_frame)
+        list_header = QHBoxLayout()
         list_label = QLabel("Prises:")
         list_label.setStyleSheet("font-weight: bold;")
-        list_layout.addWidget(list_label)
+        list_header.addWidget(list_label)
+        self._list_toggle_btn = QToolButton()
+        self._list_toggle_btn.setToolTip("Replier / Déplier la liste")
+        self._list_toggle_btn.setText("▼")
+        self._list_toggle_btn.setCheckable(True)
+        self._list_toggle_btn.setChecked(True)
+        self._list_toggle_btn.clicked.connect(self._on_toggle_list_panel)
+        list_header.addStretch()
+        list_header.addWidget(self._list_toggle_btn)
+        list_layout.addLayout(list_header)
         self._search_edit = QLineEdit()
         self._search_edit.setPlaceholderText("Rechercher (ID, tags)…")
         self._search_edit.setClearButtonEnabled(True)
@@ -228,6 +255,21 @@ class CatalogWidget(QWidget):
         self._catalog_splitter.setStretchFactor(1, 0)  # droite
         self._catalog_splitter.setCollapsible(1, True)
         main_layout.addWidget(self._catalog_splitter)
+
+    def _on_toggle_list_panel(self) -> None:
+        """Replie ou déplie le panneau liste des prises."""
+        self._list_panel_expanded = not self._list_panel_expanded
+        sizes = self._catalog_splitter.sizes()
+        total = sum(sizes)
+        if self._list_panel_expanded:
+            self._list_toggle_btn.setText("▼")
+            self._list_toggle_btn.setChecked(True)
+            self._catalog_splitter.setSizes([total - self._list_panel_saved_width, self._list_panel_saved_width])
+        else:
+            self._list_panel_saved_width = sizes[1] if sizes[1] > 0 else 350
+            self._list_toggle_btn.setText("▶")
+            self._list_toggle_btn.setChecked(False)
+            self._catalog_splitter.setSizes([total, 0])
 
     def _on_modify_holds(self) -> None:
         """Ouvre une fenêtre avec la liste des prises et leur difficulté."""

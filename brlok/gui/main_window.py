@@ -23,7 +23,7 @@ from PySide6.QtWidgets import (
 from brlok.generator import generate_session
 from brlok.models import Catalog, Session
 from brlok.storage.catalog_store import save_catalog
-from brlok.storage.catalog_collection_store import get_active_catalog, load_collection, set_active_catalog
+from brlok.storage.catalog_collection_store import get_active_catalog, load_collection, remove_catalog, set_active_catalog
 from brlok.storage.favorites_store import load_favorites
 from brlok.storage.history_store import add_to_history
 from brlok.config.difficulty import block_level_to_target
@@ -75,11 +75,13 @@ class BrlokMainWindow(QMainWindow):
             on_save=self._save_catalog,
             on_new_catalog=self._on_new_catalog,
             on_set_default=self._set_current_catalog_as_default,
+            on_remove_catalog=self._on_remove_catalog,
             catalog_combo=None,  # Sélecteur dans la toolbar
         )
         self._library_widget = LibraryWidget(
             on_load_session=self._load_session,
             on_go_session=lambda: self._tabs.setCurrentIndex(0),
+            on_get_catalog_id=lambda: self._catalog_combo.currentData(),
         )
         self._session_widget = SessionWidget(
             self._catalog,
@@ -87,6 +89,7 @@ class BrlokMainWindow(QMainWindow):
             on_generate=self._generate_session,
             on_favorites_changed=self._library_widget.refresh,
             on_end_session=self._on_end_session,
+            on_get_catalog_id=lambda: self._catalog_combo.currentData(),
         )
         self._config_widget = ConfigWidget(
             self,
@@ -103,6 +106,7 @@ class BrlokMainWindow(QMainWindow):
         self._tabs = tabs
 
         self.setCentralWidget(tabs)
+        self._catalog_widget.set_remove_catalog_enabled(len(load_collection().catalogs) > 1)
         self._setup_menu_bar()
 
     def _setup_menu_bar(self) -> None:
@@ -148,6 +152,8 @@ class BrlokMainWindow(QMainWindow):
                 active_idx = i
         self._catalog_combo.setCurrentIndex(active_idx)
         self._catalog_combo.blockSignals(False)
+        if hasattr(self, "_catalog_widget"):
+            self._catalog_widget.set_remove_catalog_enabled(len(coll.catalogs) > 1)
 
     def _set_current_catalog_as_default(self) -> None:
         """Définit le catalogue courant comme défaut (rechargé au démarrage)."""
@@ -160,6 +166,40 @@ class BrlokMainWindow(QMainWindow):
                 "Catalogue par défaut",
                 "Ce catalogue sera chargé par défaut au prochain démarrage.",
             )
+
+    def _on_remove_catalog(self) -> None:
+        """Supprime le catalogue actif (avec confirmation)."""
+        from PySide6.QtWidgets import QMessageBox
+        catalog_id = self._catalog_combo.currentData()
+        if not catalog_id:
+            return
+        coll = load_collection()
+        if len(coll.catalogs) <= 1:
+            QMessageBox.warning(
+                self,
+                "Suppression impossible",
+                "Impossible de supprimer le dernier catalogue.",
+            )
+            return
+        entry = next((e for e in coll.catalogs if e.id == catalog_id), None)
+        name = entry.name if entry else "catalogue"
+        reply = QMessageBox.question(
+            self,
+            "Supprimer le catalogue",
+            f"Supprimer « {name} » ? Les favoris associés à ce catalogue seront conservés.",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        )
+        if reply != QMessageBox.StandardButton.Yes:
+            return
+        if remove_catalog(catalog_id):
+            self._catalog = get_active_catalog()
+            self._refresh_catalog_combo()
+            self._catalog_widget.set_catalog(self._catalog)
+            self._session_widget.set_catalog(self._catalog)
+            self._config_widget.set_catalog(self._catalog)
+            self._library_widget.refresh()
+            QMessageBox.information(self, "Catalogue supprimé", "Le catalogue a été retiré de la collection.")
 
     def _on_catalog_selected(self, index: int) -> None:
         """Changement de catalogue actif (7.1)."""
@@ -226,7 +266,8 @@ class BrlokMainWindow(QMainWindow):
                 "Ajoutez des prises dans l'onglet Catalogue avant de générer une séance.",
             )
             return None
-        favorites = load_favorites()
+        catalog_id = self._catalog_combo.currentData()
+        favorites = load_favorites(catalog_id)
         self._session = generate_session(
             self._catalog,
             target_level=level,
@@ -280,7 +321,8 @@ class BrlokMainWindow(QMainWindow):
                 (block_level_to_target(cfg.level), 1)
                 for cfg in template.blocks_config[:blocks_count]
             ]
-        favorites = load_favorites()
+        catalog_id = self._catalog_combo.currentData()
+        favorites = load_favorites(catalog_id)
         self._session = generate_session(
             self._catalog,
             target_level=target_level,

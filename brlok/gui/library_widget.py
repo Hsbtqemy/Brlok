@@ -29,7 +29,14 @@ from PySide6.QtWidgets import (
 )
 
 from brlok.models import Block, CompletedSession, Session
-from brlok.storage.favorites_store import add_favorite, load_favorites, remove_favorite, save_favorites
+from brlok.storage.favorites_store import (
+    add_favorite,
+    export_favorites_to_file,
+    load_favorites,
+    merge_favorites_from_file,
+    remove_favorite,
+    save_favorites,
+)
 from brlok.storage.history_store import load_history
 
 
@@ -42,10 +49,12 @@ class LibraryWidget(QWidget):
         *,
         on_load_session: Callable[[Session], None] | None = None,
         on_go_session: Callable[[], None] | None = None,
+        on_get_catalog_id: Callable[[], str | None] | None = None,
     ) -> None:
         super().__init__(parent)
         self._on_load_session = on_load_session
         self._on_go_session = on_go_session
+        self._on_get_catalog_id = on_get_catalog_id
         self._history_filter_days: int | None = None  # None = tout, 7, 30
         self._search_text = ""
         self._build_ui()
@@ -82,7 +91,16 @@ class LibraryWidget(QWidget):
         fav_frame = QFrame()
         fav_frame.setFrameShape(QFrame.Shape.StyledPanel)
         fav_layout = QVBoxLayout(fav_frame)
-        fav_layout.addWidget(QLabel("☆ Favoris"))
+        fav_header = QHBoxLayout()
+        fav_header.addWidget(QLabel("☆ Favoris"))
+        fav_import_export = QPushButton("Import / Export favoris")
+        fav_import_menu = QMenu(self)
+        fav_import_menu.addAction("Importer depuis JSON…").triggered.connect(self._on_import_favorites)
+        fav_import_menu.addAction("Exporter en JSON…").triggered.connect(self._on_export_favorites)
+        fav_import_export.setMenu(fav_import_menu)
+        fav_header.addStretch()
+        fav_header.addWidget(fav_import_export)
+        fav_layout.addLayout(fav_header)
         self._fav_list = QListWidget()
         self._fav_list.setMinimumWidth(220)
         self._fav_list.currentItemChanged.connect(self._on_fav_selection_changed)
@@ -160,7 +178,8 @@ class LibraryWidget(QWidget):
     def refresh(self) -> None:
         """Rafraîchit Favoris et Historique depuis le stockage."""
         self._fav_list.clear()
-        blocks = load_favorites()
+        catalog_id = self._on_get_catalog_id() if self._on_get_catalog_id else None
+        blocks = load_favorites(catalog_id)
         if not blocks:
             placeholder = QListWidgetItem("(aucun favori)")
             placeholder.setData(Qt.ItemDataRole.UserRole, None)
@@ -237,10 +256,56 @@ class LibraryWidget(QWidget):
                 return data
         return None
 
+    def _get_catalog_id(self) -> str | None:
+        """ID du catalogue actif (pour favoris par catalogue)."""
+        return self._on_get_catalog_id() if self._on_get_catalog_id else None
+
     def _update_action_buttons(self) -> None:
         session = self._get_selected_session()
         self._load_btn.setEnabled(session is not None and bool(session.blocks))
         self._export_btn.setEnabled(session is not None and bool(session.blocks))
+
+    def _get_import_export_dir(self) -> str:
+        from PySide6.QtCore import QStandardPaths
+        docs = QStandardPaths.writableLocation(QStandardPaths.StandardLocation.DocumentsLocation)
+        return docs if docs else str(Path.home())
+
+    def _on_import_favorites(self) -> None:
+        path, _ = QFileDialog.getOpenFileName(
+            self.window(),
+            "Importer des favoris",
+            self._get_import_export_dir(),
+            "Fichiers JSON (*.json);;Tous les fichiers (*)",
+        )
+        if not path:
+            return
+        try:
+            added = merge_favorites_from_file(Path(path), self._get_catalog_id())
+            self.refresh()
+            QMessageBox.information(
+                self,
+                "Import favoris",
+                f"{added} bloc(s) importé(s) et fusionnés avec vos favoris." if added else "Aucun nouveau bloc (doublons exclus).",
+            )
+        except Exception as e:
+            QMessageBox.critical(self, "Erreur d'import", str(e))
+
+    def _on_export_favorites(self) -> None:
+        path, _ = QFileDialog.getSaveFileName(
+            self.window(),
+            "Exporter les favoris",
+            self._get_import_export_dir(),
+            "Fichiers JSON (*.json);;Tous les fichiers (*)",
+        )
+        if not path:
+            return
+        if not path.lower().endswith(".json"):
+            path = path + ".json"
+        try:
+            export_favorites_to_file(Path(path), self._get_catalog_id())
+            QMessageBox.information(self, "Export", f"Favoris exportés dans {path}")
+        except Exception as e:
+            QMessageBox.critical(self, "Erreur d'export", str(e))
 
     def _on_fav_selection_changed(self, current: QListWidgetItem | None, previous: QListWidgetItem | None) -> None:
         self._hist_list.clearSelection()
@@ -384,11 +449,12 @@ class LibraryWidget(QWidget):
                 QLineEdit.EchoMode.Normal, block.comment or "",
             )
             if ok:
-                blocks = load_favorites()
+                cid = self._get_catalog_id()
+                blocks = load_favorites(cid)
                 if 0 <= idx < len(blocks):
                     updated = blocks[idx].model_copy(update={"comment": new_comment.strip() or None})
                     blocks[idx] = updated
-                    save_favorites(blocks)
+                    save_favorites(cid, blocks)
                     self.refresh()
         elif action == act_remove:
             reply = QMessageBox.question(
@@ -398,7 +464,7 @@ class LibraryWidget(QWidget):
                 QMessageBox.StandardButton.No,
             )
             if reply == QMessageBox.StandardButton.Yes:
-                remove_favorite(idx)
+                remove_favorite(idx, self._get_catalog_id())
                 self.refresh()
 
     def _on_hist_context_menu(self, pos: object) -> None:
@@ -421,7 +487,8 @@ class LibraryWidget(QWidget):
             self._on_export_clicked()
         elif action == act_fav:
             from brlok.storage.favorites_store import make_favorite_title
-            prev = load_favorites()
+            cid = self._get_catalog_id()
+            prev = load_favorites(cid)
             added = 0
             target_level = cs.session.constraints.target_level if cs.session.constraints else None
             for i, block in enumerate(cs.session.blocks):
@@ -430,7 +497,7 @@ class LibraryWidget(QWidget):
                     date=cs.date,
                     block_index=i,
                 )
-                new_list = add_favorite(block, prev, title=title)
+                new_list = add_favorite(block, catalog_id=cid, existing=prev, title=title)
                 if len(new_list) > len(prev):
                     added += 1
                 prev = new_list

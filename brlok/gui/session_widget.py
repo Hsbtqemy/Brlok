@@ -43,6 +43,7 @@ class SessionWidget(QWidget):
         on_generate: Callable[[int, int, int, int, str | None], object | None] | None = None,
         on_favorites_changed: Callable[[], None] | None = None,
         on_end_session: Callable[[Session, dict[int, str]], None] | None = None,
+        on_get_catalog_id: Callable[[], str | None] | None = None,
     ) -> None:
         super().__init__(parent)
         self._catalog = catalog
@@ -55,6 +56,7 @@ class SessionWidget(QWidget):
         self._on_generate = on_generate
         self._on_favorites_changed = on_favorites_changed
         self._cb_end_session = on_end_session
+        self._on_get_catalog_id = on_get_catalog_id
         self._build_ui()
 
     def set_session(self, session: Session | None) -> None:
@@ -353,7 +355,8 @@ class SessionWidget(QWidget):
             target_level=target_level,
             block_index=self._block_index,
         )
-        add_favorite(block, title=title)
+        catalog_id = self._on_get_catalog_id() if self._on_get_catalog_id else None
+        add_favorite(block, catalog_id=catalog_id, title=title)
         QMessageBox.information(
             self, "Favori ajouté",
             f"Bloc ajouté aux favoris : {title}\n{' → '.join(h.id for h in block.holds)}",
