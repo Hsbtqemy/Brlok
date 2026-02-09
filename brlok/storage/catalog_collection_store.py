@@ -79,7 +79,36 @@ def load_collection() -> CatalogCollection:
         save_collection(coll)
         return coll
 
-    # Nouvelle installation : catalogue par défaut (persisté immédiatement)
+    # Nouvelle installation : utiliser data/catalog_collection.json du repo si présent
+    _bundled_data = Path(__file__).resolve().parent.parent.parent / "data" / "catalog_collection.json"
+    if _bundled_data.exists():
+        try:
+            with open(_bundled_data, encoding="utf-8") as f:
+                data = json.load(f)
+            coll = CatalogCollection.model_validate(data)
+            # Normaliser à la grille fixe
+            def _norm(c: Catalog) -> Catalog:
+                from brlok.models import DEFAULT_GRID
+                if c.grid.rows == DEFAULT_GRID.rows and c.grid.cols == DEFAULT_GRID.cols:
+                    return c
+                rows, cols = DEFAULT_GRID.rows, DEFAULT_GRID.cols
+                kept = [h for h in c.holds if 0 <= h.position.row < rows and 0 <= h.position.col < cols]
+                return Catalog(
+                    holds=kept,
+                    grid=DEFAULT_GRID,
+                    foot_grid=c.foot_grid,
+                    foot_levels=getattr(c, "foot_levels", None) or _default_foot_levels(),
+                )
+            coll.catalogs = [
+                CatalogEntry(id=e.id, name=e.name, catalog=_norm(e.catalog))
+                for e in coll.catalogs
+            ]
+            save_collection(coll)
+            return coll
+        except (json.JSONDecodeError, ValidationError, OSError) as e:
+            logger.warning("Catalogue fourni (data/) illisible: %s", e)
+
+    # Fallback : catalogue générique (grille A1..F7, niveau 1)
     from brlok.storage.catalog_store import create_default_catalog
     default = create_default_catalog()
     entry = CatalogEntry(id="default", name="Pan principal", catalog=default)

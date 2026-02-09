@@ -77,7 +77,7 @@ class CatalogWidget(QWidget):
         super().__init__(parent)
         self._catalog = catalog
         self._on_save = on_save
-        self._on_new_catalog = on_new_catalog
+        self._cb_new_catalog = on_new_catalog
         self._on_set_default = on_set_default
         self._catalog_combo = catalog_combo
         self._sorted_holds: list = []
@@ -130,7 +130,7 @@ class CatalogWidget(QWidget):
         for btn in (
             ("Modifier les prises", self._on_modify_holds),
             ("Ajouter une prise", self._on_add_hold_clicked),
-            ("Nouveau catalogue", self._on_new_catalog),
+            ("Nouveau catalogue", self._on_new_catalog_clicked),
         ):
             b = QPushButton(btn[0])
             b.clicked.connect(btn[1])
@@ -603,20 +603,33 @@ class CatalogWidget(QWidget):
         left_layout.insertWidget(0, self._grid_widget)
         self._refresh_table()
 
-    def _on_new_catalog(self) -> None:
+    def _on_new_catalog_clicked(self) -> None:
         """Crée un nouveau catalogue et l'ajoute à la collection (7.1)."""
         from PySide6.QtWidgets import QInputDialog, QMessageBox
 
-        if self._on_new_catalog:
+        if self._cb_new_catalog:
+            parent = self.window() or self
+            if parent:
+                parent.raise_()
+                parent.activateWindow()
             name, ok = QInputDialog.getText(
-                self,
+                parent,
                 "Nouveau catalogue",
                 "Nom du catalogue :",
                 text="Pan salle",
             )
-            if ok and name.strip():
-                new_cat = create_default_catalog()
-                self._on_new_catalog(new_cat, name.strip())
+            if not ok:
+                return
+            name = name.strip()
+            if not name:
+                QMessageBox.warning(
+                    parent,
+                    "Nouveau catalogue",
+                    "Le nom ne peut pas être vide.",
+                )
+                return
+            new_cat = create_default_catalog()
+            self._cb_new_catalog(new_cat, name)
             return
 
         reply = QMessageBox.question(
