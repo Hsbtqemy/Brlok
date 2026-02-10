@@ -84,8 +84,22 @@ jobs:
 
       - name: Prepare release assets
         run: |
-          mv Brlok-Windows/Brlok.exe .
-          mv Brlok-macOS/Brlok-macos.app.zip .
+          if [ -f Brlok-Windows/dist/Brlok.exe ]; then
+            cp Brlok-Windows/dist/Brlok.exe .
+          elif [ -f Brlok-Windows/Brlok.exe ]; then
+            cp Brlok-Windows/Brlok.exe .
+          else
+            echo "Contents of Brlok-Windows:" && ls -laR Brlok-Windows/
+            exit 1
+          fi
+          if [ -f Brlok-macOS/dist/Brlok-macos.app.zip ]; then
+            cp Brlok-macOS/dist/Brlok-macos.app.zip .
+          elif [ -f Brlok-macOS/Brlok-macos.app.zip ]; then
+            cp Brlok-macOS/Brlok-macos.app.zip .
+          else
+            echo "Contents of Brlok-macOS:" && ls -laR Brlok-macOS/
+            exit 1
+          fi
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
