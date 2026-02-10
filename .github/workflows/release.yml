@@ -27,7 +27,7 @@ jobs:
       - name: Build .exe
         run: |
           python -m pip install pyinstaller
-          python -m pyinstaller --onefile --windowed --name=Brlok --clean --noconfirm brlok/__main__.py
+          python -m PyInstaller --onefile --windowed --name=Brlok --clean --noconfirm brlok/__main__.py
 
       - name: Upload Windows artifact
         uses: actions/upload-artifact@v4
@@ -53,7 +53,7 @@ jobs:
       - name: Build .app
         run: |
           python -m pip install pyinstaller
-          python -m pyinstaller --windowed --name=Brlok --clean --noconfirm brlok/__main__.py
+          python -m PyInstaller --windowed --name=Brlok --clean --noconfirm brlok/__main__.py
 
       - name: Zip .app for upload
         run: |
