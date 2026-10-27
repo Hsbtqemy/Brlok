@@ -492,3 +492,64 @@ describe("réussir un bloc rapporte du temps", () => {
     expect(game.log.at(-1)).toMatchObject({ text: "Chute : exd5 est joué, mais ton pion ne pourra pas bouger au prochain tour.", tone: "mauvais" });
   });
 });
+
+describe("rythme par séries (§5.6)", () => {
+  function soloSeries() {
+    return setup("classique", "modere", {
+      rhythm: "series",
+      players: { w: { name: "A", climbRating: 1500, fatigue: false }, b: { name: "SF", climbRating: 0, fatigue: false } },
+      engine: { color: "b", elo: 1500 },
+    });
+  }
+
+  it("les coups passent tout de suite, les blocs attendent puis se grimpent par trois", () => {
+    const { game, requests } = soloSeries();
+    playLine(game, ["e2e4", "d7d5"]);
+    game.play("e4", "d5", undefined, 0); // exd5 : coup joué, bloc mis de côté
+    expect(game.phase).toBe("move");
+    expect(game.chess.get("d5")?.color).toBe("w");
+    expect(game.queue.w).toHaveLength(1);
+    game.play("d8", "d5", undefined, 0); // le moteur reprend : défense mise de côté
+    expect(game.queue.w).toHaveLength(2);
+    expect(game.canGoToWall()).toBe(true);
+    playLine(game, ["b1c3"]);
+    game.play("d5", "a2", undefined, 0); // Dxa2 : troisième bloc, passage au mur
+    expect(game.chess.get("a2")?.type).toBe("q");
+    expect(game.phase).toBe("block");
+    expect(game.pending?.series).toEqual({ index: 1, total: 3 });
+    const before = game.clock.remainingAt("w", 0);
+    game.blockResult(true, 0);
+    expect(game.pending?.series?.index).toBe(2);
+    game.blockResult(false, 0); // défense ratée : du temps perdu, rien sur l'échiquier
+    game.blockResult(true, 0);
+    expect(game.phase).toBe("move");
+    expect(game.turn).toBe("w");
+    expect(game.queue.w).toHaveLength(0);
+    expect(game.clock.remainingAt("w", 0)).not.toBe(before);
+    expect(requests.filter((r) => r.climber === "w")).toHaveLength(3);
+  });
+
+  it("aller au mur avant d'avoir trois blocs, et la file survit à la sauvegarde", () => {
+    const { game } = soloSeries();
+    playLine(game, ["e2e4", "d7d5"]);
+    game.play("e4", "d5", undefined, 0);
+    game.play("d8", "d5", undefined, 0);
+    const restored = ChesscaladeGame.restore(JSON.parse(JSON.stringify(game.save(0))), () => ({ holds: [], estimatedRating: 1500, relaxations: [] }), 0);
+    expect(restored.queue.w).toHaveLength(2);
+    restored.goToWall(0);
+    expect(restored.pending?.series).toEqual({ index: 1, total: 2 });
+    restored.blockResult(true, 0);
+    restored.blockResult(true, 0);
+    expect(restored.phase).toBe("move");
+    expect(restored.canGoToWall()).toBe(false);
+  });
+
+  it("le mat se grimpe aussitôt", () => {
+    const { game } = setup("classique", "modere", { rhythm: "series" });
+    playLine(game, ["e2e4", "e7e5", "f1c4", "b8c6", "d1h5", "g8f6"]);
+    game.play("h5", "f7", undefined, 0);
+    expect(game.phase).toBe("block");
+    expect(game.pending?.series).toBeUndefined();
+    expect(game.pending?.move?.san).toBe("Qxf7#");
+  });
+});

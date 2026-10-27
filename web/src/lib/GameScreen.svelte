@@ -2,6 +2,7 @@
   import type { PieceSymbol, Square } from "chess.js";
   import {
     ChesscaladeGame,
+    SERIES_SIZE,
     VERDICT_LABELS,
     type BlockRequest,
     type Color,
@@ -9,6 +10,7 @@
     type Deviation,
     type Difficulty,
     type Format,
+    type Rhythm,
   } from "../core/game";
   import { engineSettings, pickEngineMove } from "../core/engine";
   import { FOOT_RULES, type FootRule } from "../core/feet";
@@ -46,10 +48,13 @@
   let deviation = $state<Deviation>("courte");
   let feetRule = $state<"auto" | FootRule>("auto");
   let density = $state<Density>("normale");
+  /** Rythme : par défaut, par séries en solo et à chaque bloc à deux. */
+  let rhythmChoice = $state<Rhythm | null>(null);
   let whiteId = $state(app.ratings.players[0]?.id ?? "");
   let blackId = $state(app.ratings.players[1]?.id ?? app.ratings.players[0]?.id ?? "");
   let fatigue = $state<Record<Color, boolean>>({ w: false, b: false });
   let mode = $state<"duo" | "solo">("solo");
+  const rhythm = $derived<Rhythm>(rhythmChoice ?? (mode === "solo" ? "series" : "immediat"));
   /** Mur à voies : voies retenues pour la partie (vide : toutes). */
   let gameRoutes = $state<string[]>([]);
 
@@ -133,7 +138,7 @@
       const players = humanColor === "w" ? { w: human, b: engine } : { w: engine, b: human };
       ids = humanColor === "w" ? { w: soloId, b: "" } : { w: "", b: soloId };
       game = new ChesscaladeGame(
-        { format, difficulty, deviation, players, engine: { color: engineColor, elo: engineElo }, bell: family === "C", feet: feetRule, density },
+        { format, difficulty, deviation, players, engine: { color: engineColor, elo: engineElo }, bell: family === "C", feet: feetRule, density, rhythm },
         makeBlock,
         Date.now(),
       );
@@ -144,7 +149,7 @@
         b: { name: nameOf(blackId), climbRating: climbRating(blackId), fatigue: fatigue.b },
       };
       ids = { w: whiteId, b: blackId };
-      game = new ChesscaladeGame({ format, difficulty, deviation, players, bell: family === "C", feet: feetRule, density }, makeBlock, Date.now());
+      game = new ChesscaladeGame({ format, difficulty, deviation, players, bell: family === "C", feet: feetRule, density, rhythm }, makeBlock, Date.now());
     }
     engineError = "";
     selected = null;
@@ -322,6 +327,8 @@
       log: [...game.log].reverse().slice(0, 12),
       sans: history.map((m) => m.san),
       canRecharge: game.canRecharge(),
+      queued: game.queue[turn].length,
+      canGoToWall: game.canGoToWall(),
       canCounter: game.canCounterAttack(),
       bell: game.config.bell ? { left: Math.max(0, game.nextBellAt() - game.bellPlayTimeMs), rung: game.bellsRung } : null,
       engineTurn: game.isEngineTurn(),
@@ -389,6 +396,12 @@
   function counterAttack() {
     game?.requestCounterAttack(Date.now());
     selected = null;
+    refresh();
+  }
+
+  function goToWall() {
+    if (!game?.canGoToWall()) return;
+    game.goToWall(Date.now());
     refresh();
   }
 
@@ -613,6 +626,18 @@
       </p>
     </div>
     <div class="field">
+      Rythme
+      <div class="row">
+        <button aria-pressed={rhythm === "series"} onclick={() => (rhythmChoice = "series")}>Par séries de {SERIES_SIZE}</button>
+        <button aria-pressed={rhythm === "immediat"} onclick={() => (rhythmChoice = "immediat")}>À chaque bloc</button>
+      </div>
+      <p class="hint">
+        {#if rhythm === "series"}Les coups sont joués tout de suite et leurs blocs mis de côté ; à {SERIES_SIZE} blocs en attente (ou quand
+          tu veux), tu les grimpes d'affilée, pendule en pause. Réussite : du temps gagné ; chute : du temps perdu. Le mat se grimpe aussitôt.
+        {:else}Chaque bloc se grimpe dès qu'il est demandé, et son résultat décide du coup (validé, limité, annulé, dévié…).{/if}
+      </p>
+    </div>
+    <div class="field">
       Pieds
       <div class="row">
         <button aria-pressed={feetRule === "auto"} onclick={() => (feetRule = "auto")}>Selon le niveau</button>
@@ -688,6 +713,7 @@
           block={p.block}
           title={`${KIND_LABEL[p.request.kind]} — ${game.config.players[p.request.climber].name}`}
           subtitle={[
+            p.series ? `Série : bloc ${p.series.index}/${p.series.total}` : "",
             p.move ? `Coup en suspens : ${p.move.san}` : "",
             p.triggers.length ? `déclencheur : ${p.triggers.map((t) => TRIGGER_LABEL[t]).join(" + ")}` : "",
             `caractère : ${pieceLabel(p.request.piece)}`,
@@ -723,6 +749,12 @@
             <button class="counter" onclick={counterAttack}>Contre-attaque</button>
           {/if}
         </div>
+        {#if game.config.rhythm === "series"}
+          <div class="row queue">
+            <span>Blocs en attente : <strong>{view.queued}/{SERIES_SIZE}</strong></span>
+            <button class="primary" disabled={!view.canGoToWall} onclick={goToWall}>Aller au mur maintenant</button>
+          </div>
+        {/if}
         <p class="hint">
           Recharge : la pendule tourne pendant le bloc. Disponible tous les 5 coups.
           {#if view.canCounter}Contre-attaque (une fois par partie) : un bloc très dur pour annuler le dernier coup du moteur.{/if}
@@ -775,6 +807,10 @@
 {/if}
 
 <style>
+  .queue {
+    align-items: center;
+    margin-top: 0.5rem;
+  }
   .setup {
     max-width: 720px;
     margin: 0 auto;

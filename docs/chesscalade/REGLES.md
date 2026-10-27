@@ -274,6 +274,20 @@ La **densité** se choisit au lancement de la partie (familles C et D) :
 - Le coup rejoué au même moment après une prise **annulée** (V3, V4) n'est pas en récupération : rater
   une prise ne rend pas la suivante gratuite.
 
+### 5.6 Rythme : à chaque bloc ou par séries
+
+Deuxième retour en solo : même avec moins de blocs, les allers-retours entre la tablette et le mur cassent
+le rythme. Le **rythme** se choisit au lancement (familles C et D) :
+
+- **À chaque bloc** (défaut à deux) : chaque bloc se grimpe dès qu'il est demandé, et son résultat décide du
+  coup (verdicts §5.2 et §5.3).
+- **Par séries de 3** (défaut en solo) : le coup déclencheur est **joué tout de suite** et son bloc est
+  **mis de côté** (« 1/3 », « 2/3 »…). Au 3ᵉ bloc en attente, ou quand le joueur le décide (« Aller au mur
+  maintenant », à son tour), il grimpe les blocs **d'affilée**, pendule en pause (sauf Diabolique). Pas de
+  verdict, puisque les coups sont déjà joués : un bloc réussi **rapporte du temps** (bonus de réussite, §4),
+  une chute **en coûte** (pénalité du niveau). Les blocs de défense et les parades rejoignent la même file.
+- Le **mat** se grimpe toujours aussitôt, avec son verdict (§6 règle 5).
+
 ---
 
 ## 6. Règles de sécurité du jeu (ne jamais bloquer la partie)

@@ -12,6 +12,10 @@ export type { Color, Square };
 export type Format = "blitz" | "classique";
 export type Difficulty = "facile" | "modere" | "difficile" | "diabolique";
 export type Deviation = "courte" | "libre";
+/** Rythme (§5.6) : grimper à chaque déclencheur, ou par séries de blocs mis de côté. */
+export type Rhythm = "immediat" | "series";
+/** Rythme par séries : nombre de blocs en attente qui envoie au mur. */
+export const SERIES_SIZE = 3;
 /** Densité de blocs (§5.5) : combien de coups demandent de grimper. */
 export type Density = "legere" | "normale" | "intense";
 export type Trigger = "capture" | "echec" | "promotion" | "roque" | "mat";
@@ -38,6 +42,8 @@ export interface GameConfig {
   feet?: "auto" | FootRule;
   /** Densité de blocs (§5.5) ; « normale » par défaut. */
   density?: Density;
+  /** Rythme (§5.6) ; « immediat » par défaut. */
+  rhythm?: Rhythm;
 }
 
 export interface BlockRequest {
@@ -62,6 +68,8 @@ export interface PendingBlock {
   move?: Move;
   /** Recharge « bloc dur ». */
   hard?: boolean;
+  /** Rythme par séries : place du bloc dans la série en cours. */
+  series?: { index: number; total: number };
   startedAt: number;
 }
 
@@ -281,6 +289,8 @@ export interface SavedGame {
   exhaustionOrder: number;
   bell?: { playTimeMs: number; rung: number; queue: Color[] };
   lastBlockPly?: Record<Color, number>;
+  queue?: Record<Color, BlockRequest[]>;
+  seriesRest?: BlockRequest[];
 }
 
 const SAVED_LOG_LIMIT = 60;
@@ -351,6 +361,9 @@ export class ChesscaladeGame {
   bellQueue: Color[] = [];
   /** Demi-coup du dernier bloc de chaque joueur (temps de récupération, §5.5). */
   lastBlockPly: Record<Color, number> = { w: -100, b: -100 };
+  /** Rythme par séries : blocs mis de côté pour chaque joueur, et suite de la série en cours. */
+  queue: Record<Color, BlockRequest[]> = { w: [], b: [] };
+  private seriesRest: BlockRequest[] = [];
   private lastTickAt: number | null = null;
 
   constructor(
@@ -393,6 +406,8 @@ export class ChesscaladeGame {
       exhaustionOrder: this.exhaustionOrder,
       bell: { playTimeMs: this.bellPlayTimeMs, rung: this.bellsRung, queue: [...this.bellQueue] },
       lastBlockPly: { ...this.lastBlockPly },
+      queue: jsonClone(this.queue),
+      seriesRest: jsonClone(this.seriesRest),
     };
   }
 
@@ -434,6 +449,8 @@ export class ChesscaladeGame {
     game.bellsRung = saved.bell?.rung ?? 0;
     game.bellQueue = [...(saved.bell?.queue ?? [])];
     game.lastBlockPly = { ...(saved.lastBlockPly ?? { w: -100, b: -100 }) };
+    game.queue = jsonClone(saved.queue ?? { w: [], b: [] });
+    game.seriesRest = jsonClone(saved.seriesRest ?? []);
     return game;
   }
 
@@ -530,7 +547,62 @@ export class ChesscaladeGame {
     }
     this.lastBlockPly[color] = this.chess.history().length;
     const request = this.defiRequest(color, move, kept);
+    if (this.config.rhythm === "series" && !kept.includes("mat")) {
+      // Par séries : le coup est joué tout de suite, le bloc attend (le mat, lui, se grimpe aussitôt).
+      this.applyMove(move, now);
+      this.enqueue(color, request, `${move.san}`, now);
+      return;
+    }
     this.startBlock({ request, triggers: kept, move }, now);
+  }
+
+  /** Rythme par séries : aller au mur maintenant avec les blocs en attente. */
+  canGoToWall(): boolean {
+    return this.phase === "move" && !this.isEngineTurn() && this.queue[this.turn].length > 0;
+  }
+
+  goToWall(now: number): void {
+    if (!this.canGoToWall()) throw new Error("Aucun bloc en attente.");
+    this.startSeries(this.turn, now);
+  }
+
+  private enqueue(color: Color, request: BlockRequest, label: string, now: number): void {
+    this.queue[color].push(request);
+    const n = this.queue[color].length;
+    this.note(color, `Bloc mis de côté (${label}) : ${n}/${SERIES_SIZE}.`);
+    if (n >= SERIES_SIZE && this.phase === "move") this.startSeries(color, now);
+  }
+
+  private startSeries(color: Color, now: number): void {
+    const [first, ...rest] = this.queue[color];
+    this.queue[color] = [];
+    if (!first) return;
+    this.seriesRest = rest;
+    this.note(color, `Passage au mur : ${rest.length + 1} bloc(s) d'affilée.`);
+    this.startBlock({ request: first, triggers: [], series: { index: 1, total: rest.length + 1 } }, now);
+  }
+
+  /** Bloc d'une série : la réussite rapporte du temps, la chute en coûte (les coups sont déjà joués). */
+  private resolveSeriesBlock(pending: PendingBlock, success: boolean, now: number): void {
+    const climber = pending.request.climber;
+    const series = pending.series!;
+    const kind = pending.request.kind === "defi" ? "defi" : "autre";
+    if (success) {
+      this.consecutiveFalls[climber] = 0;
+      this.note(climber, `Bloc ${series.index}/${series.total} réussi : +${this.reward(climber, kind, now)} s.`, "bon");
+    } else {
+      const penaltyMs = DIFFICULTY[this.config.difficulty].penaltyMs;
+      this.penalize(climber, penaltyMs, now);
+      this.note(climber, `Bloc ${series.index}/${series.total} raté : tu perds ${penaltyMs / 1000} s.`, "mauvais");
+    }
+    const [next, ...rest] = this.seriesRest;
+    if (next) {
+      this.seriesRest = rest;
+      this.startBlock({ request: next, triggers: [], series: { index: series.index + 1, total: series.total } }, now);
+      return;
+    }
+    this.phase = "move";
+    this.clock.run(this.turn, now);
   }
 
   /** Recharge volontaire : la pendule du grimpeur continue de tourner (§4). */
@@ -566,6 +638,11 @@ export class ChesscaladeGame {
     this.pending = null;
     this.phase = "move";
     const outcome: BlockOutcome = { climber, kind: request.kind, block: pending.block, success };
+    if (pending.series) {
+      this.resolveSeriesBlock(pending, success, now);
+      this.checkFlag(now);
+      return outcome;
+    }
 
     switch (request.kind) {
       case "recharge":
@@ -748,7 +825,7 @@ export class ChesscaladeGame {
     return rule === "auto" ? AUTO_FEET[this.config.difficulty] : rule;
   }
 
-  private startBlock(init: { request: BlockRequest; triggers: Trigger[]; move?: Move; hard?: boolean }, now: number): void {
+  private startBlock(init: { request: BlockRequest; triggers: Trigger[]; move?: Move; hard?: boolean; series?: { index: number; total: number } }, now: number): void {
     const request = { ...init.request, feet: this.footRule(init.request.kind) };
     init = { ...init, request };
     const d = DIFFICULTY[this.config.difficulty];
@@ -889,7 +966,8 @@ export class ChesscaladeGame {
         length: PARADE_LENGTH,
         cruxLast: false,
       };
-      this.startBlock({ request, triggers: [] }, now);
+      if (this.config.rhythm === "series") this.enqueue(opponent, request, "parade", now);
+      else this.startBlock({ request, triggers: [] }, now);
     }
   }
 
@@ -912,6 +990,10 @@ export class ChesscaladeGame {
       length: FORMAT[this.config.format].length - 1,
       cruxLast: false,
     };
+    if (this.config.rhythm === "series") {
+      this.enqueue(human, request, `défense sur ${move.san}`, now);
+      return;
+    }
     this.startBlock({ request, triggers, move }, now);
   }
 
