@@ -27,6 +27,8 @@ export interface AttemptRecord {
   context: "libre" | "partie" | "placement";
   /** Règle de pieds du bloc (absente : pieds libres). */
   feet?: string;
+  /** Mur à voies : la voie tentée (pour le carnet). */
+  routeId?: string;
   ratingBefore: number;
   ratingAfter: number;
   blockRating: number;
@@ -130,6 +132,7 @@ export function recordBlockAttempt(
     success,
     context,
     ...(block.feet ? { feet: block.feet } : {}),
+    ...(block.route ? { routeId: block.route.id } : {}),
     ratingBefore: Math.round(before.rating),
     ratingAfter: Math.round(updated.climber.rating),
     blockRating: Math.round(blockBefore.rating),
@@ -175,6 +178,7 @@ export function recordPlacement(
       holds: ids,
       success: result.success,
       context: "placement",
+      ...(block.route ? { routeId: block.route.id } : {}),
       ratingBefore: before,
       ratingAfter: Math.round(rating.rating),
       blockRating: Math.round(current.rating),

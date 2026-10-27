@@ -13,6 +13,8 @@
   import GymEditor from "./GymEditor.svelte";
   import RouteView from "./RouteView.svelte";
   import { EXPRESS_LEVEL, expressWall, newWall } from "../core/wallEdit";
+  import { activeRoutes, gradeToRating, routeBlock, routeHex, routeLabel, routeLogs } from "../core/gym";
+  import type { Route } from "../core/wall";
 
   let expressCols = $state(6);
   let expressRows = $state(7);
@@ -54,10 +56,11 @@
   let footMerges = $state<FootMerge[]>([]);
   let message = $state("");
 
-  let mode = $state<"chesscalade" | "classique">("chesscalade");
+  let mode = $state<"chesscalade" | "classique" | "carnet">("chesscalade");
 
   // Chesscalade
-  let piece = $state<Piece>("cavalier");
+  /** Pièce facultative : sans pièce, simplement un bloc (ou une voie) à la cote visée. */
+  let piece = $state<Piece | null>("cavalier");
   let targetRating = $state(Math.round(app.activePlayer?.ratings.grimpe.rating ?? 1500));
   let length = $state(6);
   let cruxLast = $state(false);
@@ -76,10 +79,44 @@
   let classicSelected = $state(0);
 
   /** Bloc affiché, et s'il a déjà été noté (une seule tentative enregistrée par bloc affiché). */
-  const currentBlock = $derived(mode === "chesscalade" ? chessBlock : (classicSession[classicSelected] ?? null));
+  // Séance de voies et carnet (mur à voies)
+  let gymTarget = $state(Math.round(app.activePlayer?.ratings.grimpe.rating ?? 1500));
+  let gymCount = $state(6);
+  let gymPattern = $state<DistributionPattern>("pyramide");
+  let carnetBlock = $state<Block | null>(null);
+  let carnetFilter = $state<"toutes" | "a-faire">("toutes");
+  const logs = $derived(app.activePlayer && app.wall ? routeLogs(app.ratings.attempts, app.activePlayer.id, app.wall.id) : new Map());
+  const carnetRoutes = $derived(
+    app.wall && isGym
+      ? activeRoutes(app.wall, (r) => app.routeRating(r))
+          .filter((c) => carnetFilter === "toutes" || !logs.get(c.route.id)?.successes)
+          // Ordre stable (cotation, puis nom) : la liste ne bouge pas quand une cote apprise change.
+          .sort((a, b) => gradeToRating(a.route.grade) - gradeToRating(b.route.grade) || routeLabel(a.route).localeCompare(routeLabel(b.route)))
+      : [],
+  );
+
+  function generateGymSession() {
+    classicSession = app.routeSession({ targetRating: gymTarget, count: gymCount, pattern: gymPattern, step: 100, rng: seededRng(Date.now()) });
+    classicSelected = 0;
+    lastDelta = null;
+  }
+
+  function carnetRecord(route: Route, rating: number, success: boolean) {
+    const player = app.activePlayer;
+    if (!player) return;
+    const block = routeBlock(route, rating, null);
+    carnetBlock = block;
+    lastDelta = app.recordAttempt(player.id, block, success, "libre");
+  }
+
+  const currentBlock = $derived(
+    mode === "chesscalade" ? chessBlock : mode === "carnet" ? carnetBlock : (classicSession[classicSelected] ?? null),
+  );
   let recorded = $state<string | null>(null);
   let lastDelta = $state<number | null>(null);
-  const currentKey = $derived(currentBlock ? `${mode}:${classicSelected}:${currentBlock.holds.map((h) => h.id).join("-")}` : null);
+  const currentKey = $derived(
+    currentBlock ? `${mode}:${classicSelected}:${currentBlock.route?.id ?? currentBlock.holds.map((h) => h.id).join("-")}` : null,
+  );
 
   function loadData(data: unknown, source: string) {
     try {
@@ -292,10 +329,49 @@
   <section class="panel gen-panel">
     <div class="tabs">
       <button aria-pressed={mode === "chesscalade"} onclick={() => (mode = "chesscalade")}>Chesscalade</button>
-      <button aria-pressed={mode === "classique"} onclick={() => (mode = "classique")} disabled={isGym}>Brlok classique</button>
+      <button aria-pressed={mode === "classique"} onclick={() => (mode = "classique")}>{isGym ? "Séance" : "Brlok classique"}</button>
+      {#if isGym}<button aria-pressed={mode === "carnet"} onclick={() => (mode = "carnet")}>Carnet</button>{/if}
     </div>
 
-    {#if mode === "chesscalade" || isGym}
+    {#if mode === "carnet" && isGym}
+      <h2>Carnet de voies</h2>
+      <div class="row">
+        <button aria-pressed={carnetFilter === "toutes"} onclick={() => (carnetFilter = "toutes")}>Toutes</button>
+        <button aria-pressed={carnetFilter === "a-faire"} onclick={() => (carnetFilter = "a-faire")}>Pas encore réussies</button>
+      </div>
+      {#if !app.activePlayer}
+        <p class="hint">Crée un joueur (onglet Joueurs) pour tenir ton carnet.</p>
+      {/if}
+      <ul class="carnet">
+        {#each carnetRoutes as c (c.route.id)}
+          {@const log = logs.get(c.route.id)}
+          <li class:selected={carnetBlock?.route?.id === c.route.id}>
+            <button class="carnet-route" onclick={() => (carnetBlock = routeBlock(c.route, c.rating, null))}>
+              <span class="dot" style:background={routeHex(c.route)}></span>
+              <span class="carnet-info">
+                <strong>{routeLabel(c.route)}</strong>
+                <span class="hint">
+                  cote {Math.round(c.rating)} ·
+                  {#if log?.successes}réussie ({log.successes}/{log.attempts}){:else if log}{log.attempts} essai(s){:else}pas encore tentée{/if}
+                </span>
+              </span>
+              {#if log?.successes}<span class="done" aria-label="Réussie">✓</span>{/if}
+            </button>
+            {#if app.activePlayer}
+              <div class="carnet-actions">
+                <button class="mini ok" onclick={() => carnetRecord(c.route, c.rating, true)}>Réussi</button>
+                <button class="mini ko" onclick={() => carnetRecord(c.route, c.rating, false)}>Raté</button>
+              </div>
+            {/if}
+          </li>
+        {:else}
+          <li class="hint">{carnetFilter === "a-faire" ? "Toutes les voies en place sont réussies." : "Aucune voie en place."}</li>
+        {/each}
+      </ul>
+      {#if lastDelta !== null && carnetBlock && app.activePlayer}
+        <p class="hint">Cote de grimpe : {lastDelta >= 0 ? "+" : ""}{Math.round(lastDelta)} → {Math.round(app.activePlayer.ratings.grimpe.rating)}</p>
+      {/if}
+    {:else if mode === "chesscalade"}
       <h2>{isGym ? "Choisir une voie" : "Bloc-défi"}</h2>
       {#if isGym}<p class="hint">La voie en place la plus proche de la cote visée, de préférence au style de la pièce.</p>{/if}
       <div class="pieces">
@@ -304,8 +380,11 @@
             <span class="symbol">{p.symbol}</span>{p.label}
           </button>
         {/each}
+        <button aria-pressed={piece === null} onclick={() => (piece = null)} title="Sans pièce : juste la cote visée">
+          <span class="symbol">—</span>Aucune
+        </button>
       </div>
-      <p class="hint">{PIECES.find((p) => p.id === piece)?.character}</p>
+      <p class="hint">{piece ? PIECES.find((p) => p.id === piece)?.character : "Sans pièce : simplement à la cote visée."}</p>
       <label class="field">
         <span>
           Cote visée : <strong>{targetRating}</strong>
@@ -347,6 +426,37 @@
       {:else if generationFailed}
         <p class="warn">Aucun bloc possible sur ce pan.</p>
       {/if}
+    {:else if isGym}
+      <h2>Séance de voies</h2>
+      <label class="field">
+        <span>
+          Autour de la cote : <strong>{gymTarget}</strong>
+          {#if app.activePlayer}
+            <button class="link" onclick={() => (gymTarget = Math.round(app.activePlayer!.ratings.grimpe.rating))}>ma cote</button>
+          {/if}
+        </span>
+        <input type="range" min="800" max="2300" step="50" bind:value={gymTarget} />
+      </label>
+      <label class="field">
+        Répartition
+        <select bind:value={gymPattern}>
+          {#each DISTRIBUTION_PATTERNS as p (p.id)}<option value={p.id}>{p.label}</option>{/each}
+        </select>
+      </label>
+      <label class="field">Voies <input type="number" min="1" max="20" bind:value={gymCount} /></label>
+      <button class="primary" disabled={!app.wall} onclick={generateGymSession}>Préparer la séance</button>
+      {#if classicSession.length > 0}
+        <ol class="session">
+          {#each classicSession as b, i (i)}
+            <li>
+              <button aria-pressed={classicSelected === i} onclick={() => { classicSelected = i; lastDelta = null; }}>
+                <span class="dot" style:background={b.route?.colorHex}></span>
+                {i + 1}. {b.route?.label} · {b.estimatedRating}
+              </button>
+            </li>
+          {/each}
+        </ol>
+      {/if}
     {:else}
       <h2>Séance</h2>
       <label class="field">
@@ -380,7 +490,7 @@
       {/if}
     {/if}
 
-    {#if currentBlock}
+    {#if currentBlock && mode !== "carnet"}
       <div class="attempt">
         {#if app.activePlayer}
           {#if recorded === currentKey}
@@ -522,6 +632,76 @@
     display: flex;
     flex-direction: column;
     gap: 8px;
+  }
+  .carnet,
+  .session {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .carnet li {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 6px;
+    flex-wrap: wrap;
+  }
+  .carnet li.selected .carnet-route {
+    border-color: var(--accent);
+  }
+  .carnet-route {
+    flex: 1;
+    min-width: 180px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    text-align: left;
+    padding: 6px 10px;
+  }
+  .carnet-info {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+  }
+  .done {
+    color: #2e7d32;
+    font-weight: 700;
+    font-size: 1.2rem;
+  }
+  .carnet-actions {
+    display: flex;
+    gap: 6px;
+  }
+  .mini {
+    min-height: 40px;
+    padding: 0 12px;
+    color: #fff;
+    border: none;
+    font-weight: 600;
+  }
+  .mini.ok {
+    background: #2e7d32;
+  }
+  .mini.ko {
+    background: #c62828;
+  }
+  .session button {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    justify-content: flex-start;
+  }
+  .dot {
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    border: 1px solid var(--border);
+    flex: none;
   }
   .sector {
     display: block;

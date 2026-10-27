@@ -68,3 +68,40 @@ describe("mode salle", () => {
     expect(pickRoute(gym([{ archived: true }]), { piece: null, targetRating: 1500, rng: seededRng(1) })).toBeNull();
   });
 });
+
+describe("Brlok en salle", () => {
+  const wall = gym([
+    { grade: "5a" },
+    { grade: "5c" },
+    { grade: "6a" },
+    { grade: "6b" },
+    { grade: "6c" },
+    { grade: "7a" },
+  ]);
+
+  it("séance en pyramide autour de la cible, sans répéter une voie", async () => {
+    const { routeSession } = await import("./gym");
+    const session = routeSession(wall, { targetRating: 1500, count: 5, pattern: "pyramide", step: 200, rng: seededRng(4) });
+    // Cibles 1300, 1500, 1700, 1500, 1300 : on monte puis on redescend, sans reprendre une voie.
+    expect(session.map((b) => b.route?.grade)).toEqual(["5c", "6b", "6c", "6a", "5a"]);
+    expect(new Set(session.map((b) => b.route?.id)).size).toBe(5);
+  });
+
+  it("plus de blocs que de voies : une voie revient, signalé", async () => {
+    const { routeSession } = await import("./gym");
+    const session = routeSession(gym([{ grade: "6a" }]), { targetRating: 1400, count: 2, rng: seededRng(1) });
+    expect(session).toHaveLength(2);
+    expect(session[1].relaxations.length).toBe(1);
+  });
+
+  it("carnet : tentatives, réussites et première réussite par voie", async () => {
+    const { routeLogs } = await import("./gym");
+    let state = createPlayer(emptyRatingsState(), "Alice", "a");
+    const block = pickRoute(wall, { piece: null, targetRating: 1100, rng: seededRng(1) })!;
+    state = recordBlockAttempt(state, "a", "salle", block, false, "libre", "2026-10-01T10:00:00Z").state;
+    state = recordBlockAttempt(state, "a", "salle", block, true, "libre", "2026-10-02T10:00:00Z").state;
+    state = recordBlockAttempt(state, "a", "salle", block, true, "libre", "2026-10-03T10:00:00Z").state;
+    const logs = routeLogs(state.attempts, "a", "salle");
+    expect(logs.get(block.route!.id)).toEqual({ attempts: 3, successes: 2, firstSuccessAt: "2026-10-02T10:00:00Z", lastAt: "2026-10-03T10:00:00Z" });
+  });
+});

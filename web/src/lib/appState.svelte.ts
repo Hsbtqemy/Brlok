@@ -4,6 +4,7 @@
  * est disponible (voir sharedStore.ts), auquel cas c'est lui qui fait foi.
  */
 import { makeChallengeBlock, type ChallengeOptions } from "../core/challenge";
+import { routeSession, type RouteSessionOptions } from "../core/gym";
 import type { Block } from "../core/generator";
 import { recordBlockAttempt, recordGame, recordGameVsEngine, routeKey, type AttemptRecord, type RatingsState } from "../core/players";
 import type { Route, Wall } from "../core/wall";
@@ -112,6 +113,17 @@ class AppState {
       ...options,
       routeRating: (route: Route) => blocks[routeKey(wall.id, route.id)]?.rating,
     });
+  }
+
+  /** Cote apprise d'une voie du mur actif (Glicko-2), si elle a déjà été grimpée. */
+  routeRating(route: Route): number | undefined {
+    return this.wall ? this.ratings.blocks[routeKey(this.wall.id, route.id)]?.rating : undefined;
+  }
+
+  /** Séance de voies sur le mur actif (Brlok classique en salle). */
+  routeSession(options: Omit<RouteSessionOptions, "ratingOf">): Block[] {
+    if (!this.wall) return [];
+    return routeSession($state.snapshot(this.wall) as Wall, { ...options, ratingOf: (r) => this.routeRating(r) });
   }
 
   /** Enregistre une tentative de bloc ; renvoie la variation de la cote de grimpe. */

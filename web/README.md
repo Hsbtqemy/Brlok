@@ -56,4 +56,5 @@ ordinateur du même réseau et ouvrir l'adresse affichée.
 - [x] Éditeur de pan (niveaux, types, prises inutilisables, enchaînements impossibles, taille, nouveau pan)
 - [x] Mode salle : mur à voies, photo du secteur, détection des prises par couleur, voies choisies selon la
       cote et le style de la pièce (voir [`docs/chesscalade/MURS.md`](../docs/chesscalade/MURS.md))
+- [x] Brlok en salle : séance de voies (répartitions Brlok), carnet de voies, pièce facultative
 - [ ] Pan en photo (attend une photo avec les 4 coins visibles)

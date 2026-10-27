@@ -107,6 +107,16 @@ Dans le jeu, sur un mur à voies, les blocs sont **choisis** et non générés :
   prises ne sont pas décrites une à une) ;
 - chaque voie a sa propre cote (indépendante de la règle de pieds) et apparaît au journal sous son nom.
 
+**Brlok en salle, sans Chesscalade** (onglet Pan, sur un mur à voies) :
+
+- **Séance** : N voies autour d'une cote, avec les répartitions de Brlok (uniforme, progressive, pyramide,
+  régressive, crux, alternance ; un cran = 100 points de cote). Une voie n'est reprise que s'il y a moins de
+  voies que de blocs demandés.
+- **Carnet** : toutes les voies en place, triées par cotation, avec pour le joueur actif « réussie (n/m) »,
+  « n essais » ou « pas encore tentée », et des boutons Réussi / Raté sur chaque ligne ; filtre « pas encore
+  réussies ».
+- **Choisir une voie** sans pièce (« Aucune ») : simplement la voie la plus proche de la cote visée.
+
 Limites de la v1 : une seule photo par mur (un secteur), pas de redressement (inutile ici : on ne mesure pas
 de distances), et dans les salles où une couleur regroupe plusieurs voies, il faut retirer à la main les
 prises qui n'en font pas partie.

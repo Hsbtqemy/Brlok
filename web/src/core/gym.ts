@@ -2,6 +2,7 @@
  * Mode salle (MURS.md étape 3) : un mur à voies. Les blocs ne sont pas générés, ils sont **choisis**
  * parmi les voies en place, selon la cote visée et le caractère de la pièce.
  */
+import { distributionLevels, type DistributionPattern } from "./distribution";
 import type { Block } from "./generator";
 import type { Piece } from "./pieces";
 import type { Rng } from "./random";
@@ -131,4 +132,65 @@ export function pickRoute(wall: Wall, options: RouteOptions): Block | null {
   if (piece && !matches(best.route)) relaxations.push("pas de voie au style de la pièce : la plus proche en cote");
   usage?.set(best.route.id, (usage.get(best.route.id) ?? 0) + 1);
   return routeBlock(best.route, best.rating, piece, relaxations);
+}
+
+export interface RouteSessionOptions {
+  /** Cote autour de laquelle se construit la séance. */
+  targetRating: number;
+  count: number;
+  pattern?: DistributionPattern;
+  /** Écart de cote entre deux crans de la répartition (pyramide, progressive…). */
+  step?: number;
+  ratingOf?: (route: Route) => number | undefined;
+  rng: Rng;
+}
+
+/**
+ * Séance de voies (Brlok classique en salle) : la répartition donne une cote par voie (ex. pyramide autour
+ * de la cible), puis on prend la voie en place la plus proche, sans la reprendre deux fois si possible.
+ */
+export function routeSession(wall: Wall, options: RouteSessionOptions): Block[] {
+  const { targetRating, count, pattern = "uniforme", step = 100, rng } = options;
+  const routes = activeRoutes(wall, options.ratingOf);
+  if (routes.length === 0 || count < 1) return [];
+  // distributionLevels travaille en niveaux 1–6 : on la centre sur 3 et on la traduit en écarts de cote.
+  const targets = distributionLevels(pattern, count, 3).map((level) => targetRating + (level - 3) * step);
+  const used = new Set<string>();
+  return targets.map((target) => {
+    const free = routes.filter((c) => !used.has(c.route.id));
+    const pool = free.length > 0 ? free : routes;
+    const best = pool.reduce((a, b) => (Math.abs(b.rating - target) + rng() * 20 < Math.abs(a.rating - target) + rng() * 20 ? b : a));
+    used.add(best.route.id);
+    return routeBlock(best.route, best.rating, null, free.length === 0 ? ["moins de voies que de blocs : une voie revient"] : []);
+  });
+}
+
+export interface RouteLog {
+  attempts: number;
+  successes: number;
+  lastAt?: string;
+  firstSuccessAt?: string;
+}
+
+/** Carnet : tentatives et réussites d'un joueur sur chaque voie d'un mur. */
+export function routeLogs(
+  attempts: readonly { playerId: string; wallId: string; routeId?: string; success: boolean; at: string }[],
+  playerId: string,
+  wallId: string,
+): Map<string, RouteLog> {
+  const logs = new Map<string, RouteLog>();
+  // Journal du plus récent au plus ancien : on le parcourt à l'envers pour garder la première réussite.
+  for (let i = attempts.length - 1; i >= 0; i--) {
+    const a = attempts[i];
+    if (a.playerId !== playerId || a.wallId !== wallId || !a.routeId) continue;
+    const log = logs.get(a.routeId) ?? { attempts: 0, successes: 0 };
+    log.attempts++;
+    if (a.success) {
+      log.successes++;
+      log.firstSuccessAt ??= a.at;
+    }
+    log.lastAt = a.at;
+    logs.set(a.routeId, log);
+  }
+  return logs;
 }
