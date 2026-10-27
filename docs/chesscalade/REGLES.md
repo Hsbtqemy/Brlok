@@ -49,7 +49,7 @@ Deux rythmes, plus une variante.
 
 **Variante « Rounds » (chessboxing augmenté)** : alternance de rounds de 3 min d'échecs et de rounds de
 grimpe. Le bloc du round de grimpe est généré à partir de la position (la pièce la plus active de chaque
-joueur donne le motif). Le meilleur résultat au mur offre un bonus pour le round d'échecs suivant :
+joueur donne le caractère du bloc). Le meilleur résultat au mur offre un bonus pour le round d'échecs suivant :
 +30 s ou un **joker** (un indice du moteur).
 
 ---
@@ -163,21 +163,26 @@ Les verdicts modifient les règles des échecs. Ces garde-fous gardent la partie
 
 ## 7. Génération des blocs-défis
 
-### 7.1 Motif : la pièce qui bouge
+### 7.1 Le style de la pièce (et pas sa géométrie exacte)
 
-Le bloc respecte le **motif de déplacement de la pièce jouée** entre deux prises successives, sur la grille 6×7 :
+Imposer à chaque mouvement la géométrie exacte de la pièce (un L entre chaque prise pour un cavalier)
+donnerait des blocs artificiels, plus proches du **Twister** que de l'escalade : ce qui fait la difficulté
+d'un bloc, ce sont les **enchaînements**, pas une figure tracée sur la grille.
 
-| Pièce | Motif entre deux prises | Portée max |
-|---|---|---|
-| Pion | vers le haut (1 case), ou diagonale haute | 1 |
-| Cavalier | en L | — |
-| Fou | diagonale | 2 cases |
-| Tour | ligne ou colonne | 2 cases |
-| Dame | ligne, colonne ou diagonale | 2 cases |
-| Roi | n'importe quelle case adjacente | 1 |
+La pièce donne donc le **caractère du bloc dans son ensemble**. Les mouvements entre prises restent, eux,
+des mouvements d'escalade naturels (prises à portée de main).
 
-La portée est limitée pour que les mouvements restent grimpables. Elle sera réglable selon la taille du pan.
-Les **pieds** suivent la grille pieds existante de Brlok (4 × 6).
+| Pièce | Caractère du bloc |
+|---|---|
+| Pion | court, montée directe, prises plutôt faciles |
+| Cavalier | trajectoire **décalée** : changements de direction, un ou deux mouvements latéraux marqués |
+| Fou | trajectoire **diagonale** sur l'ensemble du pan (par exemple de A1 vers F7) |
+| Tour | trajectoire **rectiligne** : montée verticale ou traversée horizontale |
+| Dame | long et varié, crux marqué |
+| Roi | court et **compact**, prises proches les unes des autres, sans relâche |
+
+**Variante « Géométrie stricte »** (option, pour rire) : chaque mouvement respecte exactement le
+déplacement de la pièce. Assumée comme un défi Twister, non cotée.
 
 ### 7.2 Difficulté visée
 
@@ -207,69 +212,62 @@ cote_visée = cote_grimpe_du_joueur + bonus_déclencheur + bonus_niveau
 | Diabolique | +300 |
 
 Le générateur cherche ensuite un bloc dont la **cote estimée** (§7.3) est la plus proche de la cote visée,
-en respectant le motif (§7.4).
+en respectant le caractère de la pièce (§7.4).
 
 ### 7.3 De la difficulté des prises à la cote du bloc
 
-On repart des niveaux déjà saisis dans les catalogues Brlok : **prises de main de 1 à 5**, **pieds de 1 à 6**
-(grille pieds 4 × 6). Mais dans Chesscalade, la difficulté d'un bloc ne se résume pas au niveau des prises :
-le **mouvement** entre deux prises compte aussi (un jeté en L n'a rien à voir avec un pas de roi).
-
-**Difficulté d'un mouvement** (d'une prise à la suivante) :
-
-```
-d = niveau de la prise d'arrivée (1–5) + coût du motif
-```
-
-| Mouvement | coût du motif |
-|---|---|
-| Roi, pion, tour ou fou à 1 case | 0 |
-| Tour, fou ou dame à 2 cases | +1 |
-| Cavalier (en L) | +1 |
-| Mouvement vers le bas ou latéral pur | +0,5 |
+La difficulté repose **au maximum sur les niveaux déjà saisis** dans les catalogues Brlok : chaque prise de main
+a un niveau de **1 à 5**. (La grille pieds de Brlok n'est pas utilisée : sur le pan réel, les « pieds » sont
+des prises centrales déjà présentes dans la grille des mains. À vérifier sur le catalogue.)
 
 **Cote initiale estimée d'un bloc** :
 
 ```
 cote = 1500
-     + 200 × (moyenne des d − 3)        # niveau général du bloc
-     + 100 × (crux − moyenne des d)     # crux = le mouvement le plus dur
-     +  25 × (nombre de prises − 6)     # longueur
-     +  40 × (niveau moyen des pieds − 3)
+     + 200 × (niveau moyen des prises − 3)    # niveau général du bloc
+     + 100 × (niveau max − niveau moyen)       # crux = la prise la plus dure
+     +  25 × (nombre de prises − 6)            # longueur
 ```
 
-Repères : un bloc de prises de niveau 1 en pas de roi vaut environ **1100** ; un bloc de niveau 3 vaut
-environ **1500** ; un bloc de niveau 5 en cavalier, long, vaut **2000 et plus**.
+Repères : un bloc de prises de niveau 1 vaut environ **1100** ; un bloc de niveau 3 vaut environ **1500** ;
+un bloc long de niveau 5 vaut **1900 et plus**.
 
-Ces coefficients sont des **hypothèses de départ**. Ensuite, Glicko-2 corrige la cote réelle de chaque bloc à
-partir des réussites et des chutes. Une prise mal notée dans le catalogue se voit donc vite, et Chesscalade
-pourrait proposer de corriger son niveau.
+Ce que la formule ne voit pas, c'est la difficulté des **enchaînements** (deux prises faciles peuvent faire
+un mouvement très dur). On ne tente pas de la deviner : **Glicko-2 l'apprend**. La cote réelle de chaque bloc
+se corrige à partir des réussites et des chutes. Plus tard, on pourra en déduire une difficulté par
+**enchaînement** (paire de prises) et l'utiliser dans le générateur.
+
+Une prise mal notée dans le catalogue se repère aussi : Chesscalade pourra proposer de corriger son niveau.
 
 **Placement** : un nouveau joueur grimpe 5 blocs de difficulté croissante (de 1100 à 1900 environ) pour
 fixer sa cote de grimpe de départ, au lieu de partir à 1500 « à l'aveugle ».
 
 ### 7.4 Algorithme de génération
 
-1. Le pan devient un **graphe** : chaque prise active est un nœud, et deux prises sont reliées si le motif de la pièce
-   permet de passer de l'une à l'autre (avec la portée max).
-2. On convertit la cote visée en **plage de niveaux** pour les prises (comme le profil de difficulté actuel de
-   Brlok : niveau cible ± tolérance), et on garde seulement les prises dans cette plage.
-3. On cherche des **chemins** dans ce graphe, de la longueur voulue. On réutilise les **répartitions** existantes de
-   Brlok (progressive, pyramide, crux…). Pour une prise, le **crux est placé en dernier** : la dernière prise,
-   c'est la pièce capturée.
-4. On calcule la cote estimée de chaque chemin candidat et on garde le plus proche de la cote visée (avec un peu
-   de hasard et la règle de variété de Brlok pour ne pas toujours grimper les mêmes blocs).
-5. **Si aucun chemin n'existe** (sur un 6 × 7, un cavalier n'a parfois que 2 ou 3 prises atteignables),
-   on assouplit dans cet ordre :
+1. Le pan devient un **graphe** : chaque prise active est un nœud, et deux prises sont reliées si elles sont
+   **à portée** l'une de l'autre (distance réglable selon l'espacement réel des prises).
+2. On convertit la cote visée en **plage de niveaux** (comme le profil de difficulté actuel de Brlok :
+   niveau cible ± tolérance) et on garde seulement les prises dans cette plage.
+3. On cherche des **chemins** de la longueur voulue dont la **forme globale** respecte le caractère de la pièce
+   (§7.1). On réutilise les **répartitions** existantes de Brlok (progressive, pyramide, crux…). Pour une
+   prise, le **crux est placé en dernier** : la dernière prise, c'est la pièce capturée.
+4. On calcule la cote estimée de chaque chemin candidat et on garde le plus proche de la cote visée, avec un
+   peu de hasard et la règle de variété de Brlok pour ne pas toujours grimper les mêmes blocs.
+5. **Si aucun chemin ne convient**, on assouplit dans cet ordre :
    1. élargir la tolérance de niveau de ±1 ;
    2. raccourcir le bloc (minimum 3 prises) ;
-   3. augmenter la portée du motif de 1 ;
-   4. en dernier recours, passer au motif **Roi**, et l'app l'indique.
+   3. relâcher la forme imposée par la pièce, et l'app l'indique.
 
 ### 7.5 Fatigue (option)
 
-Au fil d'une partie, les bras se vident. Option possible : baisser la cote visée de **−15 par bloc déjà grimpé**
-dans la partie, pour que la fin de partie reste grimpable sans que le niveau Diabolique perde son sens.
+Au fil d'une partie, les bras se vident. L'option fatigue baisse la cote visée de **−15 par bloc déjà grimpé**
+dans la partie, pour que la fin de partie reste grimpable.
+
+- Elle se **choisit au lancement** de la partie.
+- Elle peut être **activée en cours de partie**, au début de son propre tour (par exemple quand on sent
+  les bras partir). Le compteur de blocs part alors du nombre de blocs déjà grimpés.
+- **En duo**, chaque joueur a sa propre option : c'est un réglage individuel, comme un handicap.
+- Une partie où l'option a été activée reste cotée, mais l'historique le mentionne.
 
 ---
 
@@ -284,7 +282,7 @@ Chaque joueur a **trois cotes** indépendantes :
 | **Chesscalade** | résultat des parties hybrides |
 
 - Les **blocs** ont eux aussi une cote, qui évolue avec les réussites et les échecs de tous les joueurs.
-  Cote initiale estimée à partir des niveaux des prises, du nombre de prises et du motif.
+  Cote initiale estimée à partir des niveaux des prises et du nombre de prises (§7.3).
 - **Pas de plage imposée** : le joueur choisit sa fourchette. Par défaut, sa cote ±200, ou une plage libre
   (par exemple 700–2000 pour les problèmes Lichess, dont la base va d'environ 400 à plus de 3000).
 
@@ -312,7 +310,7 @@ Chaque joueur a **trois cotes** indépendantes :
 ### 9.3 Entraînement (hors partie)
 
 - **Problèmes grimpés** : un problème Lichess s'affiche. Le joueur trouve le coup, puis grimpe le bloc du
-  motif de la pièce jouée. Deux cotes évoluent : échecs et grimpe.
+  caractère de la pièce jouée. Deux cotes évoluent : échecs et grimpe.
 - **Échauffement** : 2 ou 3 blocs faciles, non cotés, recommandés avant toute partie.
 
 ---
@@ -321,7 +319,7 @@ Chaque joueur a **trois cotes** indépendantes :
 
 1. Alice (Blancs) et Bruno (Noirs) ont 10 min chacun.
 2. Coup 7 : Alice joue **Cxe5**. Prise d'un pion → déclencheur actif en Classique.
-   Bloc-défi : motif **cavalier**, cote visée = 1450 (sa cote de grimpe) − 300 = **1150**.
+   Bloc-défi : caractère **cavalier** (trajectoire décalée), cote visée = 1450 (sa cote de grimpe) − 300 = **1150**.
    Pendule d'Alice en pause, limite 90 s.
 3. Alice **tombe**. Modéré, 1re chute → **V2 : Limité**. Le cavalier reste en e5 mais devient épuisé
    pendant 2 tours. Compteur de chutes d'Alice : 1.
@@ -346,12 +344,13 @@ Chaque joueur a **trois cotes** indépendantes :
 ## 12. Questions ouvertes (à trancher au mur)
 
 1. Les valeurs de temps (départ, recharge, limites) sont des **hypothèses** : à mesurer sur ton pan réel.
-2. Pièce épuisée pendant 2 tours : trop punitif en Modéré ? Et dans l'échelle, faut-il placer Dévié (V4) avant ou après Interdit ?
-7. Déviation courte par défaut, ou libre ?
-8. Les coûts de motif (§7.3) collent-ils à ton pan ? Par exemple, un mouvement en L y est-il vraiment plus dur qu'une diagonale à 2 cases ?
-9. Option fatigue (§7.5) : activée par défaut, ou réservée aux niveaux Facile et Modéré ?
-3. Le bloc de parade sur échec : amusant ou trop interruptif en Blitz ?
-4. En solo, le joueur doit-il aussi pouvoir faire « annuler » un coup du moteur en réussissant un bloc très dur ?
+2. Pièce épuisée pendant 2 tours : trop punitif en Modéré ?
+3. Dans l'échelle des verdicts, faut-il placer Dévié (V4) avant ou après Interdit ?
+4. Déviation courte par défaut, ou libre ?
+5. Le bloc de parade sur échec : amusant ou trop interruptif en Blitz ?
+6. En solo, le joueur doit-il aussi pouvoir faire « annuler » un coup du moteur en réussissant un bloc très dur ?
    (Mécanique de **contre-attaque**, à envisager seulement en Difficile et au-dessus.)
-5. Portée des motifs (2 cases) : à valider selon l'espacement réel des prises sur le pan.
-6. Faut-il une **cote de bloc** séparée pour les blocs « motif » (cavalier, fou…) et pour les blocs Brlok classiques ?
+7. Portée entre deux prises (§7.4) : à régler selon l'espacement réel des prises sur le pan.
+8. Le caractère des pièces (§7.1) se ressent-il vraiment au mur, ou faut-il le marquer davantage ?
+9. Grille pieds : vérifier dans le catalogue que les « pieds » sont bien des prises centrales redondantes.
+10. Faut-il une **cote de bloc** séparée pour les blocs Chesscalade et pour les blocs Brlok classiques ?
