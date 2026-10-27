@@ -64,6 +64,8 @@
   .board {
     display: grid;
     grid-template-columns: repeat(8, 1fr);
+    /* Rangées de hauteur fixe : sinon une rangée vide s'écrase et les cases ne sont plus carrées. */
+    grid-template-rows: repeat(8, 1fr);
     width: 100%;
     max-width: 560px;
     aspect-ratio: 1;
@@ -74,6 +76,8 @@
   }
   .sq {
     position: relative;
+    aspect-ratio: 1;
+    overflow: hidden;
     min-height: 0;
     padding: 0;
     border: none;
