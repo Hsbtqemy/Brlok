@@ -10,6 +10,7 @@
   import { app } from "./appState.svelte";
   import PanView from "./PanView.svelte";
   import WallEditor from "./WallEditor.svelte";
+  import IntervalTimer from "./IntervalTimer.svelte";
   import GymEditor from "./GymEditor.svelte";
   import RouteView from "./RouteView.svelte";
   import { EXPRESS_LEVEL, expressWall, newWall } from "../core/wallEdit";
@@ -512,6 +513,17 @@
           <p class="hint">Crée un joueur (onglet Joueurs) pour enregistrer tes tentatives et faire évoluer ta cote.</p>
         {/if}
       </div>
+    {/if}
+    {#if currentBlock && mode !== "carnet"}
+      <IntervalTimer
+        block={currentBlock}
+        onNext={mode === "classique" && classicSelected < classicSession.length - 1
+          ? () => {
+              classicSelected++;
+              lastDelta = null;
+            }
+          : undefined}
+      />
     {/if}
   </section>
   {/if}

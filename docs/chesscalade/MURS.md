@@ -116,6 +116,9 @@ Dans le jeu, sur un mur à voies, les blocs sont **choisis** et non générés :
   « n essais » ou « pas encore tentée », et des boutons Réussi / Raté sur chaque ligne ; filtre « pas encore
   réussies ».
 - **Choisir une voie** sans pièce (« Aucune ») : simplement la voie la plus proche de la cote visée.
+- **Minuteur** sur chaque bloc ou voie de la séance : travail/repos (40/20, 50/28…), pyramide, EMOM,
+  chrono avec **meilleurs temps** par joueur ; mode grand écran, signal sonore et visuel, enchaînement
+  automatique des blocs de la séance.
 
 Limites de la v1 : une seule photo par mur (un secteur), pas de redressement (inutile ici : on ne mesure pas
 de distances), et dans les salles où une couleur regroupe plusieurs voies, il faut retirer à la main les

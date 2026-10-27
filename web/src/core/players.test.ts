@@ -69,3 +69,18 @@ describe("placement", () => {
     expect(mixed.attempts.filter((a) => a.context === "placement")).toHaveLength(5);
   });
 });
+
+describe("meilleurs temps", () => {
+  it("garde le plus rapide, par joueur et par bloc", async () => {
+    const { recordTime } = await import("./players");
+    let state = createPlayer(emptyRatingsState(), "Alice", "a");
+    let r = recordTime(state, "a", "pan", block, 42_000, "t1");
+    expect(r.isBest).toBe(true);
+    state = r.state;
+    r = recordTime(state, "a", "pan", block, 50_000, "t2");
+    expect(r).toMatchObject({ isBest: false, previous: { ms: 42_000 } });
+    r = recordTime(state, "a", "pan", block, 38_000, "t3");
+    expect(r.isBest).toBe(true);
+    expect(Object.values(r.state.bestTimes)).toEqual([{ ms: 38_000, at: "t3" }]);
+  });
+});

@@ -9,6 +9,7 @@
  *   walls/<id>                   un pan
  *   journal/attempts-AAAA-MM     tentatives du mois (regroupées : pas un document par tentative)
  *   journal/games                parties
+ *   journal/best-times           meilleurs temps au chrono
  *   live/current                 partie en cours (pour la reprendre après un rechargement)
  *   meta/init                    marque la première mise en commun (reprise des données locales)
  */
@@ -81,6 +82,7 @@ export class SharedStore {
   private months = new Map<string, AttemptRecord[]>();
   private games: GameRecord[] = [];
   private liveGame: Body | null = null;
+  private bestTimes: RatingsState["bestTimes"] = {};
 
   constructor(private readonly handlers: Handlers) {}
 
@@ -127,6 +129,9 @@ export class SharedStore {
           docs.filter((d) => d.id.startsWith("attempts-")).map((d) => [d.id.slice("attempts-".length), (d.body.items as AttemptRecord[]) ?? []]),
         );
         this.games = (docs.find((d) => d.id === "games")?.body.items as GameRecord[]) ?? [];
+        this.bestTimes = Object.fromEntries(
+          ((docs.find((d) => d.id === "best-times")?.body.items as { key: string; ms: number; at: string }[]) ?? []).map((t) => [t.key, { ms: t.ms, at: t.at }]),
+        );
         break;
       case "live":
         this.liveGame = docs.find((d) => d.id === "current")?.body ?? null;
@@ -152,7 +157,7 @@ export class SharedStore {
         const ratings = local.ratings();
         const walls = local.walls();
         if (ratings.players.length > 0 || walls.length > 0 || ratings.attempts.length > 0) {
-          await this.syncRatings({ players: [], blocks: {}, attempts: [], games: [] }, ratings);
+          await this.syncRatings({ players: [], blocks: {}, attempts: [], games: [], bestTimes: {} }, ratings);
           await this.syncWalls([], walls);
         }
       }
@@ -182,6 +187,7 @@ export class SharedStore {
       blocks: Object.fromEntries(this.blocks),
       attempts,
       games: this.games,
+      bestTimes: this.bestTimes,
     });
   }
 
@@ -226,6 +232,12 @@ export class SharedStore {
       const items = [...records.filter((a) => !ids.has(attemptId(a))), ...existing].slice(0, MONTH_LIMIT);
       this.months.set(m, items);
       writes.push(this.write(`journal/attempts-${m}`, { items }));
+    }
+
+    if (!same(prev.bestTimes ?? {}, next.bestTimes ?? {})) {
+      this.bestTimes = { ...(next.bestTimes ?? {}) };
+      const items = Object.entries(this.bestTimes).map(([key, t]) => ({ key, ms: t.ms, at: t.at }));
+      writes.push(this.write("journal/best-times", { items }));
     }
 
     if (!same(prev.games, next.games)) {

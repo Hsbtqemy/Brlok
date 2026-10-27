@@ -49,6 +49,13 @@ export interface RatingsState {
   blocks: Record<string, Rating>;
   attempts: AttemptRecord[];
   games: GameRecord[];
+  /** Meilleurs temps au chrono, par joueur et par bloc (clé `joueur|bloc`). */
+  bestTimes: Record<string, BestTime>;
+}
+
+export interface BestTime {
+  ms: number;
+  at: string;
 }
 
 /** Incertitude de départ d'un bloc : sa cote estimée est déjà une information. */
@@ -56,7 +63,7 @@ const NEW_BLOCK_RD = 250;
 const JOURNAL_LIMIT = 500;
 
 export function emptyRatingsState(): RatingsState {
-  return { players: [], blocks: {}, attempts: [], games: [] };
+  return { players: [], blocks: {}, attempts: [], games: [], bestTimes: {} };
 }
 
 /** Identifiant unique sans dépendre de crypto.randomUUID (absent hors HTTPS, ex. tablette sur le réseau local). */
@@ -223,6 +230,26 @@ export function recordGameVsEngine(
     players: state.players.map((p) => (p.id === playerId ? { ...p, ratings: { ...p.ratings, chesscalade: updated } } : p)),
     games: [record, ...state.games],
   };
+}
+
+export function bestTimeKey(playerId: string, wallId: string, block: Block): string {
+  return `${playerId}|${keyOf(wallId, block)}`;
+}
+
+/** Enregistre un temps au chrono ; renvoie aussi l'ancien record et si celui-ci est battu. */
+export function recordTime(
+  state: RatingsState,
+  playerId: string,
+  wallId: string,
+  block: Block,
+  ms: number,
+  at = new Date().toISOString(),
+): { state: RatingsState; previous: BestTime | null; isBest: boolean } {
+  const key = bestTimeKey(playerId, wallId, block);
+  const previous = state.bestTimes?.[key] ?? null;
+  const isBest = !previous || ms < previous.ms;
+  if (!isBest) return { state, previous, isBest };
+  return { state: { ...state, bestTimes: { ...(state.bestTimes ?? {}), [key]: { ms: Math.round(ms), at } } }, previous, isBest };
 }
 
 /** Résultat d'une partie entre deux joueurs, pour la cote donnée. */

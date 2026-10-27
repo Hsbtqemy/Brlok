@@ -6,7 +6,7 @@
 import { makeChallengeBlock, type ChallengeOptions } from "../core/challenge";
 import { routeSession, type RouteSessionOptions } from "../core/gym";
 import type { Block } from "../core/generator";
-import { recordBlockAttempt, recordGame, recordGameVsEngine, routeKey, type AttemptRecord, type RatingsState } from "../core/players";
+import { bestTimeKey, recordBlockAttempt, recordGame, recordGameVsEngine, recordTime, routeKey, type AttemptRecord, type BestTime, type RatingsState } from "../core/players";
 import type { Route, Wall } from "../core/wall";
 import type { SavedGame } from "../core/game";
 import type { SavedRounds } from "../core/rounds";
@@ -132,6 +132,18 @@ class AppState {
     const { state, delta } = recordBlockAttempt(this.snapshotRatings(), playerId, this.wall.id, block, success, context);
     this.setRatings(state);
     return delta;
+  }
+
+  /** Temps au chrono sur un bloc ; renvoie l'ancien record et s'il est battu. */
+  recordTime(playerId: string, block: Block, ms: number): { previous: BestTime | null; isBest: boolean } {
+    if (!this.wall) return { previous: null, isBest: false };
+    const { state, previous, isBest } = recordTime(this.snapshotRatings(), playerId, this.wall.id, block, ms);
+    if (isBest) this.setRatings(state);
+    return { previous, isBest };
+  }
+
+  bestTime(playerId: string, block: Block): BestTime | null {
+    return this.wall ? (this.ratings.bestTimes?.[bestTimeKey(playerId, this.wall.id, block)] ?? null) : null;
   }
 
   recordGame(whiteId: string, blackId: string, score: number, reason: string) {
