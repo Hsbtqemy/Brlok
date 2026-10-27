@@ -1,7 +1,8 @@
 <script lang="ts">
   import type { PieceSymbol, Square } from "chess.js";
+  import { untrack } from "svelte";
   import { estimateBlockRating } from "../core/blockRating";
-  import { engineSettings } from "../core/engine";
+  import { engineSettings, pickEngineMove } from "../core/engine";
   import type { Color } from "../core/game";
   import type { Block } from "../core/generator";
   import { PIECES } from "../core/pieces";
@@ -36,7 +37,7 @@
   let now = $state(Date.now());
   let selected = $state<Square | null>(null);
   let promotionChoice = $state<{ from: Square; to: Square } | null>(null);
-  let flipped = $state(false);
+  let flipped = $state(untrack(() => game.config.engine?.color === "w"));
   let message = $state("");
   let hint = $state<{ from: Square; to: Square; text: string } | null>(null);
   let recorded = $state(false);
@@ -48,6 +49,9 @@
   let composing = $state<string[]>([]);
 
   const name = (c: Color) => game.config.players[c].name;
+  const engine = $derived(game.config.engine);
+  const human: Color = $derived(engine ? (engine.color === "w" ? "b" : "w") : "w");
+  const SOLO_LABEL = { ajoute: "Bloc progressif", meme: "Bloc cible", impose: "Bloc imposé par le moteur" } as const;
   const refresh = () => version++;
 
   $effect(() => {
@@ -78,7 +82,9 @@
       if (!recorded) {
         recorded = true;
         const score = game.result.winner === "w" ? 1 : game.result.winner === "b" ? 0 : 0.5;
-        app.recordGame(ids.w, ids.b, score, REASON_LABEL[game.result.reason] ?? game.result.reason);
+        const reason = REASON_LABEL[game.result.reason] ?? game.result.reason;
+        if (engine) app.recordGameVsEngine(ids[human], human, engine.elo, human === "w" ? score : 1 - score, reason);
+        else app.recordGame(ids.w, ids.b, score, reason);
       }
       app.saveGame(null);
       return;
@@ -120,7 +126,7 @@
   }
 
   function onSquare(square: Square) {
-    if (view.stage !== "echecs") return;
+    if (view.stage !== "echecs" || (engine && view.turn === engine.color)) return;
     hint = null;
     if (selected && targets.has(square)) {
       if (view.legal.some((m) => m.from === selected && m.to === square && m.promotion)) {
@@ -144,9 +150,38 @@
     refresh();
   }
 
-  // --- Joker : indice de Stockfish à pleine force ---
+  // --- Moteur : il joue les rounds d'échecs (solo) ---
   const stockfish = new Stockfish();
   $effect(() => () => stockfish.stop());
+  let engineBusy = false;
+  let engineThinking = $state(false);
+  $effect(() => {
+    void version;
+    if (!engine || engineBusy || game.stage !== "echecs" || game.turn !== engine.color) return;
+    engineBusy = true;
+    engineThinking = true;
+    const fen = game.chess.fen();
+    const candidates = game.chess.moves({ verbose: true }).map((m) => m.lan);
+    const settings = engineSettings(engine.elo);
+    const playMove = (lan: string) => {
+      if (game.chess.fen() !== fen || game.stage !== "echecs") return;
+      play(lan.slice(0, 2) as Square, lan.slice(2, 4) as Square, (lan[4] as PieceSymbol | undefined) || undefined);
+    };
+    stockfish
+      .bestMove(fen, settings)
+      .then((best) => playMove(pickEngineMove(best, candidates, settings, Math.random)))
+      .catch((e: unknown) => {
+        message = `${e instanceof Error ? e.message : String(e)} Coup joué au hasard.`;
+        playMove(candidates[Math.floor(Math.random() * candidates.length)]);
+      })
+      .finally(() => {
+        engineBusy = false;
+        engineThinking = false;
+        refresh();
+      });
+  });
+
+  // --- Joker : indice de Stockfish à pleine force ---
   let hintBusy = $state(false);
   async function useJoker() {
     const color = game.turn;
@@ -239,6 +274,13 @@
     memeFinish(color, block, { success: false, attempts: Math.max(1, memeAttempts), highest: index + 1 });
   }
 
+  function soloResult(color: Color, holdIds: string[], success: boolean) {
+    act(() => {
+      recordClimb(color, holdIds, success);
+      game.soloResult(success, Date.now());
+    });
+  }
+
   function toggleCompose(holdId: string) {
     composing = composing.includes(holdId) ? composing.filter((id) => id !== holdId) : [...composing, holdId];
   }
@@ -307,6 +349,9 @@
       <p class="big">{view.result.winner ? `${name(view.result.winner)} gagne` : "Nulle"} — {REASON_LABEL[view.result.reason] ?? view.result.reason}</p>
       <p class="hint">Duels au mur : {name("w")} {view.wins.w} – {view.wins.b} {name("b")}. Cote Chesscalade mise à jour.</p>
       <button class="primary" onclick={onExit}>Nouvelle partie</button>
+    {:else if view.stage === "echecs" && engine && view.turn === engine.color}
+      <h2>{name(view.turn)} réfléchit…</h2>
+      <p class="hint">Le round de mur commence à la fin du chrono du round.</p>
     {:else if view.stage === "echecs"}
       <h2>Au tour de {name(view.turn)} ({COLOR_LABEL[view.turn]})</h2>
       <p class="hint">Le round de mur commence à la fin du chrono du round. Pendant le mur, le plateau est figé : profitez-en pour réfléchir.</p>
@@ -319,7 +364,7 @@
       {/if}
       {#if hint}<p class="hint-move">Indice : <strong>{hint.text}</strong> ({hint.from} → {hint.to})</p>{/if}
       <div class="row">
-        <button onclick={() => act(() => game.resign(view.turn, Date.now()))}>Abandon ({COLOR_LABEL[view.turn]})</button>
+        <button onclick={() => act(() => game.resign(engine ? human : view.turn, Date.now()))}>Abandon ({COLOR_LABEL[engine ? human : view.turn]})</button>
       </div>
     {:else if view.stage === "bonus" && view.bonusFor}
       <h2>{name(view.bonusFor)} gagne le duel : bonus</h2>
@@ -332,7 +377,7 @@
       {#if view.joker[view.bonusFor]}<p class="hint">Joker déjà en main : prends le temps.</p>{/if}
     {:else if view.stage === "mur" && view.duel}
       {@const duel = view.duel}
-      <h2>Duel au mur : {DUEL_LABEL[duel.format]}</h2>
+      <h2>Duel au mur : {duel.format === "solo" ? SOLO_LABEL[duel.kind] : DUEL_LABEL[duel.format]}</h2>
       {#if game.stageRemaining(now) === 0}
         <div class="timeout">
           <p><strong>Temps du round écoulé.</strong> Qui est allé le plus haut ?</p>
@@ -344,7 +389,24 @@
         </div>
       {/if}
 
-      {#if duel.format === "ajoute"}
+      {#if duel.format === "solo"}
+        {@const piece = pieceOf(duel.piece ?? undefined)}
+        <p>
+          {#if duel.kind === "ajoute"}
+            Grimpe les <strong>{duel.shown}</strong> prises affichées. À chaque réussite, une prise de plus. Objectif : <strong>{duel.block.length}</strong> prises.
+          {:else if duel.kind === "meme"}
+            Réussis ce bloc (cote {duel.estimatedRating}). Essais restants : <strong>{duel.attemptsLeft}</strong>.
+          {:else}
+            Le moteur t'impose ce bloc (cote {duel.estimatedRating}) : un seul essai.
+          {/if}
+          {#if piece}<span class="hint"> Pièce : {piece.symbol} {piece.label}.</span>{/if}
+        </p>
+        {#if app.wall}<PanView wall={app.wall} sequence={duel.block.slice(0, duel.shown)} />{/if}
+        <div class="actions">
+          <button class="success" onclick={() => soloResult(duel.climber, duel.block.slice(0, duel.shown), true)}>Réussi</button>
+          <button class="fall" onclick={() => soloResult(duel.climber, duel.block.slice(0, duel.shown), false)}>Chute</button>
+        </div>
+      {:else if duel.format === "ajoute"}
         {@const piece = pieceOf(duel.piece)}
         <p>
           <strong>{name(duel.climber)}</strong> : répète les {duel.sequence.length} prises, puis touche sur le pan la prise que tu ajoutes.

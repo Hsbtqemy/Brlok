@@ -117,9 +117,16 @@ Précisions de mise en œuvre :
 - Le joueur qui commence le duel alterne d'un round à l'autre (Blancs au premier).
 - Chaque bloc grimpé en duel compte pour la cote de grimpe, et la partie pour la cote Chesscalade.
 
-**En solo**, le duel au mur se joue contre un **score cible** calculé à partir de la cote de grimpe du
-joueur (par exemple, pour « Ajoute une prise » : atteindre une longueur de bloc donnée). *Pas encore dans
-l'app : les rounds se jouent à deux.*
+**En solo** (contre Stockfish, qui joue les rounds d'échecs), le duel au mur devient un **objectif** ;
+le réussir gagne le duel, le rater le donne au moteur :
+
+| Duel choisi | En solo | Objectif |
+|---|---|---|
+| Ajoute une prise | **Bloc progressif** (cote du joueur − 100) | 3 prises au départ, une de plus à chaque réussite, jusqu'à 6 (Blitz) ou 8 (Classique) prises ; une chute perd |
+| Même bloc | **Bloc cible** (cote du joueur) | réussir en 2 essais (Blitz) ou 3 (Classique) |
+| Bloc imposé | **Bloc imposé par le moteur** (cote du joueur + 100) | réussir en un essai |
+
+En Rounds couplés, quand le moteur gagne un duel, il prend automatiquement +30 s.
 
 ### 3.5 Famille C : l'intrication rythmée
 

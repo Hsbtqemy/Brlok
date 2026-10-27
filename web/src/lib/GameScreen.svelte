@@ -77,6 +77,25 @@
 
   function start() {
     if (family !== "D") {
+      if (mode === "solo") {
+        humanColor = soloColor === "hasard" ? (Math.random() < 0.5 ? "w" : "b") : soloColor;
+        const engineColor: Color = humanColor === "w" ? "b" : "w";
+        const human = { name: nameOf(soloId), climbRating: climbRating(soloId) };
+        const engine = { name: `Stockfish ${engineElo}`, climbRating: 0 };
+        ids = humanColor === "w" ? { w: soloId, b: "" } : { w: "", b: soloId };
+        rounds = new RoundsGame(
+          {
+            family,
+            format,
+            duel: duelFormat,
+            players: humanColor === "w" ? { w: human, b: engine } : { w: engine, b: human },
+            engine: { color: engineColor, elo: engineElo },
+          },
+          makeDuelBlock,
+          Date.now(),
+        );
+        return;
+      }
       const players = {
         w: { name: nameOf(whiteId), climbRating: climbRating(whiteId) },
         b: { name: nameOf(blackId), climbRating: climbRating(blackId) },
@@ -425,13 +444,12 @@
           {:else}Chacun compose le bloc de l'autre sous un budget de cote ; celui qui réussit le bloc adverse gagne.{/if}
         </p>
       </div>
-    {:else}
+    {/if}
     <div class="row">
       <button aria-pressed={mode === "solo"} onclick={() => (mode = "solo")}>Solo contre Stockfish</button>
       <button aria-pressed={mode === "duo"} onclick={() => (mode = "duo")}>À deux</button>
     </div>
-    {/if}
-    {#if mode === "solo" && family === "D"}
+    {#if mode === "solo"}
       <div class="grid">
         <div class="player">
           <label class="field">
@@ -447,7 +465,9 @@
               {#each app.ratings.players as p (p.id)}<option value={p.id}>{p.name} (Chesscalade {Math.round(p.ratings.chesscalade.rating)})</option>{/each}
             </select>
           </label>
-          <label class="check"><input type="checkbox" bind:checked={fatigue.w} /> Option fatigue</label>
+          {#if family === "D"}
+            <label class="check"><input type="checkbox" bind:checked={fatigue.w} /> Option fatigue</label>
+          {/if}
         </div>
         <div class="field">
           Couleur
@@ -463,8 +483,15 @@
         <input type="range" min="400" max="2800" step="50" bind:value={engineElo} />
       </label>
       <p class="hint">
-        Le moteur ne grimpe pas : quand il prend une pièce ou donne échec, c'est toi qui grimpes un bloc de défense (une chute coûte du temps).
-        En Difficile et Diabolique, une contre-attaque par partie peut annuler son dernier coup. Sous 1320, la force est approximative (coups au hasard).
+        {#if family === "D"}
+          Le moteur ne grimpe pas : quand il prend une pièce ou donne échec, c'est toi qui grimpes un bloc de défense (une chute coûte du temps).
+          En Difficile et Diabolique, une contre-attaque par partie peut annuler son dernier coup.
+        {:else}
+          Le moteur joue les rounds d'échecs. Au mur, tu vises un objectif :
+          {duelFormat === "ajoute" ? "un bloc progressif (une prise de plus à chaque réussite, jusqu'à la longueur cible)" : duelFormat === "meme" ? "un bloc à ta cote, à réussir en un nombre d'essais limité" : "un bloc un peu plus dur que ta cote, en un seul essai"}.
+          Raté : le moteur gagne le duel.
+        {/if}
+        Sous 1320, la force est approximative (coups au hasard).
       </p>
     {:else}
     <div class="grid">

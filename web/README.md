@@ -49,4 +49,5 @@ ordinateur du même réseau et ouvrir l'adresse affichée.
 - [x] Partie en cours sauvegardée à chaque action, reprise après rechargement ou sur un autre appareil
 - [x] Familles A et B : rounds d'échecs et de mur, duels « Ajoute une prise », « Même bloc », « Bloc imposé »,
       KO, points, bonus et joker (à deux)
-- [ ] Famille C (intrication rythmée), rounds en solo
+- [x] Rounds en solo contre Stockfish (objectifs au mur : bloc progressif, bloc cible, bloc imposé)
+- [ ] Famille C (intrication rythmée)

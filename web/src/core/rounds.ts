@@ -19,6 +19,8 @@ export interface RoundsConfig {
   format: Format;
   duel: DuelFormat;
   players: Record<Color, { name: string; climbRating: number }>;
+  /** Solo contre un moteur : il joue les rounds d'échecs ; au mur, le joueur vise un objectif. */
+  engine?: { color: Color; elo: number };
 }
 
 export interface DuelBlockRequest {
@@ -38,6 +40,14 @@ export const BONUS_TIME_MS = 30_000;
 export const AJOUTE_START = 3;
 export const IMPOSE_STEP = 100;
 export const IMPOSE_MAX_RESTARTS = 2;
+
+/** Solo : objectifs au mur (§3.4 « En solo »). */
+export const SOLO = {
+  blitz: { progressiveLength: 6, cibleAttempts: 2 },
+  classique: { progressiveLength: 8, cibleAttempts: 3 },
+  progressiveOffset: -100,
+  imposedOffset: 100,
+} as const;
 
 export interface MemeResult {
   success: boolean;
@@ -74,6 +84,19 @@ export type Duel =
       /** Bloc composé PAR ce joueur, pour son adversaire. */
       composed: Partial<Record<Color, string[]>>;
       results: Partial<Record<Color, boolean>>;
+      winner?: Color | null;
+    }
+  | {
+      /** Solo : le joueur contre un objectif (progressif, cible ou imposé par le moteur). */
+      format: "solo";
+      kind: DuelFormat;
+      piece: Piece | null;
+      block: string[];
+      estimatedRating: number;
+      /** Nombre de prises dévoilées (bloc progressif) ; tout le bloc sinon. */
+      shown: number;
+      attemptsLeft: number;
+      climber: Color;
       winner?: Color | null;
     };
 
@@ -167,7 +190,8 @@ export class RoundsGame {
   stageRemaining(now: number): number {
     if (this.stage !== "echecs" && this.stage !== "mur") return 0;
     const length = this.stage === "echecs" ? this.params.chessMs : this.params.wallMs;
-    return Math.max(0, length - (now - this.stageStartedAt));
+    // Bornée à la durée du round : l'affichage peut avoir quelques millisecondes de retard sur le début du round.
+    return Math.min(length, Math.max(0, length - (now - this.stageStartedAt)));
   }
 
   duelWins(): Record<Color, number> {
@@ -220,6 +244,12 @@ export class RoundsGame {
     const starter: Color = this.round % 2 === 0 ? "w" : "b";
     const piece = this.duelPiece();
     const avgRating = Math.round((this.config.players.w.climbRating + this.config.players.b.climbRating) / 2);
+    const engine = this.config.engine;
+    if (engine) {
+      this.duel = this.soloDuel(other(engine.color), piece);
+      this.note(`Round de mur ${this.round + 1} : ${this.duelLabel()}.`);
+      return;
+    }
     switch (this.config.duel) {
       case "ajoute": {
         const block = this.makeBlock({ piece, targetRating: Math.min(this.config.players.w.climbRating, this.config.players.b.climbRating) - 200, length: AJOUTE_START });
@@ -245,6 +275,44 @@ export class RoundsGame {
     this.note(`Round de mur ${this.round + 1} : ${this.duelLabel()}.`);
   }
 
+  private soloDuel(human: Color, piece: Piece): Duel {
+    const rating = this.config.players[human].climbRating;
+    const solo = SOLO[this.config.format];
+    const kind = this.config.duel;
+    const request =
+      kind === "ajoute"
+        ? { piece, targetRating: rating + SOLO.progressiveOffset, length: solo.progressiveLength }
+        : { piece, targetRating: kind === "impose" ? rating + SOLO.imposedOffset : rating, length: this.params.blockLength };
+    const block = this.makeBlock(request);
+    const ids = block?.holds.map((h) => h.id) ?? [];
+    return {
+      format: "solo",
+      kind,
+      piece,
+      block: ids,
+      estimatedRating: block?.estimatedRating ?? request.targetRating,
+      shown: kind === "ajoute" ? Math.min(AJOUTE_START, ids.length) : ids.length,
+      attemptsLeft: kind === "meme" ? solo.cibleAttempts : 1,
+      climber: human,
+    };
+  }
+
+  /** Solo : résultat de la tentative en cours. */
+  soloResult(success: boolean, now: number): void {
+    const duel = this.requireDuel("solo");
+    const engine = other(duel.climber);
+    if (success) {
+      if (duel.kind === "ajoute" && duel.shown < duel.block.length) {
+        duel.shown++;
+        return;
+      }
+      this.endDuel(duel.climber, now);
+      return;
+    }
+    duel.attemptsLeft--;
+    if (duel.attemptsLeft <= 0) this.endDuel(engine, now);
+  }
+
   /** Famille A : une pièce au hasard. Famille B : la pièce la plus active du camp au trait. */
   private duelPiece(): Piece {
     if (this.config.family === "B") return mostActivePiece(this.chess.fen(), this.turn);
@@ -253,6 +321,9 @@ export class RoundsGame {
   }
 
   private duelLabel(): string {
+    if (this.config.engine) {
+      return { ajoute: "bloc progressif", meme: "bloc cible", impose: "bloc imposé par le moteur" }[this.config.duel];
+    }
     return { ajoute: "Ajoute une prise", meme: "Même bloc", impose: "Bloc imposé" }[this.config.duel];
   }
 
@@ -350,7 +421,7 @@ export class RoundsGame {
 
   // --- Interne ------------------------------------------------------------------
 
-  private requireDuel<F extends DuelFormat>(format: F): Extract<Duel, { format: F }> {
+  private requireDuel<F extends Duel["format"]>(format: F): Extract<Duel, { format: F }> {
     if (this.stage !== "mur" || this.duel?.format !== format) throw new Error("Aucun duel de ce type en cours.");
     return this.duel as Extract<Duel, { format: F }>;
   }
@@ -375,6 +446,13 @@ export class RoundsGame {
       return;
     }
     if (this.config.family === "B" && winner) {
+      if (winner === this.config.engine?.color) {
+        // Le moteur ne choisit pas : il prend le temps.
+        this.clock.add(winner, BONUS_TIME_MS, now);
+        this.note(`${this.config.players[winner].name} prend +30 s.`);
+        this.nextChessRound(now);
+        return;
+      }
       this.bonusFor = winner;
       this.stage = "bonus";
       return;

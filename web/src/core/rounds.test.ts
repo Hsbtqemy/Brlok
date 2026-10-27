@@ -163,3 +163,39 @@ describe("joker", () => {
     expect(() => game.useJoker("w")).toThrow();
   });
 });
+
+describe("rounds en solo", () => {
+  const solo = (duel: "ajoute" | "meme" | "impose", family: "A" | "B" = "A") =>
+    setup({ duel, family, engine: { color: "b", elo: 1500 }, players: { w: { name: "Alice", climbRating: 1500 }, b: { name: "Stockfish", climbRating: 0 } } });
+
+  it("bloc progressif : une prise dévoilée par réussite, gagné à la longueur cible", () => {
+    const { game, requests } = solo("ajoute");
+    game.tick(CHESS);
+    expect(requests[0]).toMatchObject({ targetRating: 1400, length: 6 });
+    const duel = () => game.duel as Extract<NonNullable<typeof game.duel>, { format: "solo" }>;
+    expect(duel().shown).toBe(3);
+    for (let i = 0; i < 3; i++) game.soloResult(true, CHESS);
+    expect(duel().shown).toBe(6);
+    game.soloResult(true, CHESS);
+    expect(game.duels.at(-1)).toEqual({ round: 0, winner: "w" });
+  });
+
+  it("bloc cible : 2 essais en Blitz, sinon le moteur gagne le duel", () => {
+    const { game } = solo("meme");
+    game.tick(CHESS);
+    game.soloResult(false, CHESS);
+    expect(game.stage).toBe("mur");
+    game.soloResult(false, CHESS);
+    expect(game.duels.at(-1)).toEqual({ round: 0, winner: "b" });
+  });
+
+  it("bloc imposé par le moteur : plus dur, un seul essai ; en famille B le moteur prend +30 s", () => {
+    const { game, requests } = solo("impose", "B");
+    game.tick(CHESS);
+    expect(requests[0].targetRating).toBe(1600);
+    const before = game.clock.remainingAt("b", CHESS);
+    game.soloResult(false, CHESS);
+    expect(game.stage).toBe("echecs");
+    expect(game.clock.remainingAt("b", CHESS)).toBe(before + 30_000);
+  });
+});
