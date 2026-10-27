@@ -51,3 +51,5 @@ ordinateur du même réseau et ouvrir l'adresse affichée.
       KO, points, bonus et joker (à deux)
 - [x] Rounds en solo contre Stockfish (objectifs au mur : bloc progressif, bloc cible, bloc imposé)
 - [x] Famille C (intrication rythmée) : cloche toutes les 4 / 8 min de jeu
+- [x] Éditeur de pan (niveaux, types, prises inutilisables, enchaînements impossibles, taille, nouveau pan)
+- [ ] Pan en photo, mur à voies : voir [`docs/chesscalade/MURS.md`](../docs/chesscalade/MURS.md)

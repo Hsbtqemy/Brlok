@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { holdAt, type Wall } from "../core/wall";
+  import { holdAt, holdId, type Position, type Wall } from "../core/wall";
   import { LEVEL_COLORS, LEVEL_TEXT } from "./colors";
 
   interface Props {
@@ -10,9 +10,15 @@
     candidate?: string | null;
     /** Rend les prises touchables (duels au mur). */
     onHold?: (id: string) => void;
+    /** Rend toutes les cases touchables, vides comprises (édition du pan). */
+    onCell?: (position: Position) => void;
+    /** Case sélectionnée (édition). */
+    selected?: Position | null;
+    /** Prises reliées à la sélection par un enchaînement impossible. */
+    linked?: Set<string>;
   }
 
-  let { wall, sequence = [], candidate = null, onHold }: Props = $props();
+  let { wall, sequence = [], candidate = null, onHold, onCell, selected = null, linked = new Set() }: Props = $props();
 
   // Le bas du mur est affiché en bas de l'écran.
   const rows = $derived(
@@ -30,11 +36,13 @@
       {@const hold = holdAt(wall, { row, col })}
       {@const rank = hold ? order.get(hold.id) : undefined}
       <svelte:element
-        this={onHold && hold ? "button" : "div"}
+        this={(onHold && hold) || onCell ? "button" : "div"}
         class="cell"
-        class:clickable={!!(onHold && hold)}
+        class:clickable={!!((onHold && hold) || onCell)}
         class:candidate={!!hold && hold.id === candidate}
-        onclick={() => hold && onHold?.(hold.id)}
+        class:selected={selected?.row === row && selected?.col === col}
+        class:linked={!!hold && linked.has(hold.id)}
+        onclick={() => (onCell ? onCell({ row, col }) : hold && onHold?.(hold.id))}
         class:empty={!hold}
         class:inactive={hold && !hold.active}
         class:in-block={rank !== undefined}
@@ -42,7 +50,8 @@
         style:color={rank !== undefined && hold ? LEVEL_TEXT[hold.level] : undefined}
         style:border-color={hold && hold.active && rank === undefined ? LEVEL_COLORS[hold.level] : undefined}
         title={hold ? `${hold.id} · niveau ${hold.level}${hold.tags.length ? " · " + hold.tags.join(", ") : ""}` : ""}
-        role={onHold && hold ? undefined : "gridcell"}
+        aria-label={onCell ? (hold ? `${hold.id}, niveau ${hold.level}` : `Case vide ${holdId({ row, col })}`) : undefined}
+        role={(onHold && hold) || onCell ? undefined : "gridcell"}
       >
         {#if hold}
           <span class="id">{hold.id}</span>
@@ -82,6 +91,15 @@
     font: inherit;
     color: inherit;
     cursor: pointer;
+  }
+  .cell.selected {
+    box-shadow: 0 0 0 3px var(--accent);
+    border-color: var(--accent);
+    opacity: 1;
+  }
+  .cell.linked {
+    border-style: dashed;
+    border-color: #c62828;
   }
   .cell.candidate {
     border-color: #6a1b9a;

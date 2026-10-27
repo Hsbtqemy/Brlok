@@ -8,6 +8,9 @@
   import type { Wall } from "../core/wall";
   import { app } from "./appState.svelte";
   import PanView from "./PanView.svelte";
+  import WallEditor from "./WallEditor.svelte";
+
+  let editing = $state(false);
 
   const LEVEL_PROFILES = [
     { label: "Très facile", level: 1 },
@@ -174,6 +177,7 @@
         Portée entre deux prises (cases)
         <input type="number" min="1" max="4" value={app.wall.reach} onchange={(e) => app.updateWall({ reach: Number((e.currentTarget as HTMLInputElement).value) })} />
       </label>
+      <button class="primary" onclick={() => (editing = true)} disabled={editing}>Modifier le pan</button>
       <button onclick={exportFile}>Exporter pour Brlok desktop</button>
       {#if exportJson}
         <button onclick={copyExport}>Copier le JSON exporté</button>
@@ -197,11 +201,22 @@
     {/if}
   </section>
 
+  {#if editing}
+    <div class="edit-span">
+      <WallEditor
+        onClose={() => {
+          editing = false;
+          chessBlock = null;
+          classicSession = [];
+        }}
+      />
+    </div>
+  {:else}
   <section class="panel pan-panel">
     {#if app.wall}
       <PanView wall={app.wall} sequence={currentBlock?.holds.map((h) => h.id) ?? []} />
     {:else}
-      <p class="empty">Importe ton <code>catalog_collection.json</code> de Brlok, ou charge l'exemple.</p>
+      <p class="empty">Importe ton <code>catalog_collection.json</code> de Brlok, charge l'exemple, ou <button class="link" onclick={() => (editing = true)}>crée un pan</button>.</p>
     {/if}
   </section>
 
@@ -305,6 +320,7 @@
       </div>
     {/if}
   </section>
+  {/if}
 </div>
 
 <style>
@@ -314,7 +330,15 @@
     gap: 16px;
     align-items: start;
   }
+  .edit-span {
+    grid-column: span 2;
+    min-width: 0;
+  }
   @media (max-width: 960px) {
+    .edit-span {
+      grid-column: auto;
+      order: -1;
+    }
     .screen {
       grid-template-columns: 1fr;
     }
