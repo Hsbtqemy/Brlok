@@ -1,5 +1,6 @@
 <script lang="ts">
   import { FOOT_RULES } from "../core/feet";
+  import { routeVariantInfo } from "../core/gym";
   import type { Block } from "../core/generator";
   import { PIECES } from "../core/pieces";
   import type { Wall } from "../core/wall";
@@ -62,6 +63,10 @@
     {:else}
       <PanView {wall} sequence={block.holds.map((h) => h.id)} />
       <p class="sequence">{block.holds.map((h) => h.id).join(" → ")}</p>
+    {/if}
+    {#if block.route?.variant}
+      {@const v = routeVariantInfo(block.route.variant)}
+      <p class="feet"><strong>Variante : {v?.label}</strong> — {v?.description}</p>
     {/if}
     {#if block.feet}
       {@const rule = FOOT_RULES.find((r) => r.id === block.feet)}

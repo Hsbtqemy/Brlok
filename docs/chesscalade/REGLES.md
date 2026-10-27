@@ -277,7 +277,7 @@ La **densité** se choisit au lancement de la partie (familles C et D) :
 ### 5.6 Rythme : à chaque bloc ou par séries
 
 Deuxième retour en solo : même avec moins de blocs, les allers-retours entre la tablette et le mur cassent
-le rythme. Le **rythme** se choisit au lancement (familles C et D) :
+le rythme. Le **passage au mur** se choisit au lancement (familles C et D) :
 
 - **À chaque bloc** (défaut à deux) : chaque bloc se grimpe dès qu'il est demandé, et son résultat décide du
   coup (verdicts §5.2 et §5.3).
@@ -593,7 +593,29 @@ s'adapteraient naturellement au mode « pan libre ».
 
 Comme pour le pan, Glicko-2 corrige ensuite la cote réelle de chaque voie.
 
-### 13.4 Ce que ça implique
+### 13.4 Variantes d'une voie
+
+Avec une seule voie retenue (ou quelques voies de même cotation), chaque bloc serait la même voie, quelle
+que soit la cote visée. Une **variante** rend la voie plus facile ou plus dure (environ 100 points par cran) :
+
+| Variante | Effet sur la cote |
+|---|---|
+| Pieds libres (pieds sur n'importe quelle prise ou sur le mur) | −100 |
+| Un mouvement sans pied (au choix) | +150 |
+| Aller-retour (monter puis redescendre jusqu'au départ) | +150 |
+| Saute une prise (une prise de main au choix est interdite) | +200 |
+| Deux fois (enchaîner deux fois sans poser les pieds au sol) | +250 |
+
+- Les variantes permises se cochent au lancement de la partie (toutes par défaut, réglage retenu) ; la voie
+  telle quelle reste toujours possible.
+- Le choix porte sur les paires voie + variante : la plus proche de la cote visée, avec une préférence pour la
+  voie telle quelle (une variante doit rapprocher d'au moins 60 points) ; les variantes de difficulté voisine
+  tournent au fil de la partie.
+- Chaque paire voie + variante a **sa propre cote** (départ : cote de la voie + bonus, puis Glicko-2). Une
+  tentative avec variante ne compte pas au carnet de la voie.
+- Sur un mur à voies, les variantes remplacent les règles de pieds du pan (§7.6).
+
+### 13.5 Ce que ça implique
 
 - Le **modèle de données** doit être générique dès le départ : un mur = une grille de taille quelconque,
   des prises (niveau optionnel) et/ou des voies fixes. **C'est peu coûteux à prévoir maintenant**, et beaucoup

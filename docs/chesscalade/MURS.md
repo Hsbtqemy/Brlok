@@ -121,7 +121,9 @@ Dans le jeu, sur un mur à voies, les blocs sont **choisis** et non générés :
   à côté du minuteur), signal sonore et visuel, enchaînement automatique des blocs de la séance. Le
   minuteur est aussi disponible sur la voie touchée dans le carnet.
 - **Partie** : on choisit le pan ou le mur de la partie et, pour une salle, **les voies retenues** (toutes
-  par défaut) ; les blocs de la partie sont choisis parmi elles.
+  par défaut) ; les blocs de la partie sont choisis parmi elles. Pour varier une même voie, des **variantes**
+  (pieds libres, un mouvement sans pied, aller-retour, saute une prise, deux fois) suivent la cote visée
+  (REGLES.md §13.4) ; on choisit celles qui sont permises.
 
 Limites de la v1 : une seule photo par mur (un secteur), pas de redressement (inutile ici : on ne mesure pas
 de distances), et dans les salles où une couleur regroupe plusieurs voies, il faut retirer à la main les

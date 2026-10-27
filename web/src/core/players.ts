@@ -2,6 +2,7 @@
  * Joueurs, cotes (REGLES.md §8) et journal des tentatives.
  * Trois cotes par joueur ; les blocs ont aussi leur cote, partagée entre Brlok classique et Chesscalade.
  */
+import { routeVariantInfo } from "./gym";
 import type { Block } from "./generator";
 import { newRating, recordAttempt, updateRating, type Rating } from "./glicko2";
 import { placementRating, type PlacementResult } from "./placement";
@@ -29,6 +30,8 @@ export interface AttemptRecord {
   feet?: string;
   /** Mur à voies : la voie tentée (pour le carnet). */
   routeId?: string;
+  /** Voie jouée avec une variante (§13.4) : ne compte pas au carnet de la voie. */
+  routeVariant?: string;
   ratingBefore: number;
   ratingAfter: number;
   blockRating: number;
@@ -91,14 +94,14 @@ export function blockKey(wallId: string, holds: readonly string[], feet?: string
   return `${wallId}:${holds.join("-")}${suffix}`;
 }
 
-/** Clé d'une voie de salle (sa cote vit avec elle, quelle que soit la règle de pieds). */
-export function routeKey(wallId: string, routeId: string): string {
-  return `${wallId}:voie:${routeId}`;
+/** Clé d'une voie de salle ; jouée avec une variante (§13.4), elle a une cote à part. */
+export function routeKey(wallId: string, routeId: string, variant?: string): string {
+  return `${wallId}:voie:${routeId}${variant ? `~${variant}` : ""}`;
 }
 
 const keyOf = (wallId: string, block: Block) =>
   block.route
-    ? routeKey(wallId, block.route.id)
+    ? routeKey(wallId, block.route.id, block.route.variant)
     : blockKey(
         wallId,
         block.holds.map((h) => h.id),
@@ -107,7 +110,8 @@ const keyOf = (wallId: string, block: Block) =>
       );
 
 /** Prises (ou voie) d'un bloc, pour le journal. */
-const labelOf = (block: Block) => (block.route ? [block.route.label] : block.holds.map((h) => h.id));
+const labelOf = (block: Block) =>
+  block.route ? [block.route.variant ? `${block.route.label} · ${routeVariantInfo(block.route.variant)?.label}` : block.route.label] : block.holds.map((h) => h.id);
 
 export function blockRating(state: RatingsState, wallId: string, block: Block): Rating {
   return state.blocks[keyOf(wallId, block)] ?? { rating: block.estimatedRating, rd: NEW_BLOCK_RD, volatility: 0.06 };
@@ -140,6 +144,7 @@ export function recordBlockAttempt(
     context,
     ...(block.feet ? { feet: block.feet } : {}),
     ...(block.route ? { routeId: block.route.id } : {}),
+    ...(block.route?.variant ? { routeVariant: block.route.variant } : {}),
     ratingBefore: Math.round(before.rating),
     ratingAfter: Math.round(updated.climber.rating),
     blockRating: Math.round(blockBefore.rating),

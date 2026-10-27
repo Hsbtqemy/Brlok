@@ -115,3 +115,41 @@ describe("voies retenues pour une partie", () => {
     expect(pickRoute(wall, { piece: null, targetRating: 1400, allowed: ["inconnue"], rng: seededRng(1) })?.route?.id).toBe("v1");
   });
 });
+
+describe("variantes d'une voie (§13.4)", () => {
+  const all = ["pieds-libres", "sans-pied", "desescalade", "saute-prise", "deux-fois"] as const;
+
+  it("une seule voie : la variante suit la cote visée", () => {
+    const wall = gym([{ grade: "6a" }]); // 1400
+    const at = (targetRating: number) => pickRoute(wall, { piece: null, targetRating, variants: all, rng: seededRng(2) })!;
+    expect(at(1400).route?.variant).toBeUndefined();
+    expect(at(1300).route?.variant).toBe("pieds-libres");
+    expect(at(1300).estimatedRating).toBe(1300);
+    expect(at(1650).route?.variant).toBe("deux-fois");
+    expect(at(1650).estimatedRating).toBe(1650);
+  });
+
+  it("sans variante permise, la voie reste telle quelle", () => {
+    const wall = gym([{ grade: "6a" }]);
+    expect(pickRoute(wall, { piece: null, targetRating: 1800, rng: seededRng(2) })!.route?.variant).toBeUndefined();
+    expect(pickRoute(wall, { piece: null, targetRating: 1800, variants: ["pieds-libres"], rng: seededRng(2) })!.route?.variant).toBeUndefined();
+  });
+
+  it("l'usage fait tourner les variantes de même difficulté", () => {
+    const wall = gym([{ grade: "6a" }]);
+    const usage = new Map<string, number>();
+    const picks = [1, 2, 3, 4].map((i) => pickRoute(wall, { piece: null, targetRating: 1550, variants: all, usage, rng: seededRng(i) })!.route?.variant);
+    expect(new Set(picks).size).toBeGreaterThan(1);
+  });
+
+  it("une variante a sa propre cote et ne compte pas au carnet de la voie", () => {
+    const wall = gym([{ grade: "6a" }]);
+    const block = pickRoute(wall, { piece: null, targetRating: 1650, variants: all, rng: seededRng(2) })!;
+    const start = createPlayer(emptyRatingsState(), "A", "a");
+    const { state } = recordBlockAttempt(start, "a", wall.id, block, true, "partie");
+    expect(state.blocks[routeKey(wall.id, "v0", "deux-fois")]).toBeDefined();
+    expect(state.blocks[routeKey(wall.id, "v0")]).toBeUndefined();
+    expect(state.attempts[0].routeVariant).toBe("deux-fois");
+    expect(state.attempts[0].holds[0]).toContain("Deux fois");
+  });
+});

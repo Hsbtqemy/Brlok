@@ -87,13 +87,45 @@ export function routeHex(route: Route): string {
   return route.colorHex ?? ROUTE_COLORS.find((c) => c.name === route.color)?.hex ?? "#888888";
 }
 
-export function routeBlock(route: Route, rating: number, piece: Piece | null, relaxations: string[] = []): Block {
+/**
+ * Variantes d'une voie (REGLES.md §13.4) : une contrainte qui rend la même voie plus facile ou plus dure,
+ * choisie selon l'écart entre la cote visée et la cote de la voie. Un cran de cotation ≈ 100 points.
+ */
+export type RouteVariant = "pieds-libres" | "sans-pied" | "desescalade" | "saute-prise" | "deux-fois";
+
+export const ROUTE_VARIANTS: { id: RouteVariant; label: string; description: string; bonus: number }[] = [
+  { id: "pieds-libres", label: "Pieds libres", description: "Les pieds sur n'importe quelle prise ou sur le mur.", bonus: -100 },
+  { id: "sans-pied", label: "Un mouvement sans pied", description: "Un passage au choix se fait pieds décollés.", bonus: 150 },
+  { id: "desescalade", label: "Aller-retour", description: "Monte, puis redescends la voie jusqu'au départ.", bonus: 150 },
+  { id: "saute-prise", label: "Saute une prise", description: "Une prise de main au choix est interdite.", bonus: 200 },
+  { id: "deux-fois", label: "Deux fois", description: "Enchaîne la voie deux fois, sans poser les pieds au sol entre les deux.", bonus: 250 },
+];
+
+export function routeVariantInfo(variant: RouteVariant | undefined) {
+  return ROUTE_VARIANTS.find((v) => v.id === variant);
+}
+
+export function routeBlock(
+  route: Route,
+  rating: number,
+  piece: Piece | null,
+  relaxations: string[] = [],
+  variant?: RouteVariant,
+): Block {
   return {
     holds: [],
     estimatedRating: Math.round(rating),
     relaxations,
     piece: piece ?? undefined,
-    route: { id: route.id, label: routeLabel(route), color: route.color, colorHex: routeHex(route), grade: route.grade, styles: [...route.styles] },
+    route: {
+      id: route.id,
+      label: routeLabel(route),
+      color: route.color,
+      colorHex: routeHex(route),
+      grade: route.grade,
+      styles: [...route.styles],
+      ...(variant ? { variant } : {}),
+    },
   };
 }
 
@@ -107,6 +139,10 @@ export interface RouteOptions {
   usage?: Map<string, number>;
   /** Restreint le choix à ces voies (voies retenues pour une partie). */
   allowed?: readonly string[];
+  /** Variantes permises (aucune si absent) : la voie telle quelle reste toujours possible. */
+  variants?: readonly RouteVariant[];
+  /** Cote apprise d'une voie jouée avec une variante, sinon cote de la voie + bonus de la variante. */
+  variantRatingOf?: (route: Route, variant: RouteVariant) => number | undefined;
   rng: Rng;
 }
 
@@ -114,6 +150,9 @@ export interface RouteOptions {
 export function activeRoutes(wall: Wall, ratingOf?: (route: Route) => number | undefined): { route: Route; rating: number }[] {
   return wall.routes.filter((r) => !r.archived).map((route) => ({ route, rating: ratingOf?.(route) ?? gradeToRating(route.grade) }));
 }
+
+/** Pénalité d'une variante : la voie telle quelle est préférée quand l'écart est faible. */
+const VARIANT_COST = 60;
 
 /** Choisit la voie la plus proche de la cote visée, en préférant le style de la pièce. */
 export function pickRoute(wall: Wall, options: RouteOptions): Block | null {
@@ -126,19 +165,34 @@ export function pickRoute(wall: Wall, options: RouteOptions): Block | null {
   }
   if (candidates.length === 0) return null;
   const relaxations: string[] = [];
-  if (maxRating !== undefined) {
-    const within = candidates.filter((c) => c.rating <= maxRating);
-    if (within.length > 0) candidates = within;
-    else relaxations.push("aucune voie sous le budget : la plus facile est proposée");
-  }
   const wanted = piece ? PIECE_STYLES[piece] : [];
   const matches = (r: Route) => wanted.length === 0 || r.styles.some((s) => wanted.includes(s));
-  const score = (c: { route: Route; rating: number }) =>
-    Math.abs(c.rating - targetRating) + (matches(c.route) ? 0 : 150) + 40 * (usage?.get(c.route.id) ?? 0) + rng() * 40;
-  const best = candidates.reduce((a, b) => (score(b) < score(a) ? b : a));
+  // Chaque voie, telle quelle ou avec une variante permise ; une variante n'est retenue que si elle rapproche
+  // nettement de la cote visée (VARIANT_COST), et l'usage fait tourner les variantes d'une même voie.
+  const variants = ROUTE_VARIANTS.filter((v) => options.variants?.includes(v.id));
+  const pairs = candidates.flatMap((c) => [
+    { ...c, variant: undefined as RouteVariant | undefined },
+    ...variants.map((v) => ({ ...c, variant: v.id, rating: options.variantRatingOf?.(c.route, v.id) ?? c.rating + v.bonus })),
+  ]);
+  let pool = pairs;
+  if (maxRating !== undefined) {
+    const within = pairs.filter((c) => c.rating <= maxRating);
+    if (within.length > 0) pool = within;
+    else relaxations.push("aucune voie sous le budget : la plus facile est proposée");
+  }
+  const usageKey = (c: { route: Route; variant?: RouteVariant }) => (c.variant ? `${c.route.id}~${c.variant}` : c.route.id);
+  const score = (c: (typeof pairs)[number]) =>
+    Math.abs(c.rating - targetRating) +
+    (matches(c.route) ? 0 : 150) +
+    (c.variant ? VARIANT_COST : 0) +
+    40 * (usage?.get(c.route.id) ?? 0) +
+    30 * (usage?.get(usageKey(c)) ?? 0) +
+    rng() * 40;
+  const best = pool.reduce((a, b) => (score(b) < score(a) ? b : a));
   if (piece && !matches(best.route)) relaxations.push("pas de voie au style de la pièce : la plus proche en cote");
   usage?.set(best.route.id, (usage.get(best.route.id) ?? 0) + 1);
-  return routeBlock(best.route, best.rating, piece, relaxations);
+  if (best.variant) usage?.set(usageKey(best), (usage.get(usageKey(best)) ?? 0) + 1);
+  return routeBlock(best.route, best.rating, piece, relaxations, best.variant);
 }
 
 export interface RouteSessionOptions {
@@ -181,7 +235,7 @@ export interface RouteLog {
 
 /** Carnet : tentatives et réussites d'un joueur sur chaque voie d'un mur. */
 export function routeLogs(
-  attempts: readonly { playerId: string; wallId: string; routeId?: string; success: boolean; at: string }[],
+  attempts: readonly { playerId: string; wallId: string; routeId?: string; routeVariant?: string; success: boolean; at: string }[],
   playerId: string,
   wallId: string,
 ): Map<string, RouteLog> {
@@ -189,7 +243,7 @@ export function routeLogs(
   // Journal du plus récent au plus ancien : on le parcourt à l'envers pour garder la première réussite.
   for (let i = attempts.length - 1; i >= 0; i--) {
     const a = attempts[i];
-    if (a.playerId !== playerId || a.wallId !== wallId || !a.routeId) continue;
+    if (a.playerId !== playerId || a.wallId !== wallId || !a.routeId || a.routeVariant) continue;
     const log = logs.get(a.routeId) ?? { attempts: 0, successes: 0 };
     log.attempts++;
     if (a.success) {

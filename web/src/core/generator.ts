@@ -4,6 +4,7 @@
  * - generateChessBlock : blocs-défis Chesscalade (REGLES.md §7.4) — chemin dans le graphe de portée,
  *   forme donnée par la pièce, cote estimée la plus proche de la cote visée.
  */
+import type { RouteVariant } from "./gym";
 import { estimateBlockRating, ratingToLevel } from "./blockRating";
 import { distributionLevels, type DistributionPattern } from "./distribution";
 import { footBonus, pickNoFootMove, type FootRule } from "./feet";
@@ -22,7 +23,7 @@ export interface Block {
   /** « Un mouvement sans pied » : index (à partir de 1) de la prise atteinte pieds décollés. */
   noFootMove?: number;
   /** Mur à voies : la voie choisie (le bloc n'a alors pas de prises détaillées). */
-  route?: { id: string; label: string; color: string; colorHex?: string; grade: string; styles: string[] };
+  route?: { id: string; label: string; color: string; colorHex?: string; grade: string; styles: string[]; variant?: RouteVariant };
 }
 
 export interface ClassicOptions {

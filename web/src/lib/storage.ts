@@ -1,5 +1,6 @@
 /** Persistance locale (navigateur). Toute lecture/écriture peut échouer : on retombe sur les valeurs par défaut. */
 import { emptyRatingsState, type RatingsState } from "../core/players";
+import { ROUTE_VARIANTS, type RouteVariant } from "../core/gym";
 import type { Wall } from "../core/wall";
 
 const WALLS_KEY = "brlok-web:walls";
@@ -7,6 +8,7 @@ const ACTIVE_KEY = "brlok-web:active-wall";
 const RATINGS_KEY = "brlok-web:ratings";
 const ACTIVE_PLAYER_KEY = "brlok-web:active-player";
 const LIVE_GAME_KEY = "brlok-web:live-game";
+const ROUTE_VARIANTS_KEY = "brlok-web:route-variants";
 
 function read<T>(key: string, fallback: T): T {
   try {
@@ -35,3 +37,7 @@ export const loadActivePlayerId = (): string | null => read(ACTIVE_PLAYER_KEY, n
 export const saveActivePlayerId = (id: string | null): void => write(ACTIVE_PLAYER_KEY, id);
 export const loadLiveGame = <T>(): T | null => read<T | null>(LIVE_GAME_KEY, null);
 export const saveLiveGame = (game: unknown): void => write(LIVE_GAME_KEY, game);
+
+/** Variantes de voie permises dans les parties (toutes par défaut). */
+export const loadRouteVariants = (): RouteVariant[] => read(ROUTE_VARIANTS_KEY, ROUTE_VARIANTS.map((v) => v.id));
+export const saveRouteVariants = (variants: RouteVariant[]): void => write(ROUTE_VARIANTS_KEY, variants);

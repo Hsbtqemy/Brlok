@@ -105,13 +105,14 @@ class AppState {
   }
 
   /** Bloc pour un défi : généré sur un pan, choisi parmi les voies d'un mur de salle (cote apprise). */
-  challenge(options: Omit<ChallengeOptions, "routeRating">): Block | null {
+  challenge(options: Omit<ChallengeOptions, "routeRating" | "variantRating">): Block | null {
     const wall = this.wall;
     if (!wall) return null;
     const blocks = this.ratings.blocks;
     return makeChallengeBlock($state.snapshot(wall) as Wall, {
       ...options,
       routeRating: (route: Route) => blocks[routeKey(wall.id, route.id)]?.rating,
+      variantRating: (route, variant) => blocks[routeKey(wall.id, route.id, variant)]?.rating,
     });
   }
 

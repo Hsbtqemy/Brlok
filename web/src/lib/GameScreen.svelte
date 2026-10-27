@@ -14,7 +14,8 @@
   } from "../core/game";
   import { engineSettings, pickEngineMove } from "../core/engine";
   import { FOOT_RULES, type FootRule } from "../core/feet";
-  import { routeHex, routeLabel } from "../core/gym";
+  import { ROUTE_VARIANTS, routeHex, routeLabel, type RouteVariant } from "../core/gym";
+  import { loadRouteVariants, saveRouteVariants } from "./storage";
   import { PIECES } from "../core/pieces";
   import { seededRng } from "../core/random";
   import { app } from "./appState.svelte";
@@ -57,6 +58,13 @@
   const rhythm = $derived<Rhythm>(rhythmChoice ?? (mode === "solo" ? "series" : "immediat"));
   /** Mur à voies : voies retenues pour la partie (vide : toutes). */
   let gameRoutes = $state<string[]>([]);
+  /** Mur à voies : variantes permises (§13.4), retenues d'une partie à l'autre. */
+  let routeVariants = $state<RouteVariant[]>(loadRouteVariants());
+
+  function toggleVariant(id: RouteVariant) {
+    routeVariants = routeVariants.includes(id) ? routeVariants.filter((v) => v !== id) : [...routeVariants, id];
+    saveRouteVariants(routeVariants);
+  }
 
   function toggleGameRoute(id: string, all: string[]) {
     const current = gameRoutes.length ? gameRoutes : all;
@@ -93,7 +101,7 @@
 
   function makeDuelBlock(request: DuelBlockRequest) {
     if (!app.wall) return null;
-    return app.challenge({ ...request, usage, allowedRoutes: gameRoutes, rng: seededRng(Date.now()) });
+    return app.challenge({ ...request, usage, allowedRoutes: gameRoutes, routeVariants, rng: seededRng(Date.now()) });
   }
 
   // Sur un mur à voies, « Ajoute une prise » n'a pas de sens : on bascule sur « Même bloc ».
@@ -188,7 +196,7 @@
 
   function makeBlock(request: BlockRequest) {
     if (!app.wall) return null;
-    return app.challenge({ ...request, usage, allowedRoutes: gameRoutes, rng: seededRng(Date.now()) });
+    return app.challenge({ ...request, usage, allowedRoutes: gameRoutes, routeVariants, rng: seededRng(Date.now()) });
   }
 
   function refresh() {
@@ -477,6 +485,21 @@
           </p>
         {/if}
       </div>
+      <div class="field">
+        Variantes des voies
+        <div class="row wrap">
+          {#each ROUTE_VARIANTS as v (v.id)}
+            <button aria-pressed={routeVariants.includes(v.id)} onclick={() => toggleVariant(v.id)} title={v.description}>
+              {v.label} ({v.bonus > 0 ? "+" : "−"}{Math.abs(v.bonus)})
+            </button>
+          {/each}
+        </div>
+        <p class="hint">
+          Pour varier une même voie : quand la cote visée s'éloigne de celle de la voie, une variante permise la rend plus
+          facile ou plus dure (environ 100 points par cran de cotation). Chaque variante a sa propre cote, apprise en jouant.
+          {routeVariants.length === 0 ? "Aucune variante : les voies sont toujours grimpées telles quelles." : ""}
+        </p>
+      </div>
     {/if}
     {#if app.ratings.players.length === 0}
       <p class="warn">Crée au moins un joueur (onglet Joueurs) pour que les cotes évoluent. Sinon, la partie se joue en invité.</p>
@@ -626,7 +649,7 @@
       </p>
     </div>
     <div class="field">
-      Rythme
+      Passage au mur
       <div class="row">
         <button aria-pressed={rhythm === "series"} onclick={() => (rhythmChoice = "series")}>Par séries de {SERIES_SIZE}</button>
         <button aria-pressed={rhythm === "immediat"} onclick={() => (rhythmChoice = "immediat")}>À chaque bloc</button>
@@ -637,6 +660,7 @@
         {:else}Chaque bloc se grimpe dès qu'il est demandé, et son résultat décide du coup (validé, limité, annulé, dévié…).{/if}
       </p>
     </div>
+    {#if app.wall?.kind !== "voies"}
     <div class="field">
       Pieds
       <div class="row">
@@ -650,6 +674,7 @@
         La difficulté totale ne change pas : avec une règle de pieds, les prises sont choisies plus faciles. La parade reste pieds libres.
       </p>
     </div>
+    {/if}
     {/if}
     <button class="primary" onclick={start}>Commencer la partie</button>
   </section>

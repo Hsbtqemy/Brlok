@@ -1,5 +1,5 @@
 /**
- * Modèle de mur générique (REGLES.md §13.4) : grille de taille quelconque,
+ * Modèle de mur générique (REGLES.md §13.5) : grille de taille quelconque,
  * prises (pan libre) et/ou voies fixes (mur à voies, plus tard).
  */
 
