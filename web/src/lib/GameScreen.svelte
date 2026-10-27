@@ -15,6 +15,8 @@
   import { seededRng } from "../core/random";
   import { app } from "./appState.svelte";
   import BlockChallenge from "./BlockChallenge.svelte";
+  import RoundsPlay from "./RoundsPlay.svelte";
+  import { RoundsGame, type DuelBlockRequest, type DuelFormat, type Family } from "../core/rounds";
   import Board from "./Board.svelte";
   import { Stockfish } from "./stockfish";
 
@@ -43,6 +45,10 @@
   let blackId = $state(app.ratings.players[1]?.id ?? app.ratings.players[0]?.id ?? "");
   let fatigue = $state<Record<Color, boolean>>({ w: false, b: false });
   let mode = $state<"duo" | "solo">("solo");
+  /** D = intrication ; A et B = rounds (REGLES.md §3). */
+  let family = $state<"D" | Family>("D");
+  let duelFormat = $state<DuelFormat>("ajoute");
+  let rounds = $state.raw<RoundsGame | null>(null);
   let soloId = $state(app.activePlayer?.id ?? "");
   let soloColor = $state<Color | "hasard">("w");
   /** Force du moteur : par défaut la cote Chesscalade du joueur (elle monte quand il gagne, §9.1). */
@@ -64,7 +70,21 @@
 
   const nameOf = (id: string) => app.ratings.players.find((p) => p.id === id)?.name ?? "Invité";
 
+  function makeDuelBlock(request: DuelBlockRequest) {
+    if (!app.wall) return null;
+    return generateChessBlock(app.wall, { ...request, usage, rng: seededRng(Date.now()) });
+  }
+
   function start() {
+    if (family !== "D") {
+      const players = {
+        w: { name: nameOf(whiteId), climbRating: climbRating(whiteId) },
+        b: { name: nameOf(blackId), climbRating: climbRating(blackId) },
+      };
+      ids = { w: whiteId, b: blackId };
+      rounds = new RoundsGame({ family, format, duel: duelFormat, players }, makeDuelBlock, Date.now());
+      return;
+    }
     if (mode === "solo") {
       humanColor = soloColor === "hasard" ? (Math.random() < 0.5 ? "w" : "b") : soloColor;
       const engineColor: Color = humanColor === "w" ? "b" : "w";
@@ -97,6 +117,11 @@
   function resume() {
     const live = app.liveGame;
     if (!live) return;
+    if (live.kind === "rounds") {
+      ids = { ...live.ids };
+      rounds = RoundsGame.restore(live.rounds, makeDuelBlock, Date.now());
+      return;
+    }
     game = ChesscaladeGame.restore(live.game, makeBlock, Date.now());
     ids = { ...live.ids };
     humanColor = live.humanColor;
@@ -348,15 +373,18 @@
   const pieceLabel = (p: string | null) => PIECES.find((x) => x.id === p)?.label ?? "libre";
 </script>
 
-{#if !game || !view}
+{#if rounds}
+  <RoundsPlay game={rounds} {ids} onExit={() => (rounds = null)} />
+{:else if !game || !view}
   <section class="panel setup">
     {#if app.liveGame}
       {@const lg = app.liveGame}
+      {@const saved = lg.kind === "rounds" ? lg.rounds : lg.game}
       <div class="resume">
         <div>
-          <strong>Partie en cours</strong> : {lg.game.config.players.w.name} – {lg.game.config.players.b.name},
-          {lg.game.moves.length} demi-coup(s), {lg.game.config.format === "blitz" ? "Blitz" : "Classique"}
-          · sauvegardée le {new Date(lg.game.savedAt).toLocaleString("fr-FR", { dateStyle: "short", timeStyle: "short" })}
+          <strong>Partie en cours</strong>{lg.kind === "rounds" ? " (rounds)" : ""} : {saved.config.players.w.name} – {saved.config.players.b.name},
+          {saved.moves.length} demi-coup(s), {saved.config.format === "blitz" ? "Blitz" : "Classique"}
+          · sauvegardée le {new Date(saved.savedAt).toLocaleString("fr-FR", { dateStyle: "short", timeStyle: "short" })}
         </div>
         <div class="row">
           <button class="primary" onclick={resume}>Reprendre la partie</button>
@@ -370,11 +398,40 @@
     {#if app.ratings.players.length === 0}
       <p class="warn">Crée au moins un joueur (onglet Joueurs) pour que les cotes évoluent. Sinon, la partie se joue en invité.</p>
     {/if}
+    <div class="field">
+      Type de partie
+      <div class="row">
+        <button aria-pressed={family === "D"} onclick={() => (family = "D")}>Intrication</button>
+        <button aria-pressed={family === "A"} onclick={() => (family = "A")}>Rounds</button>
+        <button aria-pressed={family === "B"} onclick={() => (family = "B")}>Rounds couplés</button>
+      </div>
+      <p class="hint">
+        {#if family === "D"}La partie déclenche la grimpe : prises, échecs, recharges (REGLES.md §4–6).
+        {:else if family === "A"}Comme le chessboxing : rounds d'échecs et rounds de mur alternent. On gagne par mat, au temps, par KO (3 duels perdus de suite) ou aux points.
+        {:else}Rounds dont le bloc vient de la position (pièce la plus active), et le gagnant du duel prend un bonus : +30 s ou un joker (indice du moteur).{/if}
+      </p>
+    </div>
+    {#if family !== "D"}
+      <div class="field">
+        Duel au mur
+        <div class="row">
+          <button aria-pressed={duelFormat === "ajoute"} onclick={() => (duelFormat = "ajoute")}>Ajoute une prise</button>
+          <button aria-pressed={duelFormat === "meme"} onclick={() => (duelFormat = "meme")}>Même bloc</button>
+          <button aria-pressed={duelFormat === "impose"} onclick={() => (duelFormat = "impose")}>Bloc imposé</button>
+        </div>
+        <p class="hint">
+          {#if duelFormat === "ajoute"}Chacun répète le bloc et ajoute une prise ; le premier qui tombe ou se trompe perd.
+          {:else if duelFormat === "meme"}Le même bloc pour les deux : la réussite en moins d'essais gagne, sinon la prise la plus haute.
+          {:else}Chacun compose le bloc de l'autre sous un budget de cote ; celui qui réussit le bloc adverse gagne.{/if}
+        </p>
+      </div>
+    {:else}
     <div class="row">
       <button aria-pressed={mode === "solo"} onclick={() => (mode = "solo")}>Solo contre Stockfish</button>
       <button aria-pressed={mode === "duo"} onclick={() => (mode = "duo")}>À deux</button>
     </div>
-    {#if mode === "solo"}
+    {/if}
+    {#if mode === "solo" && family === "D"}
       <div class="grid">
         <div class="player">
           <label class="field">
@@ -427,7 +484,9 @@
               </select>
             {/if}
           </label>
-          <label class="check"><input type="checkbox" bind:checked={fatigue[color as Color]} /> Option fatigue</label>
+          {#if family === "D"}
+            <label class="check"><input type="checkbox" bind:checked={fatigue[color as Color]} /> Option fatigue</label>
+          {/if}
         </div>
       {/each}
     </div>
@@ -435,10 +494,15 @@
     <div class="field">
       Rythme
       <div class="row">
-        <button aria-pressed={format === "blitz"} onclick={() => (format = "blitz")}>Blitz · 3 min</button>
-        <button aria-pressed={format === "classique"} onclick={() => (format = "classique")}>Classique · 10 min</button>
+        <button aria-pressed={format === "blitz"} onclick={() => (format = "blitz")}>
+          Blitz · 3 min{family !== "D" ? " · rounds 2 min, 3 + 3" : ""}
+        </button>
+        <button aria-pressed={format === "classique"} onclick={() => (format = "classique")}>
+          Classique · 10 min{family !== "D" ? " · rounds 4/3 min, 5 + 5" : ""}
+        </button>
       </div>
     </div>
+    {#if family === "D"}
     <div class="field">
       Difficulté
       <div class="row">
@@ -454,6 +518,7 @@
         <button aria-pressed={deviation === "libre"} onclick={() => (deviation = "libre")}>Libre</button>
       </div>
     </div>
+    {/if}
     <button class="primary" onclick={start}>Commencer la partie</button>
   </section>
 {:else}

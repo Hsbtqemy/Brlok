@@ -47,4 +47,6 @@ ordinateur du même réseau et ouvrir l'adresse affichée.
 - [x] Stockage partagé quand l'app tourne comme page claude.ai (capacité `db`)
 - [x] Solo contre Stockfish (force 400–2800), blocs de défense, contre-attaque
 - [x] Partie en cours sauvegardée à chaque action, reprise après rechargement ou sur un autre appareil
-- [ ] Familles A, B, C (rounds, duels au mur)
+- [x] Familles A et B : rounds d'échecs et de mur, duels « Ajoute une prise », « Même bloc », « Bloc imposé »,
+      KO, points, bonus et joker (à deux)
+- [ ] Famille C (intrication rythmée), rounds en solo

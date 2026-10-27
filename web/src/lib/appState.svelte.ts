@@ -7,6 +7,7 @@ import type { Block } from "../core/generator";
 import { recordBlockAttempt, recordGame, recordGameVsEngine, type AttemptRecord, type RatingsState } from "../core/players";
 import type { Wall } from "../core/wall";
 import type { SavedGame } from "../core/game";
+import type { SavedRounds } from "../core/rounds";
 import { SharedStore, type SyncStatus } from "./sharedStore";
 import {
   loadActivePlayerId,
@@ -118,10 +119,8 @@ class AppState {
   }
 }
 
-export interface LiveGame {
-  game: SavedGame;
-  ids: { w: string; b: string };
-  humanColor: "w" | "b";
-}
+export type LiveGame =
+  | { kind?: "intrication"; game: SavedGame; ids: { w: string; b: string }; humanColor: "w" | "b" }
+  | { kind: "rounds"; rounds: SavedRounds; ids: { w: string; b: string }; humanColor: "w" | "b" };
 
 export const app = new AppState();

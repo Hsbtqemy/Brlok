@@ -6,9 +6,13 @@
     wall: Wall;
     /** Prises du bloc affiché, dans l'ordre. */
     sequence?: string[];
+    /** Prise mise en avant (ex. prise choisie pour être ajoutée). */
+    candidate?: string | null;
+    /** Rend les prises touchables (duels au mur). */
+    onHold?: (id: string) => void;
   }
 
-  let { wall, sequence = [] }: Props = $props();
+  let { wall, sequence = [], candidate = null, onHold }: Props = $props();
 
   // Le bas du mur est affiché en bas de l'écran.
   const rows = $derived(
@@ -25,8 +29,12 @@
     {#each cols as col (col)}
       {@const hold = holdAt(wall, { row, col })}
       {@const rank = hold ? order.get(hold.id) : undefined}
-      <div
+      <svelte:element
+        this={onHold && hold ? "button" : "div"}
         class="cell"
+        class:clickable={!!(onHold && hold)}
+        class:candidate={!!hold && hold.id === candidate}
+        onclick={() => hold && onHold?.(hold.id)}
         class:empty={!hold}
         class:inactive={hold && !hold.active}
         class:in-block={rank !== undefined}
@@ -34,14 +42,15 @@
         style:color={rank !== undefined && hold ? LEVEL_TEXT[hold.level] : undefined}
         style:border-color={hold && hold.active && rank === undefined ? LEVEL_COLORS[hold.level] : undefined}
         title={hold ? `${hold.id} · niveau ${hold.level}${hold.tags.length ? " · " + hold.tags.join(", ") : ""}` : ""}
-        role="gridcell"
+        role={onHold && hold ? undefined : "gridcell"}
       >
         {#if hold}
           <span class="id">{hold.id}</span>
           <span class="level">{hold.level}</span>
           {#if rank !== undefined}<span class="rank">{rank}</span>{/if}
+          {#if hold.id === candidate}<span class="rank plus">+</span>{/if}
         {/if}
-      </div>
+      </svelte:element>
     {/each}
   {/each}
 </div>
@@ -66,6 +75,20 @@
     justify-content: center;
     font-variant-numeric: tabular-nums;
     transition: background 0.15s;
+  }
+  button.cell {
+    min-height: 0;
+    padding: 0;
+    font: inherit;
+    color: inherit;
+    cursor: pointer;
+  }
+  .cell.candidate {
+    border-color: #6a1b9a;
+    box-shadow: 0 0 0 3px #6a1b9a;
+  }
+  .rank.plus {
+    background: #6a1b9a;
   }
   .cell.empty {
     border-style: dashed;

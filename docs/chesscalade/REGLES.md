@@ -85,11 +85,13 @@ Chaque famille se joue en **Blitz** ou en **Classique**, et à l'un des 4 niveau
 
 **Famille B (rounds couplés)**, en plus :
 
-- le bloc du duel au mur est **tiré de la position** : la pièce la plus active de chaque joueur donne le
-  caractère du bloc (§7.1) ;
+- le bloc du duel au mur est **tiré de la position** : la pièce la plus active (celle qui a le plus de
+  coups possibles) **du camp au trait** donne le caractère du bloc (§7.1). En famille A, la pièce est tirée
+  au hasard ;
 - le gagnant du duel au mur reçoit un **bonus** pour le round d'échecs suivant, à choisir : **+30 s** de
-  pendule, un **joker** (un indice du moteur, une fois par partie), ou le droit de **jouer en premier** dans
-  le round suivant si c'est son tour (sinon +30 s).
+  pendule, ou un **joker** : un indice du moteur (son meilleur coup), utilisable une fois, à son tour.
+  Personne n'a de joker au départ : il se gagne au mur. (Le « droit de jouer en premier » est abandonné :
+  aux échecs, le trait ne se choisit pas.)
 
 ### 3.4 Duels au mur (un seul pan, on grimpe à tour de rôle)
 
@@ -102,11 +104,22 @@ joue donc au tour par tour. Trois formats, au choix au lancement :
 | **Même bloc** | L'app génère un bloc, chacun le tente à son tour (comme en compétition de bloc). | Moins de tentatives ; à égalité, la prise la plus haute atteinte |
 | **Bloc imposé** | Chacun compose le bloc que l'autre devra grimper, avec un **budget de difficulté** (une cote max fixée par l'app). | Celui qui réussit le bloc adverse ; si les deux réussissent ou tombent, on recommence avec +100 de budget |
 
-Le temps du round de mur borne le duel : à la fin du temps, le duel en cours est départagé comme pour
-« Même bloc » (prise la plus haute).
+Le temps du round de mur borne le duel : à la fin du temps, le duel en cours est départagé à la main,
+comme pour « Même bloc » (qui est allé le plus haut ?), ou déclaré nul.
+
+Précisions de mise en œuvre :
+
+- « Ajoute une prise » : le départ (3 prises) est généré un peu en dessous de la cote du plus faible des
+  deux grimpeurs ; la prise ajoutée se touche sur le pan, et l'app avertit si elle est hors de portée.
+- « Même bloc » : le bloc vise la moyenne des deux cotes de grimpe ; chacun compte ses essais, et s'il
+  abandonne, touche la prise la plus haute atteinte.
+- « Bloc imposé » : budget = moyenne des deux cotes ; au plus 2 relances (+100 chacune), puis duel nul.
+- Le joueur qui commence le duel alterne d'un round à l'autre (Blancs au premier).
+- Chaque bloc grimpé en duel compte pour la cote de grimpe, et la partie pour la cote Chesscalade.
 
 **En solo**, le duel au mur se joue contre un **score cible** calculé à partir de la cote de grimpe du
-joueur (par exemple, pour « Ajoute une prise » : atteindre une longueur de bloc donnée).
+joueur (par exemple, pour « Ajoute une prise » : atteindre une longueur de bloc donnée). *Pas encore dans
+l'app : les rounds se jouent à deux.*
 
 ### 3.5 Famille C : l'intrication rythmée
 
