@@ -238,6 +238,26 @@ Certains déclencheurs concernent le joueur **qui subit** :
 
 Le coup qui met en échec, lui, ne peut pas être annulé par le bloc de parade.
 
+### 5.5 Densité de blocs
+
+Retour du premier test en solo : un échange de pièces enchaînait trop de blocs (la prise, la reprise, l'échec…).
+La **densité** se choisit au lancement de la partie (familles C et D) :
+
+| | Légère | **Normale** (défaut) | Intense |
+|---|---|---|---|
+| Reprise sur la case de la prise adverse | gratuite | gratuite | bloc |
+| Récupération après un bloc (coups du joueur sans bloc) | 2 | 1 | 0 |
+| Prise de pion | rien | bloc | bloc |
+| Échec (attaquant) | rien | bloc | bloc |
+| Roque | rien | rien | bloc |
+| Parade (duo, Classique) | non | oui | oui |
+| Défense en solo (coup du moteur) | aucune | prise d'une pièce seulement | prises et échecs |
+
+- Le **mat** demande toujours un bloc, quelle que soit la densité.
+- Un échange coûte donc **un seul bloc** : celui de la première prise.
+- Le coup rejoué au même moment après une prise **annulée** (V3, V4) n'est pas en récupération : rater
+  une prise ne rend pas la suivante gratuite.
+
 ---
 
 ## 6. Règles de sécurité du jeu (ne jamais bloquer la partie)

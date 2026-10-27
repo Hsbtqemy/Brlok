@@ -12,6 +12,8 @@ export type { Color, Square };
 export type Format = "blitz" | "classique";
 export type Difficulty = "facile" | "modere" | "difficile" | "diabolique";
 export type Deviation = "courte" | "libre";
+/** Densité de blocs (§5.5) : combien de coups demandent de grimper. */
+export type Density = "legere" | "normale" | "intense";
 export type Trigger = "capture" | "echec" | "promotion" | "roque" | "mat";
 export type BlockKind = "defi" | "parade" | "recharge" | "defense" | "contre-attaque" | "cloche";
 export type Verdict = 0 | 1 | 2 | 3 | 4 | 5 | 6;
@@ -34,6 +36,8 @@ export interface GameConfig {
   bell?: boolean;
   /** Règle de pieds des blocs (§7.6) ; « auto » (défaut) : selon le niveau de difficulté. */
   feet?: "auto" | FootRule;
+  /** Densité de blocs (§5.5) ; « normale » par défaut. */
+  density?: Density;
 }
 
 export interface BlockRequest {
@@ -128,6 +132,18 @@ const DEFENSE_BONUS = -200;
 const COUNTER_BONUS = { difficile: 300, diabolique: 400 } as const;
 const COUNTER_MAJOR_BONUS = 100;
 const COUNTER_PENALTY_MS = 30_000;
+/**
+ * Densité de blocs (§5.5).
+ * - recaptureFree : reprendre aussitôt sur la case de la prise adverse ne déclenche rien (un échange = un bloc) ;
+ * - cooldown : nombre de coups du joueur, après un bloc, qui ne déclenchent rien (le mat reste un bloc) ;
+ * - defense : en solo, ce qui fait grimper le joueur quand le moteur joue.
+ */
+export const DENSITY = {
+  legere: { recaptureFree: true, cooldown: 2, pawnCaptures: false, check: false, castle: false, defense: "aucune", parade: false },
+  normale: { recaptureFree: true, cooldown: 1, pawnCaptures: true, check: true, castle: false, defense: "pieces", parade: true },
+  intense: { recaptureFree: false, cooldown: 0, pawnCaptures: true, check: true, castle: true, defense: "toutes", parade: true },
+} as const;
+
 /** Famille C : intervalle de la cloche, en temps de jeu (pendules en marche hors blocs). */
 export const BELL_INTERVAL_MS = { blitz: 4 * 60_000, classique: 8 * 60_000 } as const;
 
@@ -228,6 +244,7 @@ export interface SavedGame {
   engineExcluded: string[];
   exhaustionOrder: number;
   bell?: { playTimeMs: number; rung: number; queue: Color[] };
+  lastBlockPly?: Record<Color, number>;
 }
 
 const SAVED_LOG_LIMIT = 60;
@@ -296,6 +313,8 @@ export class ChesscaladeGame {
   bellPlayTimeMs = 0;
   bellsRung = 0;
   bellQueue: Color[] = [];
+  /** Demi-coup du dernier bloc de chaque joueur (temps de récupération, §5.5). */
+  lastBlockPly: Record<Color, number> = { w: -100, b: -100 };
   private lastTickAt: number | null = null;
 
   constructor(
@@ -337,6 +356,7 @@ export class ChesscaladeGame {
       engineExcluded: [...this.engineExcluded],
       exhaustionOrder: this.exhaustionOrder,
       bell: { playTimeMs: this.bellPlayTimeMs, rung: this.bellsRung, queue: [...this.bellQueue] },
+      lastBlockPly: { ...this.lastBlockPly },
     };
   }
 
@@ -377,6 +397,7 @@ export class ChesscaladeGame {
     game.bellPlayTimeMs = saved.bell?.playTimeMs ?? 0;
     game.bellsRung = saved.bell?.rung ?? 0;
     game.bellQueue = [...(saved.bell?.queue ?? [])];
+    game.lastBlockPly = { ...(saved.lastBlockPly ?? { w: -100, b: -100 }) };
     return game;
   }
 
@@ -465,13 +486,15 @@ export class ChesscaladeGame {
       this.playEngineMove(move, triggers, now);
       return;
     }
-    if (triggers.length === 0) {
+    const color = this.turn;
+    const kept = this.densityFilter(color, move, triggers);
+    if (kept.length === 0) {
       this.applyMove(move, now);
       return;
     }
-    const color = this.turn;
-    const request = this.defiRequest(color, move, triggers);
-    this.startBlock({ request, triggers, move }, now);
+    this.lastBlockPly[color] = this.chess.history().length;
+    const request = this.defiRequest(color, move, kept);
+    this.startBlock({ request, triggers: kept, move }, now);
   }
 
   /** Recharge volontaire : la pendule du grimpeur continue de tourner (§4). */
@@ -814,7 +837,7 @@ export class ChesscaladeGame {
     this.clock.run(opponent, now);
 
     // Être mis en échec : bloc de parade, en Classique uniquement (§5.4). En solo, le bloc de défense le remplace.
-    if (this.config.format === "classique" && this.chess.inCheck() && !this.config.engine) {
+    if (this.config.format === "classique" && this.chess.inCheck() && !this.config.engine && this.density.parade) {
       const request: BlockRequest = {
         climber: opponent,
         kind: "parade",
@@ -828,12 +851,15 @@ export class ChesscaladeGame {
   }
 
   /** Coup du moteur : toujours appliqué ; s'il déclenche un événement, le joueur grimpe un bloc de défense. */
-  private playEngineMove(move: Move, triggers: Trigger[], now: number): void {
+  private playEngineMove(move: Move, allTriggers: Trigger[], now: number): void {
+    const human = other(move.color);
+    const ply = this.chess.history().length;
+    const triggers = this.defenseTriggers(human, move, allTriggers);
     this.applyMove(move, now);
     this.lastEngineMove = move;
     this.engineExcluded = [];
     if (this.phase !== "move" || triggers.length === 0) return;
-    const human = other(move.color);
+    this.lastBlockPly[human] = ply;
     const bonuses = triggers.map((t) => (t === "capture" ? CAPTURE_BONUS[move.captured ?? "p"] : TRIGGER_BONUS[t]));
     const request: BlockRequest = {
       climber: human,
@@ -844,6 +870,45 @@ export class ChesscaladeGame {
       cruxLast: false,
     };
     this.startBlock({ request, triggers, move }, now);
+  }
+
+  get density() {
+    return DENSITY[this.config.density ?? "normale"];
+  }
+
+  /** Reprise : on prend sur la case où l'adversaire vient de prendre (un échange). */
+  private isRecapture(move: Move): boolean {
+    const last = this.chess.history({ verbose: true }).at(-1);
+    return !!move.captured && !!last?.captured && last.to === move.to;
+  }
+
+  /** Déclencheurs retenus selon la densité (§5.5) ; le mat déclenche toujours. */
+  private densityFilter(color: Color, move: Move, triggers: Trigger[]): Trigger[] {
+    if (triggers.includes("mat")) return triggers;
+    const d = this.density;
+    let kept = triggers.filter(
+      (t) =>
+        (t !== "roque" || d.castle) &&
+        (t !== "echec" || d.check) &&
+        (t !== "capture" || ((d.pawnCaptures || move.captured !== "p") && !(d.recaptureFree && this.isRecapture(move)))),
+    );
+    // Temps de récupération : les coups qui suivent un bloc du joueur ne déclenchent rien. Le coup rejoué
+    // au même demi-coup après une annulation n'en profite pas (sinon rater une prise rendrait la suivante gratuite).
+    const ply = this.chess.history().length;
+    const ownMovesSince = Math.floor((ply - this.lastBlockPly[color]) / 2);
+    if (kept.length > 0 && d.cooldown > 0 && ply > this.lastBlockPly[color] && ownMovesSince <= d.cooldown) kept = [];
+    return kept;
+  }
+
+  /** Solo : ce qui fait grimper le joueur quand le moteur joue (§9.1, §5.5). */
+  private defenseTriggers(human: Color, move: Move, triggers: Trigger[]): Trigger[] {
+    const d = this.density;
+    if (d.defense === "toutes") return triggers;
+    if (d.defense === "aucune") return [];
+    const pieceCapture = triggers.includes("capture") && move.captured !== "p" && !(d.recaptureFree && this.isRecapture(move));
+    if (!pieceCapture) return [];
+    const ownMovesSince = Math.floor((this.chess.history().length - this.lastBlockPly[human]) / 2);
+    return d.cooldown > 0 && ownMovesSince <= d.cooldown ? [] : ["capture"];
   }
 
   private exhaust(square: Square, color: Color, turns: number): void {

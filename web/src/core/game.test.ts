@@ -8,6 +8,8 @@ function setup(format: Format, difficulty: Difficulty, extra: Partial<GameConfig
     format,
     difficulty,
     deviation: "courte",
+    // Les tests des règles de base jouent en densité « intense » (tous les déclencheurs) ; la densité a ses propres tests.
+    density: "intense",
     players: {
       w: { name: "Alice", climbRating: 1500, fatigue: false },
       b: { name: "Bruno", climbRating: 1400, fatigue: false },
@@ -380,5 +382,80 @@ describe("famille C : la cloche (§3.5)", () => {
     const restored = ChesscaladeGame.restore(JSON.parse(JSON.stringify(game.save(60_000))), () => null, 0);
     expect(restored.bellPlayTimeMs).toBe(60_000);
     expect(restored.config.bell).toBe(true);
+  });
+});
+
+describe("densité de blocs (§5.5)", () => {
+  it("normale : la reprise sur la même case est gratuite (un échange = un bloc)", () => {
+    const { game, requests } = setup("classique", "modere", { density: "normale" });
+    playLine(game, ["e2e4", "d7d5"]);
+    game.play("e4", "d5", undefined, 0); // exd5 : bloc-défi
+    expect(requests).toHaveLength(1);
+    game.blockResult(true, 0);
+    game.play("d8", "d5", undefined, 0); // Dxd5 : reprise, gratuite
+    expect(game.phase).toBe("move");
+    expect(requests).toHaveLength(1);
+  });
+
+  it("normale : le coup qui suit un bloc ne déclenche rien, le mat toujours", () => {
+    const { game, requests } = setup("classique", "modere", { density: "normale" });
+    playLine(game, ["e2e4", "f7f6", "d2d4", "g7g5"]);
+    game.play("d1", "h5", undefined, 0); // mat : bloc malgré tout
+    expect(requests.at(-1)?.kind).toBe("defi");
+  });
+
+  it("normale : récupération d'un coup après un bloc-défi, puis les prises redéclenchent", () => {
+    const { game, requests } = setup("classique", "modere", { density: "normale" });
+    playLine(game, ["e2e4", "d7d5"]);
+    game.play("e4", "d5", undefined, 0); // exd5 : bloc
+    game.blockResult(true, 0);
+    playLine(game, ["c7c6"]);
+    const n = requests.length;
+    game.play("d5", "c6", undefined, 0); // dxc6 : coup suivant des Blancs, en récupération
+    expect(game.phase).toBe("move");
+    playLine(game, ["b7c6"]); // bxc6 : reprise gratuite
+    expect(requests.length).toBe(n);
+    playLine(game, ["d2d4", "g8f6", "c1g5", "e7e6"]);
+    game.play("g5", "f6", undefined, 0); // Fxf6 : deux coups plus tard, la prise redéclenche
+    expect(requests.length).toBe(n + 1);
+  });
+
+  it("normale : après une prise annulée, une autre prise au même coup n'est pas gratuite", () => {
+    const { game, requests } = setup("classique", "difficile", { density: "normale" });
+    playLine(game, ["e2e4", "d7d5", "b1c3", "g8f6"]);
+    game.play("e4", "d5", undefined, 0);
+    game.blockResult(false, 0); // V3 : annulé, les Blancs rejouent
+    const n = requests.length;
+    game.play("c3", "d5", undefined, 0); // Cxd5 : autre prise au même coup, elle aussi un bloc
+    expect(game.phase).toBe("block");
+    expect(requests.length).toBe(n + 1);
+  });
+
+  it("légère : les prises de pion et les échecs ne déclenchent rien", () => {
+    const { game, requests } = setup("classique", "modere", { density: "legere" });
+    playLine(game, ["e2e4", "d7d5"]);
+    game.play("e4", "d5", undefined, 0);
+    expect(game.phase).toBe("move");
+    expect(requests).toHaveLength(0);
+  });
+
+  it("solo normale : la reprise du moteur ne donne pas de défense, une prise de pièce oui", () => {
+    const solo = setup("classique", "modere", {
+      density: "normale",
+      players: { w: { name: "A", climbRating: 1500, fatigue: false }, b: { name: "SF", climbRating: 0, fatigue: false } },
+      engine: { color: "b", elo: 1500 },
+    });
+    const { game, requests } = solo;
+    playLine(game, ["e2e4", "d7d5"]);
+    game.play("e4", "d5", undefined, 0); // exd5 : bloc-défi du joueur
+    game.blockResult(true, 0);
+    game.play("d8", "d5", undefined, 0); // le moteur reprend : gratuit
+    expect(game.phase).toBe("move");
+    expect(requests.filter((r) => r.kind === "defense")).toHaveLength(0);
+    playLine(game, ["b1c3"]); // les Blancs (récupération)
+    playLine(game, ["d5a5"]);
+    playLine(game, ["a2a3"]);
+    game.play("a5", "c3", undefined, 0); // le moteur prend un cavalier (pas une reprise)
+    expect(requests.at(-1)?.kind).toBe("defense");
   });
 });

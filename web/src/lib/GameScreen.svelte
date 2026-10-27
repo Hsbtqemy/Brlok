@@ -5,6 +5,7 @@
     VERDICT_LABELS,
     type BlockRequest,
     type Color,
+    type Density,
     type Deviation,
     type Difficulty,
     type Format,
@@ -44,6 +45,7 @@
   let difficulty = $state<Difficulty>("modere");
   let deviation = $state<Deviation>("courte");
   let feetRule = $state<"auto" | FootRule>("auto");
+  let density = $state<Density>("normale");
   let whiteId = $state(app.ratings.players[0]?.id ?? "");
   let blackId = $state(app.ratings.players[1]?.id ?? app.ratings.players[0]?.id ?? "");
   let fatigue = $state<Record<Color, boolean>>({ w: false, b: false });
@@ -131,7 +133,7 @@
       const players = humanColor === "w" ? { w: human, b: engine } : { w: engine, b: human };
       ids = humanColor === "w" ? { w: soloId, b: "" } : { w: "", b: soloId };
       game = new ChesscaladeGame(
-        { format, difficulty, deviation, players, engine: { color: engineColor, elo: engineElo }, bell: family === "C", feet: feetRule },
+        { format, difficulty, deviation, players, engine: { color: engineColor, elo: engineElo }, bell: family === "C", feet: feetRule, density },
         makeBlock,
         Date.now(),
       );
@@ -142,7 +144,7 @@
         b: { name: nameOf(blackId), climbRating: climbRating(blackId), fatigue: fatigue.b },
       };
       ids = { w: whiteId, b: blackId };
-      game = new ChesscaladeGame({ format, difficulty, deviation, players, bell: family === "C", feet: feetRule }, makeBlock, Date.now());
+      game = new ChesscaladeGame({ format, difficulty, deviation, players, bell: family === "C", feet: feetRule, density }, makeBlock, Date.now());
     }
     engineError = "";
     selected = null;
@@ -594,6 +596,20 @@
         <button aria-pressed={deviation === "courte"} onclick={() => (deviation = "courte")}>Courte</button>
         <button aria-pressed={deviation === "libre"} onclick={() => (deviation = "libre")}>Libre</button>
       </div>
+    </div>
+    <div class="field">
+      Densité de blocs
+      <div class="row">
+        <button aria-pressed={density === "legere"} onclick={() => (density = "legere")}>Légère</button>
+        <button aria-pressed={density === "normale"} onclick={() => (density = "normale")}>Normale</button>
+        <button aria-pressed={density === "intense"} onclick={() => (density = "intense")}>Intense</button>
+      </div>
+      <p class="hint">
+        {#if density === "legere"}Seules les prises de pièces (et la promotion, le mat) font grimper ; une reprise est gratuite ; 2 coups de récupération après un bloc ; en solo, pas de bloc de défense.
+        {:else if density === "normale"}Une reprise sur la même case est gratuite (un échange = un bloc) ; 1 coup de récupération après un bloc ; le roque ne fait plus grimper ; en solo, défense seulement quand le moteur prend une pièce.
+        {:else}Toutes les règles de déclenchement, sans récupération : beaucoup de blocs.{/if}
+        Le mat demande toujours un bloc.
+      </p>
     </div>
     <div class="field">
       Pieds
