@@ -291,6 +291,9 @@
             </p>
           {:else}
             <p class="hint">Tentative de <strong>{app.activePlayer.name}</strong> (cote de grimpe {Math.round(app.activePlayer.ratings.grimpe.rating)})</p>
+            {#if !app.activePlayer.placedAt}
+              <p class="hint">Pas encore de placement : la cote bougera beaucoup sur les premiers blocs. Le placement se lance depuis l'onglet Joueurs.</p>
+            {/if}
             <div class="row two">
               <button class="success" onclick={() => record(true)}>Réussi</button>
               <button class="fall" onclick={() => record(false)}>Chute</button>

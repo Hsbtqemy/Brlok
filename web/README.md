@@ -42,6 +42,7 @@ ordinateur du même réseau et ouvrir l'adresse affichée.
 - [x] Profils de joueurs, trois cotes (grimpe, échecs, Chesscalade), cote des blocs, journal
 - [x] Partie Chesscalade en duo, famille D « intrication » : pendule verticale, recharges, coups en suspens,
       verdicts V0–V6, déviation courte/libre, parade, bloc du mat, fatigue, garde-fous §6
-- [ ] Placement (5 blocs pour fixer la cote de départ)
+- [x] Placement (5 blocs adaptatifs pour fixer la cote de grimpe de départ)
+- [x] Stockage partagé quand l'app tourne comme page claude.ai (capacité `db`)
 - [ ] Solo contre un moteur (Maia / Stockfish), contre-attaque
 - [ ] Familles A, B, C (rounds, duels au mur)

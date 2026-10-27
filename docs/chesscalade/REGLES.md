@@ -308,8 +308,10 @@ se corrige à partir des réussites et des chutes. Plus tard, on pourra en dédu
 
 Une prise mal notée dans le catalogue se repère aussi : Chesscalade pourra proposer de corriger son niveau.
 
-**Placement** : un nouveau joueur grimpe 5 blocs de difficulté croissante (de 1000 à 2000 environ) pour
-fixer sa cote de grimpe de départ, au lieu de partir à 1500 « à l'aveugle ».
+**Placement** : un nouveau joueur grimpe 5 blocs pour fixer sa cote de grimpe de départ, au lieu de partir
+à 1500 « à l'aveugle ». La difficulté s'adapte : premier bloc à 1500, puis **+200 après une réussite** et
+**−200 après une chute**. Les 5 résultats sont comptés ensemble, ce qui évite les sauts de cote des premiers
+blocs. Le placement peut être refait ; il remplace alors la cote de grimpe.
 
 ### 7.4 Algorithme de génération
 

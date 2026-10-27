@@ -1,6 +1,7 @@
 <script lang="ts">
   import { createPlayer, removePlayer, type RatingKind } from "../core/players";
   import { app } from "./appState.svelte";
+  import PlacementPanel from "./PlacementPanel.svelte";
 
   const KINDS: { id: RatingKind; label: string }[] = [
     { id: "grimpe", label: "Grimpe" },
@@ -11,6 +12,7 @@
   let name = $state("");
   /** Suppression en deux temps (pas de boîte de dialogue : elle n'est pas disponible partout). */
   let confirmDelete = $state<string | null>(null);
+  let placing = $state<string | null>(null);
 
   function add() {
     if (!name.trim()) return;
@@ -35,6 +37,11 @@
 </script>
 
 <div class="screen">
+  {#if placing}
+    <section class="panel">
+      <PlacementPanel playerId={placing} onClose={() => (placing = null)} />
+    </section>
+  {/if}
   <section class="panel">
     <h2>Joueurs</h2>
     <form
@@ -51,6 +58,7 @@
     {#if app.ratings.players.length === 0}
       <p class="hint">Aucun joueur. Chaque joueur a trois cotes (grimpe, échecs, Chesscalade), qui partent de 1500.</p>
     {:else}
+      <div class="table-wrap">
       <table>
         <thead>
           <tr>
@@ -63,7 +71,12 @@
           {#each app.ratings.players as p (p.id)}
             <tr class:active={app.activePlayer?.id === p.id}>
               <td>
-                <button class="name" onclick={() => app.selectPlayer(p.id)} aria-pressed={app.activePlayer?.id === p.id}>{p.name}</button>
+                <div class="who">
+                  <button class="name" onclick={() => app.selectPlayer(p.id)} aria-pressed={app.activePlayer?.id === p.id}>{p.name}</button>
+                  <button class="place" class:todo={!p.placedAt} onclick={() => (placing = p.id)} disabled={placing !== null}>
+                    {p.placedAt ? "Refaire le placement" : "Placement"}
+                  </button>
+                </div>
               </td>
               {#each KINDS as k (k.id)}
                 <td class="num">
@@ -71,7 +84,7 @@
                   <span class="rd">±{Math.round(p.ratings[k.id].rd * 2)}</span>
                 </td>
               {/each}
-              <td>
+              <td class="actions">
                 <button class="remove" class:armed={confirmDelete === p.id} onclick={() => remove(p.id)} aria-label={`Supprimer ${p.name}`}>
                   {confirmDelete === p.id ? "Supprimer ?" : "✕"}
                 </button>
@@ -80,7 +93,8 @@
           {/each}
         </tbody>
       </table>
-      <p class="hint">Le joueur sélectionné enregistre les tentatives de l'onglet Pan. « ± » : incertitude de la cote, qui diminue avec le nombre de blocs et de parties.</p>
+      </div>
+      <p class="hint">Placement : 5 blocs pour fixer la cote de grimpe de départ, à faire une fois. Le joueur sélectionné enregistre les tentatives de l'onglet Pan. « ± » : incertitude de la cote, qui diminue avec le nombre de blocs et de parties.</p>
     {/if}
   </section>
 
@@ -95,7 +109,7 @@
             <span class="badge" class:ok={a.success}>{a.success ? "Réussi" : "Chute"}</span>
             <span><strong>{nameOf(a.playerId)}</strong> · {a.holds.join("→")}</span>
             <span class="hint">
-              {date(a.at)} · bloc {a.blockRating} · {a.ratingBefore} → {a.ratingAfter}{a.context === "partie" ? " · en partie" : ""}
+              {date(a.at)} · bloc {a.blockRating} · {a.ratingBefore} → {a.ratingAfter}{a.context === "partie" ? " · en partie" : a.context === "placement" ? " · placement" : ""}
             </span>
           </li>
         {/each}
@@ -151,6 +165,29 @@
   .name {
     min-height: 36px;
     padding: 0 10px;
+    font-weight: 600;
+  }
+  .table-wrap {
+    overflow-x: auto;
+  }
+  .who {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+  }
+  .actions {
+    text-align: right;
+  }
+  .place {
+    min-height: 30px;
+    padding: 0 8px;
+    font-size: 0.8rem;
+    white-space: nowrap;
+  }
+  .place.todo {
+    border-color: var(--accent);
+    color: var(--accent);
     font-weight: 600;
   }
   .remove {

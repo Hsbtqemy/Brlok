@@ -4,6 +4,7 @@
  */
 import type { Block } from "./generator";
 import { newRating, recordAttempt, updateRating, type Rating } from "./glicko2";
+import { placementRating, type PlacementResult } from "./placement";
 
 export type RatingKind = "echecs" | "grimpe" | "chesscalade";
 
@@ -13,6 +14,8 @@ export interface Player {
   ratings: Record<RatingKind, Rating>;
   /** Date de création (ordre d'affichage). */
   createdAt?: string;
+  /** Date du placement (cote de grimpe de départ fixée). */
+  placedAt?: string;
 }
 
 export interface AttemptRecord {
@@ -21,7 +24,7 @@ export interface AttemptRecord {
   wallId: string;
   holds: string[];
   success: boolean;
-  context: "libre" | "partie";
+  context: "libre" | "partie" | "placement";
   ratingBefore: number;
   ratingAfter: number;
   blockRating: number;
@@ -117,6 +120,49 @@ export function recordBlockAttempt(
       attempts: [record, ...state.attempts].slice(0, JOURNAL_LIMIT),
     },
     delta: updated.climber.rating - before.rating,
+  };
+}
+
+/**
+ * Placement terminé : la cote de grimpe du joueur est remplacée par l'estimation des 5 blocs,
+ * puis chaque bloc est mis à jour face à cette cote, et les tentatives vont au journal.
+ */
+export function recordPlacement(
+  state: RatingsState,
+  playerId: string,
+  wallId: string,
+  attempts: readonly { block: Block; result: PlacementResult }[],
+  at = new Date().toISOString(),
+): RatingsState {
+  const player = state.players.find((p) => p.id === playerId);
+  if (!player || attempts.length === 0) return state;
+  const before = Math.round(player.ratings.grimpe.rating);
+  const rating = placementRating(attempts.map((a) => a.result));
+  const blocks = { ...state.blocks };
+  const records: AttemptRecord[] = [];
+  for (const { block, result } of attempts) {
+    const ids = block.holds.map((h) => h.id);
+    if (ids.length === 0) continue;
+    const key = blockKey(wallId, ids);
+    const current = blocks[key] ?? { rating: block.estimatedRating, rd: NEW_BLOCK_RD, volatility: 0.06 };
+    blocks[key] = updateRating(current, [{ opponent: rating, score: result.success ? 0 : 1 }]);
+    records.push({
+      at,
+      playerId,
+      wallId,
+      holds: ids,
+      success: result.success,
+      context: "placement",
+      ratingBefore: before,
+      ratingAfter: Math.round(rating.rating),
+      blockRating: Math.round(current.rating),
+    });
+  }
+  return {
+    ...state,
+    players: state.players.map((p) => (p.id === playerId ? { ...p, placedAt: at, ratings: { ...p.ratings, grimpe: rating } } : p)),
+    blocks,
+    attempts: [...records.reverse(), ...state.attempts].slice(0, JOURNAL_LIMIT),
   };
 }
 
