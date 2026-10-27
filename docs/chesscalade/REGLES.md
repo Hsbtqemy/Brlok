@@ -27,6 +27,7 @@ On joue **seul** (contre un moteur) ou **à deux** (sur le même mur, avec une s
 | **Verdict** | Conséquence du bloc sur le coup en suspens (voir §5) |
 | **Déclencheur** | Événement de la partie qui exige un bloc-défi (prise, échec…) |
 | **Recharge** | Bloc grimpé volontairement pour gagner du temps |
+| **Coup dévié** | La pièce prévue doit bouger, mais vers une autre case que celle visée |
 | **Pièce épuisée** | Pièce qui ne peut pas bouger pendant N tours de son camp |
 | **Compteur de chutes** | Nombre de chutes consécutives d'un joueur ; il aggrave les verdicts |
 
@@ -89,10 +90,31 @@ joueur donne le motif). Le meilleur résultat au mur offre un bonus pour le roun
 | **V1** | Validé + pénalité | Le coup est joué, le joueur perd du temps (−10 / −20 / −30 s selon le niveau) |
 | **V2** | Limité | Le coup est joué, mais la pièce jouée devient **épuisée** pendant 2 tours de son camp |
 | **V3** | Annulé | Le coup est retiré. Le joueur doit jouer **un autre coup**, et le coup tenté est interdit pour ce tour |
-| **V4** | Interdit | Le coup est retiré, et la **pièce** qui l'a tenté est épuisée pendant 2 tours |
-| **V5** | Interdit + sanction | V4, plus une pénalité de temps lourde (−45 s) |
+| **V4** | Dévié | Le coup est retiré. Le joueur doit jouer **la même pièce**, mais **pas sur la case prévue** (§5.2 bis) |
+| **V5** | Interdit | Le coup est retiré, et la **pièce** qui l'a tenté est épuisée pendant 2 tours |
+| **V6** | Interdit + sanction | V5, plus une pénalité de temps lourde (−45 s) |
 
 Un **succès** donne toujours **V0**, et remet le compteur de chutes à zéro.
+
+**Pourquoi Dévié est plus dur qu'Annulé** : après une annulation, on choisit librement un autre coup.
+Après une déviation, on est **forcé** de bouger la pièce qu'on voulait jouer, ce qui peut l'envoyer sur une
+mauvaise case ou la mettre en prise.
+
+### 5.2 bis Le verdict Dévié en détail
+
+Image d'escalade : tu as raté la prise visée, tu atterris à côté.
+
+- **Déviation courte** (réglage par défaut) : la pièce doit aller sur une case légale **la plus proche possible**
+  de la case visée (distance 1 d'abord, puis 2, etc.). Le joueur choisit parmi les cases à égale distance.
+- **Déviation libre** (réglage) : n'importe quelle autre case légale de la même pièce.
+- En **Diabolique**, c'est **l'adversaire** (ou le moteur en solo) qui choisit la case parmi les cases autorisées.
+- La case déviée peut être une prise si c'est légal, mais cette nouvelle prise **ne déclenche pas** de nouveau bloc.
+- Cas limites :
+  - la pièce n'a aucune autre case légale → le verdict devient **V3 : Annulé** ;
+  - le joueur est en échec : la case déviée doit parer l'échec. Si cette pièce n'a pas d'autre parade → **V3** ;
+  - **roque** dévié → **V3** (on ne dévie pas un roque) ;
+  - **promotion** : le pion dévié joue un autre coup de pion légal. S'il n'en a pas → **V3**.
+    Si le coup dévié est aussi une promotion, la pièce choisie reste la même.
 
 ### 5.3 Verdict en cas de chute, selon le niveau de difficulté
 
@@ -102,9 +124,9 @@ Le verdict de base dépend du niveau. Chaque chute **consécutive** aggrave le v
 | Niveau | Verdict de base (1re chute) | Aggravation | Plafond | Essais par bloc | Pendule pendant un bloc-défi |
 |---|---|---|---|---|---|
 | **Facile** | V1 | +1 tous les 2 échecs consécutifs | V2 | 2 essais | en pause |
-| **Modéré** | V2 | +1 par chute consécutive | V3 | 1 essai | en pause |
-| **Difficile** | V3 | +1 par chute consécutive | V4 | 1 essai | en pause, limite de bloc −20 % |
-| **Diabolique** | V3 | +1 par chute consécutive | V5 | 1 essai | **tourne**, limite de bloc −35 % |
+| **Modéré** | V2 | +1 par chute consécutive | V4 | 1 essai | en pause |
+| **Difficile** | V3 | +1 par chute consécutive | V5 | 1 essai | en pause, limite de bloc −20 % |
+| **Diabolique** | V3 | +1 par chute consécutive | V6 | 1 essai | **tourne**, limite de bloc −35 % (déviation choisie par l'adversaire) |
 
 Le niveau agit aussi sur la **difficulté des blocs** (§7.2) et sur les **pénalités de temps** (§5.2).
 
@@ -134,8 +156,8 @@ Les verdicts modifient les règles des échecs. Ces garde-fous gardent la partie
    n'est pas un pat. On applique la règle 1.
 5. **Mat** (Classique, déclencheur « mat ») : le coup qui mate passe par un **bloc du mat**, de difficulté +1.
    En cas de chute, le coup est annulé (V3 minimum). Le mat n'est acquis qu'une fois le bloc réussi.
-6. **Promotion** : la pièce choisie est connue avant le bloc. En cas de chute avec un verdict ≥ V3, le pion
-   reste sur sa case de départ.
+6. **Promotion** : la pièce choisie est connue avant le bloc. En cas de chute avec un verdict V3, V5 ou V6, le pion
+   reste sur sa case de départ. En V4, voir §5.2 bis.
 
 ---
 
@@ -243,6 +265,8 @@ Chaque joueur a **trois cotes** indépendantes :
    pendant 2 tours. Compteur de chutes d'Alice : 1.
 4. Coup 9 : Alice tente **Fxf7+** (prise + échec). Un seul bloc : déclencheur le plus exigeant + 1.
    Elle tombe encore → compteur 2 → **V3 : Annulé**. Elle doit jouer un autre coup.
+   Elle tente alors **Dxd8** et tombe une troisième fois → compteur 3 → **V4 : Dévié**. Sa dame doit bouger,
+   sur la case légale la plus proche de d8 : elle choisit **Dd7**.
 5. Coup 10 : Alice demande une **recharge**. Sa pendule tourne, elle réussit en 50 s → +60 s, soit +10 s net.
 6. Coup 15 : Bruno se fait mettre en échec et grimpe un bloc de parade de 20 s. Il réussit : rien ne change.
 
@@ -260,7 +284,8 @@ Chaque joueur a **trois cotes** indépendantes :
 ## 12. Questions ouvertes (à trancher au mur)
 
 1. Les valeurs de temps (départ, recharge, limites) sont des **hypothèses** : à mesurer sur ton pan réel.
-2. Pièce épuisée pendant 2 tours : trop punitif en Modéré ?
+2. Pièce épuisée pendant 2 tours : trop punitif en Modéré ? Et dans l'échelle, faut-il placer Dévié (V4) avant ou après Interdit ?
+7. Déviation courte par défaut, ou libre ?
 3. Le bloc de parade sur échec : amusant ou trop interruptif en Blitz ?
 4. En solo, le joueur doit-il aussi pouvoir faire « annuler » un coup du moteur en réussissant un bloc très dur ?
    (Mécanique de **contre-attaque**, à envisager seulement en Difficile et au-dessus.)
