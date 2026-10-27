@@ -328,3 +328,57 @@ describe("sauvegarde et reprise", () => {
     expect(restored.engineCandidates()).not.toContain("e7e5");
   });
 });
+
+describe("famille C : la cloche (§3.5)", () => {
+  it("sonne après 8 min de temps de jeu en Classique ; chacun grimpe, pendules en pause", () => {
+    const { game, requests } = setup("classique", "modere", { bell: true });
+    game.tick(0);
+    game.tick(4 * 60_000); // Blancs réfléchissent 4 min
+    game.play("e2", "e4", undefined, 4 * 60_000);
+    game.tick(4 * 60_000);
+    expect(game.phase).toBe("move");
+    game.tick(8 * 60_000); // Noirs réfléchissent 4 min : 8 min de jeu
+    expect(game.phase).toBe("block");
+    expect(game.clock.running).toBeNull();
+    expect(requests.at(-1)).toMatchObject({ kind: "cloche", climber: "b", targetRating: 1400 });
+    const before = game.clock.remainingAt("b", 8 * 60_000);
+    game.blockResult(false, 8 * 60_000);
+    expect(game.clock.remainingAt("b", 8 * 60_000)).toBe(before - 20_000);
+    expect(requests.at(-1)).toMatchObject({ kind: "cloche", climber: "w" });
+    game.blockResult(true, 8 * 60_000);
+    expect(game.phase).toBe("move");
+    expect(game.clock.running).toBe("b");
+    expect(game.nextBellAt()).toBe(16 * 60_000);
+  });
+
+  it("le temps passé à grimper ne compte pas comme temps de jeu", () => {
+    const { game } = setup("blitz", "modere", { bell: true });
+    game.tick(0);
+    game.requestRecharge(false, 0);
+    game.tick(3 * 60_000); // 3 min de recharge : pas du temps de jeu
+    expect(game.bellPlayTimeMs).toBe(0);
+  });
+
+  it("en solo, seul le joueur grimpe à la cloche", () => {
+    const { game, requests } = setup("blitz", "modere", {
+      bell: true,
+      engine: { color: "b", elo: 1500 },
+      players: { w: { name: "Alice", climbRating: 1500, fatigue: false }, b: { name: "SF", climbRating: 0, fatigue: false } },
+    });
+    game.clock.remaining = { w: 10 * 60_000, b: 10 * 60_000 }; // le Blitz (3 min) tomberait avant la cloche
+    game.tick(0);
+    game.tick(4 * 60_000);
+    expect(requests.at(-1)).toMatchObject({ kind: "cloche", climber: "w" });
+    game.blockResult(true, 4 * 60_000);
+    expect(game.phase).toBe("move");
+  });
+
+  it("la cloche est sauvegardée", () => {
+    const { game } = setup("classique", "modere", { bell: true });
+    game.tick(0);
+    game.tick(60_000);
+    const restored = ChesscaladeGame.restore(JSON.parse(JSON.stringify(game.save(60_000))), () => null, 0);
+    expect(restored.bellPlayTimeMs).toBe(60_000);
+    expect(restored.config.bell).toBe(true);
+  });
+});

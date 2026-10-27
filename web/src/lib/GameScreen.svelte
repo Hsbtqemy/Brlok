@@ -32,6 +32,7 @@
     recharge: "Recharge",
     defense: "Bloc de défense",
     "contre-attaque": "Contre-attaque",
+    cloche: "Cloche",
   } as const;
   const TRIGGER_LABEL = { capture: "prise", echec: "échec", promotion: "promotion", roque: "roque", mat: "mat" } as const;
   const REASON_LABEL = { mat: "échec et mat", pat: "pat", nulle: "nulle", temps: "au temps", abandon: "abandon" } as const;
@@ -46,7 +47,9 @@
   let fatigue = $state<Record<Color, boolean>>({ w: false, b: false });
   let mode = $state<"duo" | "solo">("solo");
   /** D = intrication ; A et B = rounds (REGLES.md §3). */
-  let family = $state<"D" | Family>("D");
+  let family = $state<"C" | "D" | Family>("D");
+  /** Familles A et B : rounds ; C et D : intrication (C avec cloche). */
+  const rounded = $derived(family === "A" || family === "B");
   let duelFormat = $state<DuelFormat>("ajoute");
   let rounds = $state.raw<RoundsGame | null>(null);
   let soloId = $state(app.activePlayer?.id ?? "");
@@ -76,7 +79,7 @@
   }
 
   function start() {
-    if (family !== "D") {
+    if (family === "A" || family === "B") {
       if (mode === "solo") {
         humanColor = soloColor === "hasard" ? (Math.random() < 0.5 ? "w" : "b") : soloColor;
         const engineColor: Color = humanColor === "w" ? "b" : "w";
@@ -112,7 +115,7 @@
       const players = humanColor === "w" ? { w: human, b: engine } : { w: engine, b: human };
       ids = humanColor === "w" ? { w: soloId, b: "" } : { w: "", b: soloId };
       game = new ChesscaladeGame(
-        { format, difficulty, deviation, players, engine: { color: engineColor, elo: engineElo } },
+        { format, difficulty, deviation, players, engine: { color: engineColor, elo: engineElo }, bell: family === "C" },
         makeBlock,
         Date.now(),
       );
@@ -123,7 +126,7 @@
         b: { name: nameOf(blackId), climbRating: climbRating(blackId), fatigue: fatigue.b },
       };
       ids = { w: whiteId, b: blackId };
-      game = new ChesscaladeGame({ format, difficulty, deviation, players }, makeBlock, Date.now());
+      game = new ChesscaladeGame({ format, difficulty, deviation, players, bell: family === "C" }, makeBlock, Date.now());
     }
     engineError = "";
     selected = null;
@@ -175,7 +178,7 @@
       now = Date.now();
       if (game && game.phase !== "over") {
         const before = game.phase;
-        game.checkFlag(now);
+        game.tick(now);
         if (game.phase !== before) refresh();
       }
     }, 200);
@@ -302,6 +305,7 @@
       sans: history.map((m) => m.san),
       canRecharge: game.canRecharge(),
       canCounter: game.canCounterAttack(),
+      bell: game.config.bell ? { left: Math.max(0, game.nextBellAt() - game.bellPlayTimeMs), rung: game.bellsRung } : null,
       engineTurn: game.isEngineTurn(),
       falls: { ...game.consecutiveFalls },
       kingOnly: game.kingOnly,
@@ -421,16 +425,18 @@
       Type de partie
       <div class="row">
         <button aria-pressed={family === "D"} onclick={() => (family = "D")}>Intrication</button>
+        <button aria-pressed={family === "C"} onclick={() => (family = "C")}>Intrication rythmée</button>
         <button aria-pressed={family === "A"} onclick={() => (family = "A")}>Rounds</button>
         <button aria-pressed={family === "B"} onclick={() => (family = "B")}>Rounds couplés</button>
       </div>
       <p class="hint">
         {#if family === "D"}La partie déclenche la grimpe : prises, échecs, recharges (REGLES.md §4–6).
+        {:else if family === "C"}L'intrication, plus une cloche toutes les 4 min (Blitz) ou 8 min (Classique) de jeu : chacun grimpe alors un bloc sur sa pièce la plus active. Impossible de fuir le mur en évitant les prises.
         {:else if family === "A"}Comme le chessboxing : rounds d'échecs et rounds de mur alternent. On gagne par mat, au temps, par KO (3 duels perdus de suite) ou aux points.
         {:else}Rounds dont le bloc vient de la position (pièce la plus active), et le gagnant du duel prend un bonus : +30 s ou un joker (indice du moteur).{/if}
       </p>
     </div>
-    {#if family !== "D"}
+    {#if rounded}
       <div class="field">
         Duel au mur
         <div class="row">
@@ -465,7 +471,7 @@
               {#each app.ratings.players as p (p.id)}<option value={p.id}>{p.name} (Chesscalade {Math.round(p.ratings.chesscalade.rating)})</option>{/each}
             </select>
           </label>
-          {#if family === "D"}
+          {#if !rounded}
             <label class="check"><input type="checkbox" bind:checked={fatigue.w} /> Option fatigue</label>
           {/if}
         </div>
@@ -483,7 +489,7 @@
         <input type="range" min="400" max="2800" step="50" bind:value={engineElo} />
       </label>
       <p class="hint">
-        {#if family === "D"}
+        {#if !rounded}
           Le moteur ne grimpe pas : quand il prend une pièce ou donne échec, c'est toi qui grimpes un bloc de défense (une chute coûte du temps).
           En Difficile et Diabolique, une contre-attaque par partie peut annuler son dernier coup.
         {:else}
@@ -511,7 +517,7 @@
               </select>
             {/if}
           </label>
-          {#if family === "D"}
+          {#if !rounded}
             <label class="check"><input type="checkbox" bind:checked={fatigue[color as Color]} /> Option fatigue</label>
           {/if}
         </div>
@@ -522,14 +528,14 @@
       Rythme
       <div class="row">
         <button aria-pressed={format === "blitz"} onclick={() => (format = "blitz")}>
-          Blitz · 3 min{family !== "D" ? " · rounds 2 min, 3 + 3" : ""}
+          Blitz · 3 min{rounded ? " · rounds 2 min, 3 + 3" : ""}
         </button>
         <button aria-pressed={format === "classique"} onclick={() => (format = "classique")}>
-          Classique · 10 min{family !== "D" ? " · rounds 4/3 min, 5 + 5" : ""}
+          Classique · 10 min{rounded ? " · rounds 4/3 min, 5 + 5" : ""}
         </button>
       </div>
     </div>
-    {#if family === "D"}
+    {#if !rounded}
     <div class="field">
       Difficulté
       <div class="row">
@@ -643,6 +649,13 @@
         </p>
       {/if}
       {#if engineError}<p class="warn">{engineError}</p>{/if}
+      {#if view.bell && view.phase !== "over"}
+        {@const left = (void now, Math.max(0, game.nextBellAt() - game.bellPlayTimeMs))}
+        <p class="bell">
+          Prochaine cloche dans <strong>{Math.floor(Math.ceil(left / 1000) / 60)}:{String(Math.ceil(left / 1000) % 60).padStart(2, "0")}</strong> de jeu
+          {view.bell.rung > 0 ? `· ${view.bell.rung} déjà sonnée(s)` : ""}
+        </p>
+      {/if}
 
       {#if lastDelta}
         <p class="hint">Cote de grimpe de {lastDelta.name} : {lastDelta.delta >= 0 ? "+" : ""}{Math.round(lastDelta.delta)}</p>
@@ -744,6 +757,10 @@
     border-color: #6a1b9a;
     color: #6a1b9a;
     font-weight: 700;
+  }
+  .bell {
+    margin: 0;
+    font-variant-numeric: tabular-nums;
   }
   .verdict {
     margin: 0;

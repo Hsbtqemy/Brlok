@@ -6,7 +6,9 @@
  * données simples (JSON), pour la sauvegarde.
  */
 import { Chess, type Color, type PieceSymbol, type Square } from "chess.js";
-import { Clock, other, PIECE_OF, type Format, type GameResult } from "./game";
+import { Clock, mostActivePiece, other, type Format, type GameResult } from "./game";
+
+export { mostActivePiece };
 import type { Block } from "./generator";
 import type { Piece } from "./pieces";
 
@@ -128,28 +130,6 @@ export interface SavedRounds {
   jokerAvailable: Record<Color, boolean>;
   result: RoundsResult | null;
   log: string[];
-}
-
-/** Pièce la plus active d'un camp : celle qui a le plus de coups possibles (§3.3, famille B). */
-export function mostActivePiece(fen: string, color: Color): Piece {
-  const parts = fen.split(" ");
-  parts[1] = color;
-  parts[3] = "-"; // la prise en passant n'a de sens que pour le camp au trait
-  let chess: Chess;
-  try {
-    chess = new Chess(parts.join(" "));
-  } catch {
-    return "roi";
-  }
-  const mobility = new Map<string, { type: PieceSymbol; count: number }>();
-  for (const m of chess.moves({ verbose: true })) {
-    const entry = mobility.get(m.from) ?? { type: m.piece, count: 0 };
-    entry.count++;
-    mobility.set(m.from, entry);
-  }
-  let best: { type: PieceSymbol; count: number } | null = null;
-  for (const e of mobility.values()) if (!best || e.count > best.count) best = e;
-  return best ? PIECE_OF[best.type] : "roi";
 }
 
 export class RoundsGame {

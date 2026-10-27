@@ -12,7 +12,7 @@ export type Format = "blitz" | "classique";
 export type Difficulty = "facile" | "modere" | "difficile" | "diabolique";
 export type Deviation = "courte" | "libre";
 export type Trigger = "capture" | "echec" | "promotion" | "roque" | "mat";
-export type BlockKind = "defi" | "parade" | "recharge" | "defense" | "contre-attaque";
+export type BlockKind = "defi" | "parade" | "recharge" | "defense" | "contre-attaque" | "cloche";
 export type Verdict = 0 | 1 | 2 | 3 | 4 | 5 | 6;
 
 export interface PlayerSetup {
@@ -29,6 +29,8 @@ export interface GameConfig {
   players: Record<Color, PlayerSetup>;
   /** Solo contre un moteur (§9.1) : couleur jouée par le moteur, qui ne grimpe pas. */
   engine?: { color: Color; elo: number };
+  /** Famille C « intrication rythmée » (§3.5) : une cloche force un bloc à intervalle régulier. */
+  bell?: boolean;
 }
 
 export interface BlockRequest {
@@ -122,6 +124,8 @@ const DEFENSE_BONUS = -200;
 const COUNTER_BONUS = { difficile: 300, diabolique: 400 } as const;
 const COUNTER_MAJOR_BONUS = 100;
 const COUNTER_PENALTY_MS = 30_000;
+/** Famille C : intervalle de la cloche, en temps de jeu (pendules en marche hors blocs). */
+export const BELL_INTERVAL_MS = { blitz: 4 * 60_000, classique: 8 * 60_000 } as const;
 
 export const PIECE_OF: Record<PieceSymbol, Piece> = { p: "pion", n: "cavalier", b: "fou", r: "tour", q: "dame", k: "roi" };
 
@@ -134,6 +138,28 @@ export const VERDICT_LABELS: Record<Verdict, string> = {
   5: "Dévié",
   6: "Dévié par l'adversaire",
 };
+
+/** Pièce la plus active d'un camp : celle qui a le plus de coups possibles (§3.3 famille B, §3.5 famille C). */
+export function mostActivePiece(fen: string, color: Color): Piece {
+  const parts = fen.split(" ");
+  parts[1] = color;
+  parts[3] = "-"; // la prise en passant n'a de sens que pour le camp au trait
+  let chess: Chess;
+  try {
+    chess = new Chess(parts.join(" "));
+  } catch {
+    return "roi";
+  }
+  const mobility = new Map<string, { type: PieceSymbol; count: number }>();
+  for (const m of chess.moves({ verbose: true })) {
+    const entry = mobility.get(m.from) ?? { type: m.piece, count: 0 };
+    entry.count++;
+    mobility.set(m.from, entry);
+  }
+  let best: { type: PieceSymbol; count: number } | null = null;
+  for (const e of mobility.values()) if (!best || e.count > best.count) best = e;
+  return best ? PIECE_OF[best.type] : "roi";
+}
 
 export function other(color: Color): Color {
   return color === "w" ? "b" : "w";
@@ -189,6 +215,7 @@ export interface SavedGame {
   counterAttackUsed: boolean;
   engineExcluded: string[];
   exhaustionOrder: number;
+  bell?: { playTimeMs: number; rung: number; queue: Color[] };
 }
 
 const SAVED_LOG_LIMIT = 60;
@@ -253,6 +280,11 @@ export class ChesscaladeGame {
   counterAttackUsed = false;
   engineExcluded: string[] = [];
   private exhaustionOrder = 0;
+  /** Famille C : temps de jeu écoulé, cloches déjà sonnées, grimpeurs en attente. */
+  bellPlayTimeMs = 0;
+  bellsRung = 0;
+  bellQueue: Color[] = [];
+  private lastTickAt: number | null = null;
 
   constructor(
     readonly config: GameConfig,
@@ -292,6 +324,7 @@ export class ChesscaladeGame {
       counterAttackUsed: this.counterAttackUsed,
       engineExcluded: [...this.engineExcluded],
       exhaustionOrder: this.exhaustionOrder,
+      bell: { playTimeMs: this.bellPlayTimeMs, rung: this.bellsRung, queue: [...this.bellQueue] },
     };
   }
 
@@ -329,6 +362,9 @@ export class ChesscaladeGame {
     game.counterAttackUsed = saved.counterAttackUsed;
     game.engineExcluded = [...saved.engineExcluded];
     game.exhaustionOrder = saved.exhaustionOrder;
+    game.bellPlayTimeMs = saved.bell?.playTimeMs ?? 0;
+    game.bellsRung = saved.bell?.rung ?? 0;
+    game.bellQueue = [...(saved.bell?.queue ?? [])];
     return game;
   }
 
@@ -487,6 +523,15 @@ export class ChesscaladeGame {
       case "defi":
         this.resolveDefi(pending, success, now);
         break;
+      case "cloche":
+        if (success) {
+          this.note(climber, "Bloc de la cloche réussi.");
+        } else {
+          this.penalize(climber, DIFFICULTY[this.config.difficulty].penaltyMs, now);
+          this.note(climber, "Bloc de la cloche raté : pénalité de temps.");
+        }
+        this.nextBellClimber(now);
+        break;
       case "defense":
         if (success) {
           this.note(climber, "Bloc de défense réussi.");
@@ -536,7 +581,51 @@ export class ChesscaladeGame {
     this.config.players[color].fatigue = enabled;
   }
 
-  /** À appeler régulièrement par l'interface : chute du drapeau. */
+  /** À appeler régulièrement par l'interface : drapeau, et cloche en famille C. */
+  tick(now: number): void {
+    this.checkFlag(now);
+    if (!this.config.bell || this.phase === "over") {
+      this.lastTickAt = now;
+      return;
+    }
+    // Temps de jeu : seulement quand on réfléchit à un coup (pas pendant les blocs).
+    if (this.lastTickAt !== null && this.phase === "move" && this.clock.running) this.bellPlayTimeMs += now - this.lastTickAt;
+    this.lastTickAt = now;
+    if (this.phase === "move" && this.bellPlayTimeMs >= this.nextBellAt()) this.ringBell(now);
+  }
+
+  /** Temps de jeu auquel sonnera la prochaine cloche. */
+  nextBellAt(): number {
+    return BELL_INTERVAL_MS[this.config.format] * (this.bellsRung + 1);
+  }
+
+  private ringBell(now: number): void {
+    this.bellsRung++;
+    const climbers: Color[] = [this.turn, other(this.turn)].filter((c) => c !== this.config.engine?.color);
+    this.bellQueue = climbers;
+    this.note(this.turn, `Cloche ${this.bellsRung} : chacun grimpe un bloc.`);
+    this.nextBellClimber(now);
+  }
+
+  private nextBellClimber(now: number): void {
+    const climber = this.bellQueue.shift();
+    if (!climber) {
+      this.phase = "move";
+      this.clock.run(this.turn, now);
+      return;
+    }
+    const request: BlockRequest = {
+      climber,
+      kind: "cloche",
+      piece: mostActivePiece(this.chess.fen(), climber),
+      targetRating: this.baseTarget(climber),
+      length: FORMAT[this.config.format].length,
+      cruxLast: false,
+    };
+    this.startBlock({ request, triggers: [] }, now);
+  }
+
+  /** Chute du drapeau. */
   checkFlag(now: number): void {
     if (this.phase === "over") return;
     for (const color of ["w", "b"] as Color[]) {

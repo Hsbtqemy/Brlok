@@ -135,6 +135,17 @@ On joue la famille D (événements, pendule verticale, verdicts), mais une **clo
 « cloche », sur le caractère de sa pièce la plus active. En cas de chute, pénalité de temps selon le niveau.
 Ça empêche un joueur de fuir toutes les prises pour ne jamais grimper.
 
+Précisions :
+
+- **Temps de jeu** = temps où une pendule tourne pendant qu'un joueur réfléchit à son coup. Les blocs
+  (défis, parades, recharges, cloches) ne comptent pas.
+- La cloche attend que le bloc ou la déviation en cours soit terminé. Le joueur au trait grimpe en premier.
+- Cote visée : celle d'un bloc-défi sans déclencheur (cote du joueur + bonus du niveau − fatigue) ;
+  pendules en pause, sauf en Diabolique.
+- En solo, seul le joueur grimpe (le moteur ne grimpe jamais).
+- En Blitz (3 min par joueur, soit 6 min de jeu au plus sans recharge), la cloche sonne au plus une ou deux
+  fois : c'est surtout en Classique qu'elle rythme la partie.
+
 ## 4. La pendule verticale
 
 - Chaque joueur part avec le temps de départ du format. **Il n'y a pas d'incrément automatique.**

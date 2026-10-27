@@ -50,4 +50,4 @@ ordinateur du même réseau et ouvrir l'adresse affichée.
 - [x] Familles A et B : rounds d'échecs et de mur, duels « Ajoute une prise », « Même bloc », « Bloc imposé »,
       KO, points, bonus et joker (à deux)
 - [x] Rounds en solo contre Stockfish (objectifs au mur : bloc progressif, bloc cible, bloc imposé)
-- [ ] Famille C (intrication rythmée)
+- [x] Famille C (intrication rythmée) : cloche toutes les 4 / 8 min de jeu
