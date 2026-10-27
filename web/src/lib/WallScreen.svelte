@@ -22,7 +22,7 @@
     { label: "Extrême", level: 6 },
   ];
 
-  let footRowOffset = $state<number | null>(0);
+  let footRowOffset = $state<number | null>(null);
   let footMerges = $state<FootMerge[]>([]);
   let message = $state("");
 
@@ -143,16 +143,22 @@
       </label>
       <button onclick={() => loadData(exampleCatalog, "l'exemple du dépôt")}>Charger l'exemple</button>
     </div>
-    <label class="field">
-      Grille pieds fusionnée à partir de la rangée
-      <select bind:value={footRowOffset}>
-        <option value={null}>ne pas fusionner</option>
-        {#each Array.from({ length: app.wall?.rows ?? 7 }, (_, i) => i) as r (r)}
-          <option value={r}>{r + 1}</option>
-        {/each}
-      </select>
-    </label>
-    <p class="hint">S'applique au prochain import. Les types de prises deviennent des étiquettes, le niveau le plus haut est gardé.</p>
+    <details>
+      <summary>Option d'import : « grille pieds » de Brlok desktop</summary>
+      <label class="field">
+        Fusionner la grille pieds dans le pan, à partir de la rangée
+        <select bind:value={footRowOffset}>
+          <option value={null}>ne pas fusionner (recommandé)</option>
+          {#each Array.from({ length: app.wall?.rows ?? 7 }, (_, i) => i) as r (r)}
+            <option value={r}>{r + 1}</option>
+          {/each}
+        </select>
+      </label>
+      <p class="hint">
+        Sur ton pan, cette grille décrit la poutre posée au-dessus, pas des prises du pan : ne pas la fusionner.
+        L'option reste là pour un autre catalogue où elle décrirait de vraies prises.
+      </p>
+    </details>
 
     {#if app.walls.length > 0 && app.wall}
       <label class="field">

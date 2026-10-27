@@ -32,8 +32,9 @@ export interface BrlokCatalogCollection {
 
 export interface ImportOptions {
   /**
-   * Fusion de la grille pieds (REGLES.md §7.3) : la rangée 0 de la grille pieds
-   * correspond à cette rangée de la grille des mains. `null` = ne pas fusionner.
+   * Fusion de la « grille pieds » de Brlok desktop dans la grille des mains : la rangée 0 de la grille
+   * pieds correspond à cette rangée. `null` (défaut) = ne pas fusionner. Sur le pan maison, cette grille
+   * décrit en réalité la poutre posée au-dessus du pan (REGLES.md §7.3) : elle ne doit pas être fusionnée.
    */
   footRowOffset: number | null;
 }
@@ -50,7 +51,7 @@ export interface ImportedWall {
   footMerges: FootMerge[];
 }
 
-export const DEFAULT_IMPORT_OPTIONS: ImportOptions = { footRowOffset: 0 };
+export const DEFAULT_IMPORT_OPTIONS: ImportOptions = { footRowOffset: null };
 
 function isCollection(data: unknown): data is BrlokCatalogCollection {
   return typeof data === "object" && data !== null && Array.isArray((data as BrlokCatalogCollection).catalogs);

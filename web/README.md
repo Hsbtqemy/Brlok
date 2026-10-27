@@ -34,7 +34,7 @@ ordinateur du même réseau et ouvrir l'adresse affichée.
 ## État (v0.2)
 
 - [x] Modèle de mur générique (grille de taille quelconque, niveaux 1–6, portée, enchaînements interdits)
-- [x] Import de `catalog_collection.json` avec fusion de la grille pieds (niveau max gardé)
+- [x] Import de `catalog_collection.json` (la « grille pieds », en fait la poutre, n'est pas fusionnée par défaut)
 - [x] Export vers Brlok desktop (niveau 6 ramené à 5)
 - [x] Générateur Brlok classique (port du générateur Python, répartitions comprises)
 - [x] Générateur de blocs-défis Chesscalade (caractère des pièces, cote visée, crux en dernier, assouplissements)

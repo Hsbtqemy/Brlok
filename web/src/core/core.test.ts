@@ -146,3 +146,11 @@ describe("blocs-défis Chesscalade", () => {
     expect(block!.relaxations.length).toBeGreaterThan(0);
   });
 });
+
+describe("import Brlok : la poutre", () => {
+  it("par défaut, la grille pieds (poutre) n'est pas fusionnée dans le pan", () => {
+    const [{ wall, footMerges }] = importBrlok(brlokData);
+    expect(footMerges).toEqual([]);
+    expect(wall.holds.find((h) => h.id === "B1")).toMatchObject({ level: 4, tags: [] });
+  });
+});

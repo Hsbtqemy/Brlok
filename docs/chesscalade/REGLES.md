@@ -314,11 +314,10 @@ en respectant le caractère de la pièce (§7.4).
 ### 7.3 De la difficulté des prises à la cote du bloc
 
 La difficulté repose **au maximum sur les niveaux déjà saisis** dans les catalogues Brlok : chaque prise de main
-a un niveau de **1 à 6** (Brlok desktop limite les mains à 5 ; la version web passe à 6, et les catalogues existants restent valides). **Grille pieds de Brlok** : ce n'est pas une zone à part. Elle reprend des prises qui existent déjà dans la
-grille des mains (probablement les rangées supérieures du pan), avec leur type (« [Bac] », « bi30 »,
-« 45 »…). Chesscalade la **fusionne par-dessus** la grille des mains : chaque position reçoit le type de
-prise comme étiquette, et on garde **le plus haut des deux niveaux** annoncés. L'import montre la
-correspondance des rangées (par défaut les 4 rangées du haut) pour qu'on puisse la corriger à l'écran.
+a un niveau de **1 à 6** (Brlok desktop limite les mains à 5 ; la version web passe à 6, et les catalogues existants restent valides). **« Grille pieds » de Brlok** : vérifié sur photo, ce n'est ni une zone de pieds ni des prises du pan,
+mais la **poutre d'entraînement posée au-dessus du pan** (4 × 6, symétrique : « [Bac] », « [35°] »,
+« bi30 », réglettes de 18 à 45 mm…). Elle **n'est pas fusionnée** dans la grille des mains (l'option
+existe encore à l'import pour un autre catalogue). La poutre pourra devenir un agrès à part (MURS.md).
 
 **Cote initiale estimée d'un bloc** :
 
@@ -494,7 +493,7 @@ Chaque joueur a **trois cotes** indépendantes :
 | Contre-attaque (solo) | Une fois par partie, Difficile et au-dessus ; difficulté à jauger (§9.1) |
 | Portée entre prises | Réglée dans le catalogue, avec enchaînements impossibles marqués à la main |
 | Caractère des pièces | Testé avec le mode « Devine la pièce » (§9.3) |
-| Grille pieds | Fusionnée par-dessus la grille des mains, niveau le plus haut gardé (§7.3) |
+| « Grille pieds » de Brlok | C'est la poutre au-dessus du pan : pas fusionnée dans les prises (§7.3) |
 | Cote des blocs | Une seule cote, commune à Brlok classique et à Chesscalade |
 | Niveaux des prises | 1 à 6 |
 
@@ -502,9 +501,8 @@ Chaque joueur a **trois cotes** indépendantes :
 
 1. Valeurs de temps (départ, recharge, limites de bloc) : **provisoires**. À mesurer en chronométrant
    quelques blocs de 6 prises ; la recharge devrait rapporter environ 1,5 fois le temps moyen d'un bloc.
-2. Correspondance exacte entre la grille pieds et la grille des mains (rangées du haut ?).
-3. Difficulté de la contre-attaque.
-4. Coefficients de la cote initiale des blocs (§7.3).
+2. Difficulté de la contre-attaque.
+3. Coefficients de la cote initiale des blocs (§7.3).
 
 ---
 

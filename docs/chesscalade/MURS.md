@@ -52,6 +52,27 @@ le pan gagne des dimensions réelles et une photo redressée. Sans photo, tout f
 **Pieds** : décidé, on reste sur le placement des mains ; les pieds sont une règle de difficulté
 (REGLES.md §7.6), sans placement sur la photo.
 
+**Constat sur la photo du pan maison** (premier test) :
+
+- la grille A–F × 1–7 est **tracée sur le bois** : la grille de Brlok est la grille physique ; rangée 1 en
+  haut, rangée 7 en bas (côté grimpeur) ;
+- le pan porte une **vingtaine de prises**, alors que le catalogue en décrit 37 actives : le catalogue est
+  un pan « conceptuel » complet. À recaler : garder « Pan conceptuel » et créer « Pan réel » ;
+- des prises sont posées **sur la ligne du bas et sous la grille** (départ ou pieds ?) : à décider ;
+- fond en bois clair : la détection par couleur fonctionne bien, noir compris ;
+- il faut **les 4 coins** de la grille sur la photo (la perspective rend 3 coins insuffisants) ; comme la
+  grille est tracée, ses coins pourraient être retrouvés automatiquement.
+
+### La poutre
+
+La « grille pieds » de Brlok desktop est en fait la **poutre posée au-dessus du pan** (4 × 6 : bacs,
+plats à 20° et 35°, bi-doigts de 30 et 50 mm, réglettes de 18 à 45 mm). Elle n'est plus fusionnée dans le
+pan. Pistes pour en faire un **agrès** du jeu :
+
+- **sortie** de bloc : finir en se suspendant à une prise de poutre donnée ;
+- **suspension imposée** (ex. 7 s sur la réglette de 20 mm) comme pénalité ou comme recharge ;
+- un type de bloc « poutre » pour la pièce **tour** (puissance, statique).
+
 ### Étape 3 — Mur à voies (salle)
 
 - Créer les voies : couleur (prélevée sur la photo), cotation (5c, 6a+…), style (dalle, dévers, dynamique,
