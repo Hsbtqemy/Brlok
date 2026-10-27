@@ -8,6 +8,8 @@ import type { Route, Wall } from "./wall";
 export interface ChallengeOptions extends ChessBlockOptions {
   maxRating?: number;
   routeRating?: (route: Route) => number | undefined;
+  /** Mur à voies : voies retenues (toutes si absent ou vide). */
+  allowedRoutes?: readonly string[];
 }
 
 export function makeChallengeBlock(wall: Wall, options: ChallengeOptions): Block | null {
@@ -18,6 +20,7 @@ export function makeChallengeBlock(wall: Wall, options: ChallengeOptions): Block
       maxRating: options.maxRating,
       ratingOf: options.routeRating,
       usage: options.usage,
+      allowed: options.allowedRoutes,
       rng: options.rng,
     });
   }

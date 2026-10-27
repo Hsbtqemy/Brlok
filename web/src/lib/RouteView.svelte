@@ -5,9 +5,12 @@
   interface Props {
     wall: Wall;
     route: Route | null;
+    /** Hauteur maximale de la photo (grand écran). */
+    maxHeight?: string;
   }
 
-  let { wall, route }: Props = $props();
+  let { wall, route, maxHeight }: Props = $props();
+  let ratio = $state(1.33);
 </script>
 
 {#if route}
@@ -20,8 +23,15 @@
       </div>
     </div>
     {#if wall.photo}
-      <div class="photo">
-        <img src={wall.photo} alt={`Photo du secteur ${wall.name}`} />
+      <div class="photo" style={maxHeight ? `max-width: calc(${maxHeight} * ${ratio}); margin: 0 auto` : undefined}>
+        <img
+          src={wall.photo}
+          alt={`Photo du secteur ${wall.name}`}
+          onload={(e) => {
+            const img = e.currentTarget as HTMLImageElement;
+            if (img.naturalHeight) ratio = img.naturalWidth / img.naturalHeight;
+          }}
+        />
         {#each route.marks ?? [] as m, i (i)}
           <span class="mark" style:left={`${m.x * 100}%`} style:top={`${m.y * 100}%`} style:border-color={routeHex(route)}></span>
         {/each}

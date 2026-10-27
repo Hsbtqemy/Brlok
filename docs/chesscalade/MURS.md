@@ -117,8 +117,11 @@ Dans le jeu, sur un mur à voies, les blocs sont **choisis** et non générés :
   réussies ».
 - **Choisir une voie** sans pièce (« Aucune ») : simplement la voie la plus proche de la cote visée.
 - **Minuteur** sur chaque bloc ou voie de la séance : travail/repos (40/20, 50/28…), pyramide, EMOM,
-  chrono avec **meilleurs temps** par joueur ; mode grand écran, signal sonore et visuel, enchaînement
-  automatique des blocs de la séance.
+  chrono avec **meilleurs temps** par joueur ; mode grand écran (le pan ou la photo de la voie en grand,
+  à côté du minuteur), signal sonore et visuel, enchaînement automatique des blocs de la séance. Le
+  minuteur est aussi disponible sur la voie touchée dans le carnet.
+- **Partie** : on choisit le pan ou le mur de la partie et, pour une salle, **les voies retenues** (toutes
+  par défaut) ; les blocs de la partie sont choisis parmi elles.
 
 Limites de la v1 : une seule photo par mur (un secteur), pas de redressement (inutile ici : on ne mesure pas
 de distances), et dans les salles où une couleur regroupe plusieurs voies, il faut retirer à la main les

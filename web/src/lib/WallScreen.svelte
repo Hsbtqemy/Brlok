@@ -514,7 +514,7 @@
         {/if}
       </div>
     {/if}
-    {#if currentBlock && mode !== "carnet"}
+    {#if currentBlock}
       <IntervalTimer
         block={currentBlock}
         onNext={mode === "classique" && classicSelected < classicSession.length - 1

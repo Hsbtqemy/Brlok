@@ -105,6 +105,8 @@ export interface RouteOptions {
   /** Cote apprise d'une voie (Glicko-2), sinon celle de sa cotation. */
   ratingOf?: (route: Route) => number | undefined;
   usage?: Map<string, number>;
+  /** Restreint le choix à ces voies (voies retenues pour une partie). */
+  allowed?: readonly string[];
   rng: Rng;
 }
 
@@ -117,6 +119,11 @@ export function activeRoutes(wall: Wall, ratingOf?: (route: Route) => number | u
 export function pickRoute(wall: Wall, options: RouteOptions): Block | null {
   const { piece, targetRating, maxRating, usage, rng } = options;
   let candidates = activeRoutes(wall, options.ratingOf);
+  if (options.allowed && options.allowed.length > 0) {
+    const allowed = new Set(options.allowed);
+    const kept = candidates.filter((c) => allowed.has(c.route.id));
+    if (kept.length > 0) candidates = kept;
+  }
   if (candidates.length === 0) return null;
   const relaxations: string[] = [];
   if (maxRating !== undefined) {

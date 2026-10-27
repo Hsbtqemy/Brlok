@@ -105,3 +105,13 @@ describe("Brlok en salle", () => {
     expect(logs.get(block.route!.id)).toEqual({ attempts: 3, successes: 2, firstSuccessAt: "2026-10-02T10:00:00Z", lastAt: "2026-10-03T10:00:00Z" });
   });
 });
+
+describe("voies retenues pour une partie", () => {
+  it("le choix se limite aux voies cochées", () => {
+    const wall = gym([{ grade: "5c" }, { grade: "6a" }, { grade: "7a" }]);
+    const b = pickRoute(wall, { piece: null, targetRating: 1400, allowed: ["v2"], rng: seededRng(1) })!;
+    expect(b.route?.id).toBe("v2");
+    // Une sélection vide ou périmée ne bloque pas le jeu : toutes les voies.
+    expect(pickRoute(wall, { piece: null, targetRating: 1400, allowed: ["inconnue"], rng: seededRng(1) })?.route?.id).toBe("v1");
+  });
+});

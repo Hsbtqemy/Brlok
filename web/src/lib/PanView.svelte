@@ -16,9 +16,14 @@
     selected?: Position | null;
     /** Prises reliées à la sélection par un enchaînement impossible. */
     linked?: Set<string>;
+    /** Hauteur maximale (ex. « 70vh ») : le pan s'élargit jusqu'à la remplir (grand écran). */
+    maxHeight?: string;
   }
 
-  let { wall, sequence = [], candidate = null, onHold, onCell, selected = null, linked = new Set() }: Props = $props();
+  let { wall, sequence = [], candidate = null, onHold, onCell, selected = null, linked = new Set(), maxHeight }: Props = $props();
+
+  // Proportions du pan (cases de 52 × 44) : la largeur qui donne la hauteur voulue.
+  const sizeStyle = $derived(maxHeight ? `max-width: calc(${maxHeight} * ${(wall.cols * 52) / (wall.rows * 44)})` : undefined);
 
   // Le bas du mur est affiché en bas de l'écran.
   const rows = $derived(
@@ -30,7 +35,7 @@
   const order = $derived(new Map(sequence.map((id, i) => [id, i + 1])));
 </script>
 
-<div class="pan" style:grid-template-columns={`repeat(${wall.cols}, 1fr)`} role="grid" aria-label={`Pan ${wall.name}`}>
+<div class="pan" class:large={!!maxHeight} style={sizeStyle} style:grid-template-columns={`repeat(${wall.cols}, 1fr)`} role="grid" aria-label={`Pan ${wall.name}`}>
   {#each rows as row (row)}
     {#each cols as col (col)}
       {@const hold = holdAt(wall, { row, col })}
@@ -71,6 +76,20 @@
     width: 100%;
     max-width: 520px;
     margin: 0 auto;
+  }
+  .pan.large .id {
+    font-size: clamp(1rem, 2.6vh, 1.8rem);
+  }
+  .pan.large .level {
+    font-size: clamp(0.8rem, 1.8vh, 1.2rem);
+  }
+  .pan.large .rank {
+    min-width: clamp(22px, 4vh, 40px);
+    height: clamp(22px, 4vh, 40px);
+    border-radius: 50%;
+    font-size: clamp(0.75rem, 2.4vh, 1.4rem);
+    top: -12px;
+    right: -12px;
   }
   .cell {
     position: relative;

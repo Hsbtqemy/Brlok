@@ -2,6 +2,8 @@
   import type { Block } from "../core/generator";
   import { formatClock, planIntervals, timerState, TIMER_PRESETS, totalSeconds, type TimerConfig, type TimerMode } from "../core/intervals";
   import { app } from "./appState.svelte";
+  import PanView from "./PanView.svelte";
+  import RouteView from "./RouteView.svelte";
 
   interface Props {
     /** Bloc (ou voie) en cours : affiché, et support des meilleurs temps au chrono. */
@@ -237,12 +239,23 @@
 
 {#if big}
   <div class="overlay {phaseClass}" class:flash role="dialog" aria-label="Minuteur en grand">
-    {#if label}<p class="big-block">{label}</p>{/if}
-    <p class="big-phase">{phaseText}</p>
-    <p class="big-time">{display}</p>
-    {#if result}<p class="big-result">{result}</p>{/if}
-    {@render controls()}
-    <button class="close" onclick={() => (big = false)}>Fermer</button>
+    {#if app.wall && block}
+      <div class="big-wall">
+        {#if block.route}
+          <RouteView wall={app.wall} route={app.wall.routes.find((r) => r.id === block.route!.id) ?? null} maxHeight="72vh" />
+        {:else}
+          <PanView wall={app.wall} sequence={block.holds.map((h) => h.id)} maxHeight="72vh" />
+        {/if}
+      </div>
+    {/if}
+    <div class="big-timer">
+      {#if label}<p class="big-block">{label}</p>{/if}
+      <p class="big-phase">{phaseText}</p>
+      <p class="big-time">{display}</p>
+      {#if result}<p class="big-result">{result}</p>{/if}
+      {@render controls()}
+      <button class="close" onclick={() => (big = false)}>Fermer</button>
+    </div>
   </div>
 {/if}
 
@@ -323,11 +336,11 @@
     position: fixed;
     inset: 0;
     z-index: 50;
-    display: flex;
-    flex-direction: column;
+    display: grid;
+    grid-template-columns: minmax(0, 1.3fr) minmax(280px, 1fr);
     align-items: center;
-    justify-content: center;
-    gap: 12px;
+    gap: 24px;
+    overflow: auto;
     padding: max(16px, env(safe-area-inset-top, 0px)) max(16px, env(safe-area-inset-right, 0px)) max(16px, env(safe-area-inset-bottom, 0px))
       max(16px, env(safe-area-inset-left, 0px));
     color: #fff;
@@ -335,6 +348,27 @@
   }
   .overlay p {
     margin: 0;
+  }
+  .big-wall {
+    min-width: 0;
+    background: var(--surface);
+    color: var(--text);
+    border-radius: 14px;
+    padding: 12px;
+  }
+  .big-timer {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    min-width: 0;
+  }
+  /* Tablette ou téléphone en portrait : le pan en haut, le minuteur en dessous. */
+  @media (max-aspect-ratio: 1/1) {
+    .overlay {
+      grid-template-columns: 1fr;
+      align-content: start;
+    }
   }
   .big-block {
     font-size: clamp(1.2rem, 4vw, 2rem);
@@ -344,7 +378,7 @@
     font-size: clamp(1.4rem, 5vw, 2.4rem);
   }
   .big-time {
-    font-size: clamp(5rem, 28vw, 16rem);
+    font-size: clamp(4.5rem, min(16vw, 22vh), 12rem);
     font-weight: 800;
     font-variant-numeric: tabular-nums;
     line-height: 1;

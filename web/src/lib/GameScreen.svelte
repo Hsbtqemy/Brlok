@@ -11,6 +11,7 @@
   } from "../core/game";
   import { engineSettings, pickEngineMove } from "../core/engine";
   import { FOOT_RULES, type FootRule } from "../core/feet";
+  import { routeHex, routeLabel } from "../core/gym";
   import { PIECES } from "../core/pieces";
   import { seededRng } from "../core/random";
   import { app } from "./appState.svelte";
@@ -47,6 +48,15 @@
   let blackId = $state(app.ratings.players[1]?.id ?? app.ratings.players[0]?.id ?? "");
   let fatigue = $state<Record<Color, boolean>>({ w: false, b: false });
   let mode = $state<"duo" | "solo">("solo");
+  /** Mur à voies : voies retenues pour la partie (vide : toutes). */
+  let gameRoutes = $state<string[]>([]);
+
+  function toggleGameRoute(id: string, all: string[]) {
+    const current = gameRoutes.length ? gameRoutes : all;
+    const next = current.includes(id) ? current.filter((x) => x !== id) : [...current, id];
+    // Tout coché revient à « toutes » ; rien de coché n'est pas permis (on garde au moins une voie).
+    gameRoutes = next.length === all.length ? [] : next.length === 0 ? current : next;
+  }
   /** D = intrication ; A et B = rounds (REGLES.md §3). */
   let family = $state<"C" | "D" | Family>("D");
   /** Familles A et B : rounds ; C et D : intrication (C avec cloche). */
@@ -76,7 +86,7 @@
 
   function makeDuelBlock(request: DuelBlockRequest) {
     if (!app.wall) return null;
-    return app.challenge({ ...request, usage, rng: seededRng(Date.now()) });
+    return app.challenge({ ...request, usage, allowedRoutes: gameRoutes, rng: seededRng(Date.now()) });
   }
 
   // Sur un mur à voies, « Ajoute une prise » n'a pas de sens : on bascule sur « Même bloc ».
@@ -171,7 +181,7 @@
 
   function makeBlock(request: BlockRequest) {
     if (!app.wall) return null;
-    return app.challenge({ ...request, usage, rng: seededRng(Date.now()) });
+    return app.challenge({ ...request, usage, allowedRoutes: gameRoutes, rng: seededRng(Date.now()) });
   }
 
   function refresh() {
@@ -423,7 +433,35 @@
       </div>
     {/if}
     <h2>Nouvelle partie Chesscalade</h2>
-    <p class="hint">Famille D « intrication » (REGLES.md §4 à §6). Les blocs sont générés sur le pan actif{app.wall ? ` (${app.wall.name})` : " — aucun pan chargé"}.</p>
+    <label class="field">
+      Pan ou mur de la partie
+      <select id="game-wall" value={app.wall?.id} onchange={(e) => { app.selectWall((e.currentTarget as HTMLSelectElement).value); gameRoutes = []; }}>
+        {#each app.walls as w (w.id)}<option value={w.id}>{w.name}{w.kind === "voies" ? " (salle)" : ""}</option>{/each}
+      </select>
+    </label>
+    {#if !app.wall}<p class="warn">Aucun pan : charge ou crée-en un dans l'onglet Pan.</p>{/if}
+    {#if app.wall?.kind === "voies"}
+      {@const routes = app.wall.routes.filter((r) => !r.archived)}
+      <div class="field">
+        Voies de la partie
+        {#if routes.length === 0}
+          <p class="warn">Aucune voie en place : ajoute-les dans Pan → Gérer les voies.</p>
+        {:else}
+          <div class="route-chips">
+            {#each routes as r (r.id)}
+              <button class="route-chip" aria-pressed={gameRoutes.length === 0 || gameRoutes.includes(r.id)} onclick={() => toggleGameRoute(r.id, routes.map((x) => x.id))}>
+                <span class="dot" style:background={routeHex(r)}></span>{routeLabel(r)}
+              </button>
+            {/each}
+          </div>
+          <p class="hint">
+            {gameRoutes.length ? `${gameRoutes.length} voie(s) retenue(s).` : "Toutes les voies en place."}
+            Les blocs de la partie sont choisis parmi elles, au plus près de la cote visée.
+            {#if gameRoutes.length}<button class="link" onclick={() => (gameRoutes = [])}>Toutes</button>{/if}
+          </p>
+        {/if}
+      </div>
+    {/if}
     {#if app.ratings.players.length === 0}
       <p class="warn">Crée au moins un joueur (onglet Joueurs) pour que les cotes évoluent. Sinon, la partie se joue en invité.</p>
     {/if}
@@ -717,6 +755,36 @@
   .setup {
     max-width: 720px;
     margin: 0 auto;
+  }
+  .route-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+  .route-chip {
+    min-height: 40px;
+    padding: 0 12px;
+    border-radius: 999px;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .route-chip[aria-pressed="false"] {
+    opacity: 0.5;
+  }
+  .dot {
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    border: 1px solid var(--border);
+  }
+  .link {
+    min-height: 0;
+    padding: 0 4px;
+    border: none;
+    background: none;
+    color: var(--accent);
+    text-decoration: underline;
   }
   .resume {
     display: flex;
