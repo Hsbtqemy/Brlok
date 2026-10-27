@@ -56,12 +56,15 @@ le pan gagne des dimensions réelles et une photo redressée. Sans photo, tout f
 
 - la grille A–F × 1–7 est **tracée sur le bois** : la grille de Brlok est la grille physique ; rangée 1 en
   haut, rangée 7 en bas (côté grimpeur) ;
-- le pan porte une **vingtaine de prises**, alors que le catalogue en décrit 37 actives : le catalogue est
-  un pan « conceptuel » complet. À recaler : garder « Pan conceptuel » et créer « Pan réel » ;
-- des prises sont posées **sur la ligne du bas et sous la grille** (départ ou pieds ?) : à décider ;
+- la photo a été prise **pendant un changement de prises** : en temps normal, **chaque case porte une
+  prise**, et le catalogue est juste (pas de « pan réel » à créer) ; les prises posées sur la ligne du bas
+  étaient en cours de déplacement ;
 - fond en bois clair : la détection par couleur fonctionne bien, noir compris ;
 - il faut **les 4 coins** de la grille sur la photo (la perspective rend 3 coins insuffisants) ; comme la
   grille est tracée, ses coins pourraient être retrouvés automatiquement.
+
+Pas de nouvelle photo possible pour l'instant : l'étape 2 (pan en photo) attend une photo prise avec les
+4 coins visibles. Le pan reste décrit par sa grille, qui correspond déjà au pan physique.
 
 ### La poutre
 
