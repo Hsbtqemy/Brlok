@@ -40,3 +40,20 @@ describe("édition du pan", () => {
     expect(copy.holds).toHaveLength(1);
   });
 });
+
+describe("pan express", () => {
+  it("une prise par case, toutes au même niveau, et on peut jouer tout de suite", async () => {
+    const { expressWall, cycleLevel } = await import("./wallEdit");
+    const { generateChessBlock } = await import("./generator");
+    const { seededRng } = await import("./random");
+    const wall = expressWall("Express", 5, 4, undefined, "x");
+    expect(wall.holds).toHaveLength(20);
+    expect(new Set(wall.holds.map((h) => h.level))).toEqual(new Set([3]));
+    const block = generateChessBlock(wall, { piece: "cavalier", targetRating: 1500, length: 5, rng: seededRng(1) });
+    expect(block?.holds.length).toBeGreaterThanOrEqual(3);
+    let painted = cycleLevel(wall, { row: 0, col: 0 });
+    expect(painted.holds.find((h) => h.id === "A1")?.level).toBe(4);
+    for (let i = 0; i < 3; i++) painted = cycleLevel(painted, { row: 0, col: 0 });
+    expect(painted.holds.find((h) => h.id === "A1")?.level).toBe(1);
+  });
+});

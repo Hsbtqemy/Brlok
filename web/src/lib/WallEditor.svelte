@@ -1,6 +1,7 @@
 <script lang="ts">
   import { holdAt, holdId, MAX_LEVEL, MIN_LEVEL, type Position, type Wall } from "../core/wall";
   import {
+    cycleLevel,
     duplicateWall,
     HOLD_TYPES,
     linksOf,
@@ -26,6 +27,8 @@
   let selected = $state<Position | null>(null);
   /** Mode « enchaînement impossible » : la prochaine prise touchée est reliée à la sélection. */
   let linking = $state(false);
+  /** Peinture rapide : chaque toucher fait monter le niveau de la case. */
+  let quickPaint = $state(false);
   let customTag = $state("");
   let message = $state("");
   let rows = $state(app.wall?.rows ?? 7);
@@ -54,6 +57,11 @@
   function onCell(position: Position) {
     if (!wall) return;
     message = "";
+    if (quickPaint) {
+      save(cycleLevel(wall, position));
+      selected = position;
+      return;
+    }
     const target = holdAt(wall, position);
     if (linking && hold && target && target.id !== hold.id) {
       save(toggleForbiddenLink(wall, hold.id, target.id));
@@ -125,8 +133,17 @@
       <button class="primary" onclick={onClose}>Terminé</button>
     </div>
     {#if wall}
+      <div class="row paint">
+        <button aria-pressed={quickPaint} onclick={() => ((quickPaint = !quickPaint), (linking = false))}>
+          {quickPaint ? "Peinture rapide : activée" : "Peinture rapide"}
+        </button>
+      </div>
       <p class="hint">
-        {linking ? "Touche la prise avec laquelle l'enchaînement est impossible." : "Touche une case pour poser, modifier ou retirer une prise."}
+        {#if quickPaint}
+          Chaque toucher fait monter le niveau de la case (1 → 6, puis 1). Pratique pour noter un pan en quelques secondes.
+        {:else}
+          {linking ? "Touche la prise avec laquelle l'enchaînement est impossible." : "Touche une case pour poser, modifier ou retirer une prise."}
+        {/if}
         Les changements sont enregistrés tout de suite.
       </p>
       <PanView {wall} {onCell} {selected} linked={new Set(links)} />

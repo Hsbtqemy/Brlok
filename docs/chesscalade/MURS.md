@@ -35,6 +35,11 @@ Dans l'onglet **Pan → Modifier le pan** :
 
 Le format reste compatible avec Brlok desktop (import et export), dans la limite du niveau 5 côté desktop.
 
+**Pan express** (onglet Pan) : pour jouer tout de suite sur un pan qu'on n'a pas décrit. On donne la
+taille de la grille ; chaque case reçoit une prise de niveau 3. La difficulté vient alors des
+enchaînements, et les cotes des blocs s'ajustent en jouant. Pour affiner en quelques secondes : **peinture
+rapide** dans l'éditeur, où chaque toucher fait monter le niveau de la case (1 → 6, puis 1).
+
 ### Étape 2 — Le pan maison en photo
 
 1. **Photo** du pan (tablette) ou image importée ; elle est enregistrée avec la page.

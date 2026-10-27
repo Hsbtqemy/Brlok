@@ -91,6 +91,27 @@ export function newWall(name: string, rows: number, cols: number, id = newWallId
   return wall;
 }
 
+/** Niveau des prises d'un pan express : « moyen », faute de mieux. */
+export const EXPRESS_LEVEL = 3;
+
+/**
+ * Pan express : une prise par case, toutes au même niveau. Pour jouer tout de suite sur un pan qu'on n'a
+ * pas décrit ; la difficulté vient des enchaînements, et les cotes des blocs s'ajustent en jouant.
+ */
+export function expressWall(name: string, rows: number, cols: number, level = EXPRESS_LEVEL, id?: string): Wall {
+  let wall = newWall(name, rows, cols, id);
+  for (let row = 0; row < wall.rows; row++) {
+    for (let col = 0; col < wall.cols; col++) wall = setHold(wall, { row, col }, { level });
+  }
+  return wall;
+}
+
+/** Peinture rapide : chaque toucher fait monter le niveau de la prise (6 → 1), ou pose une prise de niveau 1. */
+export function cycleLevel(wall: Wall, position: Position): Wall {
+  const hold = holdAt(wall, position);
+  return setHold(wall, position, { level: hold ? (hold.level % 6) + 1 : 1 });
+}
+
 export function duplicateWall(wall: Wall, name: string, id = newWallId()): Wall {
   return { ...JSON.parse(JSON.stringify(wall)), id, name: name.trim() || `${wall.name} (copie)` };
 }

@@ -12,7 +12,20 @@
   import WallEditor from "./WallEditor.svelte";
   import GymEditor from "./GymEditor.svelte";
   import RouteView from "./RouteView.svelte";
-  import { newWall } from "../core/wallEdit";
+  import { EXPRESS_LEVEL, expressWall, newWall } from "../core/wallEdit";
+
+  let expressCols = $state(6);
+  let expressRows = $state(7);
+
+  /** Pan express : une prise par case, niveau moyen, pour jouer tout de suite. */
+  function createExpress() {
+    const date = new Date().toLocaleDateString("fr-FR", { day: "numeric", month: "short" });
+    const wall = expressWall(`Pan express ${expressCols}×${expressRows} (${date})`, expressRows, expressCols);
+    app.setWalls([...app.walls, wall], wall.id);
+    chessBlock = null;
+    classicSession = [];
+    message = `Pan express créé : ${wall.holds.length} prises de niveau ${EXPRESS_LEVEL}. Tu peux jouer tout de suite, ou l'affiner avec « Modifier le pan ».`;
+  }
 
   const isGym = $derived(app.wall?.kind === "voies");
   const currentRoute = $derived.by(() => {
@@ -212,6 +225,15 @@
       {/if}
       {/if}
     {/if}
+    <details class="express" open={app.walls.length === 0}>
+      <summary>Pan express</summary>
+      <p class="hint">Une prise par case, toutes de niveau moyen : pour jouer tout de suite sans décrire le pan.</p>
+      <div class="row">
+        <label class="field">Colonnes <input type="number" id="express-cols" min="2" max="26" bind:value={expressCols} /></label>
+        <label class="field">Rangées <input type="number" id="express-rows" min="2" max="30" bind:value={expressRows} /></label>
+      </div>
+      <button class="primary" onclick={createExpress}>Créer le pan express</button>
+    </details>
     <button onclick={createGym}>Nouveau mur à voies (salle)</button>
 
     {#if message}<p class="message">{message}</p>{/if}
@@ -489,6 +511,17 @@
   }
   .blocks button {
     width: 100%;
+  }
+  .express .row {
+    align-items: flex-end;
+  }
+  .express input[type="number"] {
+    width: 80px;
+  }
+  .express {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
   }
   .sector {
     display: block;
