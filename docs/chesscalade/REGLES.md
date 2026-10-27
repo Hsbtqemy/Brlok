@@ -206,8 +206,70 @@ cote_visée = cote_grimpe_du_joueur + bonus_déclencheur + bonus_niveau
 | Difficile | +150 |
 | Diabolique | +300 |
 
-Le générateur choisit ensuite les prises (niveaux 1–6, nombre de prises) dont la cote estimée est la plus
-proche de la cote visée, en respectant le motif.
+Le générateur cherche ensuite un bloc dont la **cote estimée** (§7.3) est la plus proche de la cote visée,
+en respectant le motif (§7.4).
+
+### 7.3 De la difficulté des prises à la cote du bloc
+
+On repart des niveaux déjà saisis dans les catalogues Brlok : **prises de main de 1 à 5**, **pieds de 1 à 6**
+(grille pieds 4 × 6). Mais dans Chesscalade, la difficulté d'un bloc ne se résume pas au niveau des prises :
+le **mouvement** entre deux prises compte aussi (un jeté en L n'a rien à voir avec un pas de roi).
+
+**Difficulté d'un mouvement** (d'une prise à la suivante) :
+
+```
+d = niveau de la prise d'arrivée (1–5) + coût du motif
+```
+
+| Mouvement | coût du motif |
+|---|---|
+| Roi, pion, tour ou fou à 1 case | 0 |
+| Tour, fou ou dame à 2 cases | +1 |
+| Cavalier (en L) | +1 |
+| Mouvement vers le bas ou latéral pur | +0,5 |
+
+**Cote initiale estimée d'un bloc** :
+
+```
+cote = 1500
+     + 200 × (moyenne des d − 3)        # niveau général du bloc
+     + 100 × (crux − moyenne des d)     # crux = le mouvement le plus dur
+     +  25 × (nombre de prises − 6)     # longueur
+     +  40 × (niveau moyen des pieds − 3)
+```
+
+Repères : un bloc de prises de niveau 1 en pas de roi vaut environ **1100** ; un bloc de niveau 3 vaut
+environ **1500** ; un bloc de niveau 5 en cavalier, long, vaut **2000 et plus**.
+
+Ces coefficients sont des **hypothèses de départ**. Ensuite, Glicko-2 corrige la cote réelle de chaque bloc à
+partir des réussites et des chutes. Une prise mal notée dans le catalogue se voit donc vite, et Chesscalade
+pourrait proposer de corriger son niveau.
+
+**Placement** : un nouveau joueur grimpe 5 blocs de difficulté croissante (de 1100 à 1900 environ) pour
+fixer sa cote de grimpe de départ, au lieu de partir à 1500 « à l'aveugle ».
+
+### 7.4 Algorithme de génération
+
+1. Le pan devient un **graphe** : chaque prise active est un nœud, et deux prises sont reliées si le motif de la pièce
+   permet de passer de l'une à l'autre (avec la portée max).
+2. On convertit la cote visée en **plage de niveaux** pour les prises (comme le profil de difficulté actuel de
+   Brlok : niveau cible ± tolérance), et on garde seulement les prises dans cette plage.
+3. On cherche des **chemins** dans ce graphe, de la longueur voulue. On réutilise les **répartitions** existantes de
+   Brlok (progressive, pyramide, crux…). Pour une prise, le **crux est placé en dernier** : la dernière prise,
+   c'est la pièce capturée.
+4. On calcule la cote estimée de chaque chemin candidat et on garde le plus proche de la cote visée (avec un peu
+   de hasard et la règle de variété de Brlok pour ne pas toujours grimper les mêmes blocs).
+5. **Si aucun chemin n'existe** (sur un 6 × 7, un cavalier n'a parfois que 2 ou 3 prises atteignables),
+   on assouplit dans cet ordre :
+   1. élargir la tolérance de niveau de ±1 ;
+   2. raccourcir le bloc (minimum 3 prises) ;
+   3. augmenter la portée du motif de 1 ;
+   4. en dernier recours, passer au motif **Roi**, et l'app l'indique.
+
+### 7.5 Fatigue (option)
+
+Au fil d'une partie, les bras se vident. Option possible : baisser la cote visée de **−15 par bloc déjà grimpé**
+dans la partie, pour que la fin de partie reste grimpable sans que le niveau Diabolique perde son sens.
 
 ---
 
@@ -286,6 +348,8 @@ Chaque joueur a **trois cotes** indépendantes :
 1. Les valeurs de temps (départ, recharge, limites) sont des **hypothèses** : à mesurer sur ton pan réel.
 2. Pièce épuisée pendant 2 tours : trop punitif en Modéré ? Et dans l'échelle, faut-il placer Dévié (V4) avant ou après Interdit ?
 7. Déviation courte par défaut, ou libre ?
+8. Les coûts de motif (§7.3) collent-ils à ton pan ? Par exemple, un mouvement en L y est-il vraiment plus dur qu'une diagonale à 2 cases ?
+9. Option fatigue (§7.5) : activée par défaut, ou réservée aux niveaux Facile et Modéré ?
 3. Le bloc de parade sur échec : amusant ou trop interruptif en Blitz ?
 4. En solo, le joueur doit-il aussi pouvoir faire « annuler » un coup du moteur en réussissant un bloc très dur ?
    (Mécanique de **contre-attaque**, à envisager seulement en Difficile et au-dessus.)
