@@ -38,6 +38,15 @@
       <button aria-pressed={screen === s.id} onclick={() => go(s.id)}>{s.label}</button>
     {/each}
   </nav>
+  <span class="sync" class:shared={app.syncStatus === "partage"} class:error={app.syncStatus === "erreur"} title={app.syncDetail}>
+    {app.syncStatus === "partage"
+      ? "Données partagées"
+      : app.syncStatus === "connexion"
+        ? "Connexion…"
+        : app.syncStatus === "erreur"
+          ? "Synchronisation en échec"
+          : "Données sur cet appareil"}
+  </span>
   {#if app.ratings.players.length > 0}
     <label class="player">
       Joueur
@@ -79,6 +88,21 @@
   nav {
     display: flex;
     gap: 6px;
+  }
+  .sync {
+    font-size: 0.8rem;
+    color: var(--muted);
+    padding: 4px 10px;
+    border-radius: 999px;
+    border: 1px solid var(--border);
+  }
+  .sync.shared {
+    color: #2e7d32;
+    border-color: #2e7d32;
+  }
+  .sync.error {
+    color: #c62828;
+    border-color: #c62828;
   }
   .player {
     display: flex;

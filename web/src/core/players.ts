@@ -11,6 +11,8 @@ export interface Player {
   id: string;
   name: string;
   ratings: Record<RatingKind, Rating>;
+  /** Date de création (ordre d'affichage). */
+  createdAt?: string;
 }
 
 export interface AttemptRecord {
@@ -59,6 +61,7 @@ export function createPlayer(state: RatingsState, name: string, id = newId()): R
   const player: Player = {
     id,
     name: name.trim() || "Joueur",
+    createdAt: new Date().toISOString(),
     ratings: { echecs: newRating(), grimpe: newRating(), chesscalade: newRating() },
   };
   return { ...state, players: [...state.players, player] };
