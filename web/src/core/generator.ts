@@ -6,6 +6,7 @@
  */
 import { estimateBlockRating, ratingToLevel } from "./blockRating";
 import { distributionLevels, type DistributionPattern } from "./distribution";
+import { footBonus, pickNoFootMove, type FootRule } from "./feet";
 import { PIECE_MAX_LENGTH, PIECE_MIN_LENGTH, pathFits, stepAllowed, type Piece } from "./pieces";
 import { shuffle, weightedPick, type Rng } from "./random";
 import { clampLevel, MAX_LEVEL, reachGraph, type Hold, type Wall } from "./wall";
@@ -16,6 +17,10 @@ export interface Block {
   estimatedRating: number;
   /** Assouplissements appliqués quand aucun bloc ne respectait toutes les contraintes. */
   relaxations: string[];
+  /** Règle de pieds (absente : pieds libres). Sa difficulté est comprise dans `estimatedRating`. */
+  feet?: FootRule;
+  /** « Un mouvement sans pied » : index (à partir de 1) de la prise atteinte pieds décollés. */
+  noFootMove?: number;
 }
 
 export interface ClassicOptions {
@@ -67,6 +72,8 @@ export interface ChessBlockOptions {
   tolerance?: number;
   /** Compteur d'utilisation des prises, pour varier les blocs (mis à jour par l'appelant). */
   usage?: Map<string, number>;
+  /** Règle de pieds : les prises visent une cote plus basse, la règle apporte le reste. */
+  feet?: FootRule;
   rng: Rng;
 }
 
@@ -82,6 +89,21 @@ interface Attempt {
 
 /** Génère un bloc-défi, en assouplissant les contraintes dans l'ordre de REGLES.md §7.4 si besoin. */
 export function generateChessBlock(wall: Wall, options: ChessBlockOptions): Block | null {
+  const feet = options.feet && options.feet !== "libres" ? options.feet : undefined;
+  if (!feet) return generateHandsBlock(wall, options);
+  const bonus = footBonus(feet);
+  const block = generateHandsBlock(wall, { ...options, targetRating: options.targetRating - bonus });
+  if (!block) return null;
+  return {
+    ...block,
+    feet,
+    noFootMove: feet === "sans-pied" ? pickNoFootMove(block.holds.length - 1, options.rng) : undefined,
+    estimatedRating: block.estimatedRating + bonus,
+  };
+}
+
+/** Bloc de mains seules (pieds libres). */
+function generateHandsBlock(wall: Wall, options: ChessBlockOptions): Block | null {
   const { piece, tolerance = 1 } = options;
   let length = options.length;
   if (piece) {

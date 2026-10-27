@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { FOOT_RULES } from "../core/feet";
   import type { Block } from "../core/generator";
   import { PIECES } from "../core/pieces";
   import type { Wall } from "../core/wall";
@@ -57,6 +58,15 @@
     </p>
     <PanView {wall} sequence={block.holds.map((h) => h.id)} />
     <p class="sequence">{block.holds.map((h) => h.id).join(" → ")}</p>
+    {#if block.feet}
+      {@const rule = FOOT_RULES.find((r) => r.id === block.feet)}
+      <p class="feet">
+        <strong>{rule?.label}</strong> : {rule?.description}
+        {#if block.feet === "sans-pied" && block.noFootMove}
+          Mouvement sans pied : <strong>{block.holds[block.noFootMove - 1]?.id} → {block.holds[block.noFootMove]?.id}</strong>.
+        {/if}
+      </p>
+    {/if}
     {#if block.relaxations.length > 0}<p class="warn">Assoupli : {block.relaxations.join(", ")}.</p>{/if}
   {:else}
     <p class="warn">Aucun bloc généré (pas de pan chargé ?) : grimpe un bloc libre de niveau équivalent.</p>
@@ -109,6 +119,13 @@
   .warn {
     margin: 0;
     color: var(--warn);
+  }
+  .feet {
+    margin: 0;
+    padding: 8px 10px;
+    border-left: 4px solid #6a1b9a;
+    background: var(--bg);
+    border-radius: 6px;
   }
   .actions {
     display: grid;

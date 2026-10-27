@@ -4,6 +4,7 @@
  * pour pouvoir tester sans interface ni horloge réelle.
  */
 import { Chess, type Color, type Move, type PieceSymbol, type Square } from "chess.js";
+import type { FootRule } from "./feet";
 import type { Block } from "./generator";
 import type { Piece } from "./pieces";
 
@@ -31,6 +32,8 @@ export interface GameConfig {
   engine?: { color: Color; elo: number };
   /** Famille C « intrication rythmée » (§3.5) : une cloche force un bloc à intervalle régulier. */
   bell?: boolean;
+  /** Règle de pieds des blocs (§7.6) ; « auto » (défaut) : selon le niveau de difficulté. */
+  feet?: "auto" | FootRule;
 }
 
 export interface BlockRequest {
@@ -40,6 +43,7 @@ export interface BlockRequest {
   targetRating: number;
   length: number;
   cruxLast: boolean;
+  feet?: FootRule;
 }
 
 export type BlockFactory = (request: BlockRequest) => Block | null;
@@ -160,6 +164,14 @@ export function mostActivePiece(fen: string, color: Color): Piece {
   for (const e of mobility.values()) if (!best || e.count > best.count) best = e;
   return best ? PIECE_OF[best.type] : "roi";
 }
+
+/** Règle de pieds par défaut selon le niveau (§7.6). */
+export const AUTO_FEET: Record<Difficulty, FootRule> = {
+  facile: "libres",
+  modere: "libres",
+  difficile: "mains",
+  diabolique: "sans-pied",
+};
 
 export function other(color: Color): Color {
   return color === "w" ? "b" : "w";
@@ -670,8 +682,16 @@ export class ChesscaladeGame {
     };
   }
 
+  /** Règle de pieds de la partie (la parade, courte et pressée, reste toujours pieds libres). */
+  footRule(kind: BlockKind): FootRule {
+    if (kind === "parade") return "libres";
+    const rule = this.config.feet ?? "auto";
+    return rule === "auto" ? AUTO_FEET[this.config.difficulty] : rule;
+  }
+
   private startBlock(init: { request: BlockRequest; triggers: Trigger[]; move?: Move; hard?: boolean }, now: number): void {
-    const { request } = init;
+    const request = { ...init.request, feet: this.footRule(init.request.kind) };
+    init = { ...init, request };
     const d = DIFFICULTY[this.config.difficulty];
     const baseLimit = request.kind === "parade" ? PARADE_LIMIT_MS : FORMAT[this.config.format].blockLimitMs;
     this.pending = {

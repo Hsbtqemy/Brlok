@@ -49,8 +49,8 @@ Le format reste compatible avec Brlok desktop (import et export), dans la limite
 Modèle : chaque prise garde sa case (`position`) et gagne une position réelle facultative (`x`, `y` en cm) ;
 le pan gagne des dimensions réelles et une photo redressée. Sans photo, tout fonctionne comme aujourd'hui.
 
-**Pieds** : la photo permettrait enfin de placer les prises de pied à leur vraie position (au lieu de la
-grille pieds de Brlok, aujourd'hui fusionnée dans la grille des mains). À décider.
+**Pieds** : décidé, on reste sur le placement des mains ; les pieds sont une règle de difficulté
+(REGLES.md §7.6), sans placement sur la photo.
 
 ### Étape 3 — Mur à voies (salle)
 
@@ -73,5 +73,7 @@ grille pieds de Brlok, aujourd'hui fusionnée dans la grille des mains). À déc
 ## 3. Questions ouvertes
 
 1. En salle : photographier chaque voie, ou seulement saisir une liste (« vert 5c dalle… ») ?
-2. Pieds à leur vraie position sur la photo : utile, ou les mains suffisent ?
-3. Portée réelle : une seule valeur par pan, ou une par joueur (selon sa taille) ?
+2. Portée réelle (écart max entre deux prises qui se suivent, en cm) : une valeur par pan, ou une par joueur
+   selon sa taille ou son envergure ?
+3. Photo du pan maison : idéalement d'un seul plan, de face ou presque, fond clair (test de détection par
+   couleur concluant dans ce cas ; murs peints et multi-faces : seulement des suggestions à valider).

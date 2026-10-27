@@ -3,6 +3,7 @@
   import { exportBrlok, importBrlok, type FootMerge } from "../core/brlokImport";
   import { DISTRIBUTION_PATTERNS, type DistributionPattern } from "../core/distribution";
   import { generateChessBlock, generateClassicSession, type Block } from "../core/generator";
+  import { FOOT_RULES, type FootRule } from "../core/feet";
   import { PIECES, type Piece } from "../core/pieces";
   import { seededRng } from "../core/random";
   import type { Wall } from "../core/wall";
@@ -32,6 +33,7 @@
   let targetRating = $state(Math.round(app.activePlayer?.ratings.grimpe.rating ?? 1500));
   let length = $state(6);
   let cruxLast = $state(false);
+  let feet = $state<FootRule>("libres");
   let chessBlock = $state<Block | null>(null);
   let generationFailed = $state(false);
   const usage = new Map<string, number>();
@@ -104,7 +106,7 @@
 
   function generateChess() {
     if (!app.wall) return;
-    chessBlock = generateChessBlock(app.wall, { piece, targetRating, length, cruxLast, usage, rng: seededRng(Date.now()) });
+    chessBlock = generateChessBlock(app.wall, { piece, targetRating, length, cruxLast, feet, usage, rng: seededRng(Date.now()) });
     generationFailed = chessBlock === null;
     lastDelta = null;
   }
@@ -250,12 +252,24 @@
         <input type="number" min="3" max="12" bind:value={length} />
       </label>
       <label class="check"><input type="checkbox" bind:checked={cruxLast} /> Crux en dernier (prise d'une pièce)</label>
+      <label class="field">
+        Pieds
+        <select bind:value={feet}>
+          {#each FOOT_RULES as r (r.id)}<option value={r.id}>{r.label}{r.bonus ? ` (+${r.bonus})` : ""}</option>{/each}
+        </select>
+      </label>
       <button class="primary" disabled={!app.wall} onclick={generateChess}>Générer</button>
 
       {#if chessBlock}
         <div class="result">
           <p class="sequence">{chessBlock.holds.map((h) => h.id).join(" → ")}</p>
           <p>Cote estimée : <strong>{chessBlock.estimatedRating}</strong></p>
+          {#if chessBlock.feet}
+            <p class="hint">
+              {FOOT_RULES.find((r) => r.id === chessBlock!.feet)?.label}
+              {#if chessBlock.noFootMove}: sans pied de {chessBlock.holds[chessBlock.noFootMove - 1]?.id} à {chessBlock.holds[chessBlock.noFootMove]?.id}{/if}
+            </p>
+          {/if}
           {#if chessBlock.relaxations.length > 0}
             <p class="warn">Assoupli : {chessBlock.relaxations.join(", ")}.</p>
           {/if}

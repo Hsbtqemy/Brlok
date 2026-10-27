@@ -11,6 +11,7 @@
   } from "../core/game";
   import { engineSettings, pickEngineMove } from "../core/engine";
   import { generateChessBlock } from "../core/generator";
+  import { FOOT_RULES, type FootRule } from "../core/feet";
   import { PIECES } from "../core/pieces";
   import { seededRng } from "../core/random";
   import { app } from "./appState.svelte";
@@ -42,6 +43,7 @@
   let format = $state<Format>("classique");
   let difficulty = $state<Difficulty>("modere");
   let deviation = $state<Deviation>("courte");
+  let feetRule = $state<"auto" | FootRule>("auto");
   let whiteId = $state(app.ratings.players[0]?.id ?? "");
   let blackId = $state(app.ratings.players[1]?.id ?? app.ratings.players[0]?.id ?? "");
   let fatigue = $state<Record<Color, boolean>>({ w: false, b: false });
@@ -115,7 +117,7 @@
       const players = humanColor === "w" ? { w: human, b: engine } : { w: engine, b: human };
       ids = humanColor === "w" ? { w: soloId, b: "" } : { w: "", b: soloId };
       game = new ChesscaladeGame(
-        { format, difficulty, deviation, players, engine: { color: engineColor, elo: engineElo }, bell: family === "C" },
+        { format, difficulty, deviation, players, engine: { color: engineColor, elo: engineElo }, bell: family === "C", feet: feetRule },
         makeBlock,
         Date.now(),
       );
@@ -126,7 +128,7 @@
         b: { name: nameOf(blackId), climbRating: climbRating(blackId), fatigue: fatigue.b },
       };
       ids = { w: whiteId, b: blackId };
-      game = new ChesscaladeGame({ format, difficulty, deviation, players, bell: family === "C" }, makeBlock, Date.now());
+      game = new ChesscaladeGame({ format, difficulty, deviation, players, bell: family === "C", feet: feetRule }, makeBlock, Date.now());
     }
     engineError = "";
     selected = null;
@@ -550,6 +552,19 @@
         <button aria-pressed={deviation === "courte"} onclick={() => (deviation = "courte")}>Courte</button>
         <button aria-pressed={deviation === "libre"} onclick={() => (deviation = "libre")}>Libre</button>
       </div>
+    </div>
+    <div class="field">
+      Pieds
+      <div class="row">
+        <button aria-pressed={feetRule === "auto"} onclick={() => (feetRule = "auto")}>Selon le niveau</button>
+        {#each FOOT_RULES as r (r.id)}
+          <button aria-pressed={feetRule === r.id} onclick={() => (feetRule = r.id)}>{r.label}</button>
+        {/each}
+      </div>
+      <p class="hint">
+        Selon le niveau : pieds libres en Facile et Modéré, pieds = mains en Difficile, un mouvement sans pied en Diabolique.
+        La difficulté totale ne change pas : avec une règle de pieds, les prises sont choisies plus faciles. La parade reste pieds libres.
+      </p>
     </div>
     {/if}
     <button class="primary" onclick={start}>Commencer la partie</button>

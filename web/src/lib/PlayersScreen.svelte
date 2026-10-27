@@ -110,7 +110,7 @@
             <span class="badge" class:ok={a.success}>{a.success ? "Réussi" : "Chute"}</span>
             <span><strong>{nameOf(a.playerId)}</strong> · {a.holds.join("→")}</span>
             <span class="hint">
-              {date(a.at)} · bloc {a.blockRating} · {a.ratingBefore} → {a.ratingAfter}{a.context === "partie" ? " · en partie" : a.context === "placement" ? " · placement" : ""}
+              {date(a.at)} · bloc {a.blockRating} · {a.ratingBefore} → {a.ratingAfter}{a.context === "partie" ? " · en partie" : a.context === "placement" ? " · placement" : ""}{a.feet ? ` · pieds : ${a.feet}` : ""}
             </span>
           </li>
         {/each}

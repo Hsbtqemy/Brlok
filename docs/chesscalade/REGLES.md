@@ -375,6 +375,26 @@ dans la partie, pour que la fin de partie reste grimpable.
 - **En duo**, chaque joueur a sa propre option : c'est un réglage individuel, comme un handicap.
 - Une partie où l'option a été activée reste cotée, mais l'historique le mentionne.
 
+### 7.6 Règles de pieds
+
+On place les **mains** ; les **pieds** sont une contrainte de difficulté, pas un placement de prises.
+
+| Règle | Principe | Bonus de cote |
+|---|---|---|
+| **Pieds libres** | n'importe quelle prise ou le mur | 0 |
+| **Pieds sur prises** | toute prise, mais pas le mur nu | +50 |
+| **Pieds = mains** | les pieds seulement sur les prises du bloc | +150 |
+| **Un mouvement sans pied** | un passage désigné par l'app (jamais le départ si le bloc est assez long) se fait pieds décollés | +250 |
+
+- En partie, la règle est choisie au lancement ; par défaut **selon le niveau** : pieds libres en Facile et
+  Modéré, pieds = mains en Difficile, un mouvement sans pied en Diabolique. La **parade** reste toujours
+  pieds libres.
+- La règle **ne change pas la difficulté totale** visée : les prises sont choisies plus faciles d'autant
+  (cote visée des prises = cote visée − bonus), et la règle apporte le reste.
+- Le même enchaînement avec une autre règle de pieds est **un autre bloc**, avec sa propre cote.
+- Les rounds (familles A et B) restent en pieds libres.
+- Piste : une chute pourrait aussi **durcir la règle de pieds du prochain bloc** au lieu de coûter du temps.
+
 ---
 
 ## 8. Cotes (Glicko-2, système de Lichess)

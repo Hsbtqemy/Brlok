@@ -25,6 +25,8 @@ export interface AttemptRecord {
   holds: string[];
   success: boolean;
   context: "libre" | "partie" | "placement";
+  /** Règle de pieds du bloc (absente : pieds libres). */
+  feet?: string;
   ratingBefore: number;
   ratingAfter: number;
   blockRating: number;
@@ -74,13 +76,22 @@ export function removePlayer(state: RatingsState, id: string): RatingsState {
   return { ...state, players: state.players.filter((p) => p.id !== id) };
 }
 
-export function blockKey(wallId: string, holds: readonly string[]): string {
-  return `${wallId}:${holds.join("-")}`;
+/** Clé d'un bloc : pan, prises, et règle de pieds (le même enchaînement pieds = mains est un autre bloc). */
+export function blockKey(wallId: string, holds: readonly string[], feet?: string, noFootMove?: number): string {
+  const suffix = feet && feet !== "libres" ? `~${feet}${feet === "sans-pied" && noFootMove ? noFootMove : ""}` : "";
+  return `${wallId}:${holds.join("-")}${suffix}`;
 }
 
+const keyOf = (wallId: string, block: Block) =>
+  blockKey(
+    wallId,
+    block.holds.map((h) => h.id),
+    block.feet,
+    block.noFootMove,
+  );
+
 export function blockRating(state: RatingsState, wallId: string, block: Block): Rating {
-  const ids = block.holds.map((h) => h.id);
-  return state.blocks[blockKey(wallId, ids)] ?? { rating: block.estimatedRating, rd: NEW_BLOCK_RD, volatility: 0.06 };
+  return state.blocks[keyOf(wallId, block)] ?? { rating: block.estimatedRating, rd: NEW_BLOCK_RD, volatility: 0.06 };
 }
 
 /** Une tentative de bloc = un match joueur contre bloc : les deux cotes bougent. */
@@ -96,7 +107,7 @@ export function recordBlockAttempt(
   const player = state.players.find((p) => p.id === playerId);
   if (!player || block.holds.length === 0) return { state, delta: 0 };
   const ids = block.holds.map((h) => h.id);
-  const key = blockKey(wallId, ids);
+  const key = keyOf(wallId, block);
   const before = player.ratings.grimpe;
   const blockBefore = blockRating(state, wallId, block);
   const updated = recordAttempt(before, blockBefore, success);
@@ -108,6 +119,7 @@ export function recordBlockAttempt(
     holds: ids,
     success,
     context,
+    ...(block.feet ? { feet: block.feet } : {}),
     ratingBefore: Math.round(before.rating),
     ratingAfter: Math.round(updated.climber.rating),
     blockRating: Math.round(blockBefore.rating),
@@ -143,7 +155,7 @@ export function recordPlacement(
   for (const { block, result } of attempts) {
     const ids = block.holds.map((h) => h.id);
     if (ids.length === 0) continue;
-    const key = blockKey(wallId, ids);
+    const key = keyOf(wallId, block);
     const current = blocks[key] ?? { rating: block.estimatedRating, rd: NEW_BLOCK_RD, volatility: 0.06 };
     blocks[key] = updateRating(current, [{ opponent: rating, score: result.success ? 0 : 1 }]);
     records.push({
