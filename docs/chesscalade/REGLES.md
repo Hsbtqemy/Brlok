@@ -326,7 +326,10 @@ fixer sa cote de grimpe de départ, au lieu de partir à 1500 « à l'aveugle »
 5. **Si aucun chemin ne convient**, on assouplit dans cet ordre :
    1. élargir la tolérance de niveau de ±1 ;
    2. raccourcir le bloc (minimum 3 prises) ;
-   3. relâcher la forme imposée par la pièce, et l'app l'indique.
+   3. relâcher la forme imposée par la pièce ;
+   4. en dernier recours (mur trop pauvre au niveau visé), ignorer le niveau visé.
+
+   L'app indique toujours les assouplissements appliqués.
 
 ### 7.5 Fatigue (option)
 

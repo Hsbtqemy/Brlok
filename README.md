@@ -6,6 +6,18 @@ Application d'entraînement bloc sur pan domestique — génération de séances
 
 ---
 
+## Deux versions
+
+| Version | Dossier | Statut |
+|---|---|---|
+| **Brlok desktop** (Python, PySide6) | `brlok/` | stable |
+| **Brlok web · Chesscalade** (TypeScript, Svelte) | `web/` | prototype — voir [`web/README.md`](web/README.md) |
+
+Les deux partagent le même format de catalogue (`catalog_collection.json`). Règles du mode Chesscalade :
+[`docs/chesscalade/REGLES.md`](docs/chesscalade/REGLES.md).
+
+---
+
 ## Installation
 
 ```bash
