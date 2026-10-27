@@ -19,5 +19,8 @@
     "vitest": "^3.2.7"
   },
   "private": true,
-  "type": "module"
+  "type": "module",
+  "dependencies": {
+    "chess.js": "^1.4.0"
+  }
 }

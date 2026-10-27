@@ -23,9 +23,9 @@ npm run build     # version statique dans dist/
 |---|---|
 | `src/core/` | Logique sans interface : modèle de mur générique, import/export Brlok, générateurs, Glicko-2 |
 | `src/lib/` | Composants et utilitaires d'interface |
-| `src/App.svelte` | Écran principal |
+| `src/App.svelte` | Navigation entre les écrans Pan, Partie, Joueurs |
 
-## État (v0.1)
+## État (v0.2)
 
 - [x] Modèle de mur générique (grille de taille quelconque, niveaux 1–6, portée, enchaînements interdits)
 - [x] Import de `catalog_collection.json` avec fusion de la grille pieds (niveau max gardé)
@@ -34,5 +34,9 @@ npm run build     # version statique dans dist/
 - [x] Générateur de blocs-défis Chesscalade (caractère des pièces, cote visée, crux en dernier, assouplissements)
 - [x] Glicko-2 (vérifié sur l'exemple de Glickman)
 - [ ] Timer, journal, favoris, templates (parité avec Brlok desktop)
-- [ ] Profils de joueurs et cotes enregistrées
-- [ ] Plateau d'échecs et partie Chesscalade
+- [x] Profils de joueurs, trois cotes (grimpe, échecs, Chesscalade), cote des blocs, journal
+- [x] Partie Chesscalade en duo, famille D « intrication » : pendule verticale, recharges, coups en suspens,
+      verdicts V0–V6, déviation courte/libre, parade, bloc du mat, fatigue, garde-fous §6
+- [ ] Placement (5 blocs pour fixer la cote de départ)
+- [ ] Solo contre un moteur (Maia / Stockfish), contre-attaque
+- [ ] Familles A, B, C (rounds, duels au mur)

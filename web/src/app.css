@@ -71,3 +71,76 @@ input[type="number"] {
   border: 1px solid var(--border);
   background: var(--surface);
 }
+
+/* Briques partagées entre les écrans */
+.panel {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+}
+
+.panel h2 {
+  margin: 0;
+  font-size: 1.1rem;
+}
+
+.row {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 0.9rem;
+}
+
+.check {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  font-size: 0.9rem;
+}
+
+.hint {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.warn {
+  margin: 0;
+  color: var(--warn);
+}
+
+button.success,
+button.fall {
+  min-height: 56px;
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: #fff;
+  border: none;
+}
+
+button.success {
+  background: #2e7d32;
+}
+
+button.fall {
+  background: #c62828;
+}
+
+input[type="text"] {
+  min-height: 40px;
+  padding: 0 10px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+}
