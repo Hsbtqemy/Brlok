@@ -33,9 +33,23 @@ On joue **seul** (contre un moteur) ou **à deux** (sur le même mur, avec une s
 
 ---
 
-## 3. Formats de partie
+## 3. Familles de modes
 
-Deux rythmes, plus une variante.
+### 3.1 Du chessboxing à l'intrication
+
+Tous les modes partagent les mêmes briques (verdicts, caractère des pièces, cotes, niveaux de difficulté).
+Ce qui les distingue, c'est **ce qui déclenche la grimpe** et **la force du lien** entre échecs et mur.
+
+| Famille | Ce qui déclenche la grimpe | Lien échecs ↔ mur | Pour qui |
+|---|---|---|---|
+| **A. Alternance pure** | la cloche (rounds fixes) | seulement le score final | découverte, le plus proche du chessboxing |
+| **B. Rounds couplés** | la cloche | blocs tirés de la position, bonus d'un round à l'autre | intermédiaire |
+| **C. Intrication rythmée** | les événements de la partie **et** une cloche | fort | joueurs prudents qui éviteraient les prises |
+| **D. Intrication** | les événements de la partie (§4, §5) | maximal | le cœur de Chesscalade |
+
+Chaque famille se joue en **Blitz** ou en **Classique**, et à l'un des 4 niveaux de difficulté.
+
+### 3.2 Les rythmes (familles C et D)
 
 | | **Blitz Chesscalade** | **Classique Chesscalade** |
 |---|---|---|
@@ -47,12 +61,59 @@ Deux rythmes, plus une variante.
 | Déclencheurs actifs | prise d'une pièce (pion exclu), promotion | toute prise, échec, promotion, roque, mat |
 | Recharge | 1 tous les 5 coups, +30 s | 1 tous les 5 coups, +60 s (bloc dur : +90 s) |
 
-**Variante « Rounds » (chessboxing augmenté)** : alternance de rounds de 3 min d'échecs et de rounds de
-grimpe. Le bloc du round de grimpe est généré à partir de la position (la pièce la plus active de chaque
-joueur donne le caractère du bloc). Le meilleur résultat au mur offre un bonus pour le round d'échecs suivant :
-+30 s ou un **joker** (un indice du moteur).
 
----
+### 3.3 Familles A et B : les rounds
+
+| | Blitz | Classique |
+|---|---|---|
+| Round d'échecs | 2 min | 4 min |
+| Round de mur | 2 min | 3 min |
+| Nombre de rounds max | 3 + 3 | 5 + 5 |
+| Pendule d'échecs (par joueur) | 3 min au total | 10 min au total |
+
+- On commence par un round d'échecs. Pendant un round de mur, **le plateau est figé**, mais les joueurs
+  peuvent le regarder et réfléchir.
+- Le round de mur est un **duel au mur** (§3.4).
+
+**Comment on gagne** (comme en chessboxing) :
+
+1. **Mat** ou **abandon** aux échecs ;
+2. **Temps** : pendule d'échecs à zéro ;
+3. **Abandon au mur** (l'équivalent du KO) : perdre 3 duels au mur de suite ;
+4. **Aux points** : si la partie d'échecs est nulle ou inachevée à la fin des rounds, le joueur qui a gagné
+   le plus de duels au mur l'emporte. Égalité parfaite → nulle.
+
+**Famille B (rounds couplés)**, en plus :
+
+- le bloc du duel au mur est **tiré de la position** : la pièce la plus active de chaque joueur donne le
+  caractère du bloc (§7.1) ;
+- le gagnant du duel au mur reçoit un **bonus** pour le round d'échecs suivant, à choisir : **+30 s** de
+  pendule, un **joker** (un indice du moteur, une fois par partie), ou le droit de **jouer en premier** dans
+  le round suivant si c'est son tour (sinon +30 s).
+
+### 3.4 Duels au mur (un seul pan, on grimpe à tour de rôle)
+
+En chessboxing, les deux boxent en même temps. Sur un pan, on grimpe **un à la fois** : le duel au mur se
+joue donc au tour par tour. Trois formats, au choix au lancement :
+
+| Duel | Principe | Qui gagne |
+|---|---|---|
+| **Ajoute une prise** | A grimpe un départ de 3 prises. B le répète et **ajoute une prise**. A répète tout et en ajoute une, etc. La prise ajoutée doit respecter le caractère de la pièce tirée au sort pour le round. | Le premier qui tombe ou se trompe perd |
+| **Même bloc** | L'app génère un bloc, chacun le tente à son tour (comme en compétition de bloc). | Moins de tentatives ; à égalité, la prise la plus haute atteinte |
+| **Bloc imposé** | Chacun compose le bloc que l'autre devra grimper, avec un **budget de difficulté** (une cote max fixée par l'app). | Celui qui réussit le bloc adverse ; si les deux réussissent ou tombent, on recommence avec +100 de budget |
+
+Le temps du round de mur borne le duel : à la fin du temps, le duel en cours est départagé comme pour
+« Même bloc » (prise la plus haute).
+
+**En solo**, le duel au mur se joue contre un **score cible** calculé à partir de la cote de grimpe du
+joueur (par exemple, pour « Ajoute une prise » : atteindre une longueur de bloc donnée).
+
+### 3.5 Famille C : l'intrication rythmée
+
+On joue la famille D (événements, pendule verticale, verdicts), mais une **cloche** sonne toutes les
+**4 minutes** (Blitz) ou **8 minutes** (Classique) de jeu : chaque joueur doit alors grimper un bloc
+« cloche », sur le caractère de sa pièce la plus active. En cas de chute, pénalité de temps selon le niveau.
+Ça empêche un joueur de fuir toutes les prises pour ne jamais grimper.
 
 ## 4. La pendule verticale
 
