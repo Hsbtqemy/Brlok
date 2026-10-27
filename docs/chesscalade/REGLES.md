@@ -342,7 +342,7 @@ Chaque joueur a **trois cotes** indépendantes :
    Elle tombe encore → compteur 2 → **V3 : Annulé**. Elle doit jouer un autre coup.
    Elle tente alors **Dxd8** et tombe une troisième fois → compteur 3 → **V4 : Interdit**. La prise est
    retirée et sa dame est épuisée pendant 1 tour : Alice doit jouer une autre pièce.
-   (En Difficile, une quatrième chute aurait donné **V5 : Dévié** : la dame aurait dû bouger quand même, sur la
+   (En Difficile, cette troisième chute aurait donné **V5 : Dévié** : la dame aurait dû bouger quand même, sur la
    case légale la plus proche de d8, par exemple **Dd7**.)
 5. Coup 10 : Alice demande une **recharge**. Sa pendule tourne, elle réussit en 50 s → +60 s, soit +10 s net.
 6. Coup 15 : Bruno se fait mettre en échec et grimpe un bloc de parade de 20 s. Il réussit : rien ne change.
