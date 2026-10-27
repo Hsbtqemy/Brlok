@@ -72,9 +72,23 @@
     }
   }
 
+  /** Copie du JSON exporté : repli quand le téléchargement est bloqué (page intégrée). */
+  let exportJson = $state<string | null>(null);
+
+  async function copyExport() {
+    if (!exportJson) return;
+    try {
+      await navigator.clipboard.writeText(exportJson);
+      message = "JSON copié : colle-le dans un fichier catalog_collection.json.";
+    } catch {
+      message = "Copie refusée : sélectionne le texte ci-dessous et copie-le à la main.";
+    }
+  }
+
   function exportFile() {
     const { data, clamped } = exportBrlok(app.walls, app.wall?.id);
-    const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+    exportJson = JSON.stringify(data, null, 2);
+    const blob = new Blob([exportJson], { type: "application/json" });
     const a = document.createElement("a");
     a.href = URL.createObjectURL(blob);
     a.download = "catalog_collection.json";
@@ -161,6 +175,10 @@
         <input type="number" min="1" max="4" value={app.wall.reach} onchange={(e) => app.updateWall({ reach: Number((e.currentTarget as HTMLInputElement).value) })} />
       </label>
       <button onclick={exportFile}>Exporter pour Brlok desktop</button>
+      {#if exportJson}
+        <button onclick={copyExport}>Copier le JSON exporté</button>
+        <textarea class="export" readonly rows="4" aria-label="JSON exporté">{exportJson}</textarea>
+      {/if}
     {/if}
 
     {#if message}<p class="message">{message}</p>{/if}
@@ -317,6 +335,14 @@
     inset: 0;
     opacity: 0;
     cursor: pointer;
+  }
+  .export {
+    width: 100%;
+    font: 0.75rem ui-monospace, monospace;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: var(--bg);
+    color: var(--text);
   }
   .message {
     margin: 0;

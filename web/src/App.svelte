@@ -65,7 +65,9 @@
     align-items: center;
     justify-content: space-between;
     gap: 12px;
-    padding: 12px 16px;
+    padding-block: 12px;
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
   }
   h1 {
     margin: 0;
@@ -85,6 +87,8 @@
     font-size: 0.9rem;
   }
   main {
-    padding: 0 16px 24px;
+    padding-block: 0 24px;
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
   }
 </style>

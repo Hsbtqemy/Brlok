@@ -9,6 +9,8 @@
   ];
 
   let name = $state("");
+  /** Suppression en deux temps (pas de boîte de dialogue : elle n'est pas disponible partout). */
+  let confirmDelete = $state<string | null>(null);
 
   function add() {
     if (!name.trim()) return;
@@ -18,8 +20,12 @@
     name = "";
   }
 
-  function remove(id: string, playerName: string) {
-    if (!confirm(`Supprimer ${playerName} ? Ses cotes seront perdues (le journal est conservé).`)) return;
+  function remove(id: string) {
+    if (confirmDelete !== id) {
+      confirmDelete = id;
+      return;
+    }
+    confirmDelete = null;
     app.setRatings(removePlayer($state.snapshot(app.ratings), id));
     if (app.activePlayerId === id) app.selectPlayer(null);
   }
@@ -65,7 +71,11 @@
                   <span class="rd">±{Math.round(p.ratings[k.id].rd * 2)}</span>
                 </td>
               {/each}
-              <td><button class="remove" onclick={() => remove(p.id, p.name)} aria-label={`Supprimer ${p.name}`}>✕</button></td>
+              <td>
+                <button class="remove" class:armed={confirmDelete === p.id} onclick={() => remove(p.id)} aria-label={`Supprimer ${p.name}`}>
+                  {confirmDelete === p.id ? "Supprimer ?" : "✕"}
+                </button>
+              </td>
             </tr>
           {/each}
         </tbody>
@@ -147,6 +157,12 @@
     min-height: 36px;
     padding: 0 10px;
     color: var(--muted);
+    white-space: nowrap;
+  }
+  .remove.armed {
+    color: #fff;
+    background: #c62828;
+    border-color: #c62828;
   }
   .journal {
     list-style: none;

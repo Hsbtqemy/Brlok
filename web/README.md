@@ -15,7 +15,12 @@ npm run dev       # http://localhost:5173
 npm test          # tests du cœur (src/core)
 npm run check     # vérification TypeScript / Svelte
 npm run build     # version statique dans dist/
+npm run build:single   # une seule page HTML autonome dans dist-single/ (tablette, page partagée)
+node scripts/artifact-page.mjs <sortie.html>   # adapte dist-single pour une page claude.ai
 ```
+
+Sur une tablette, sans serveur : ouvrir la page autonome, ou lancer `npm run dev -- --host` sur un
+ordinateur du même réseau et ouvrir l'adresse affichée.
 
 ## Organisation
 

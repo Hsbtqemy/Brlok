@@ -12,7 +12,7 @@
 }
 
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme="light"]) {
     --bg: #161618;
     --surface: #222226;
     --text: #ececef;
@@ -23,6 +23,19 @@
     --warn: #f0b45b;
     color-scheme: dark;
   }
+}
+
+/* Thème sombre choisi explicitement (même valeurs). */
+:root[data-theme="dark"] {
+  --bg: #161618;
+  --surface: #222226;
+  --text: #ececef;
+  --muted: #a0a0a8;
+  --border: #44444b;
+  --inactive: #33333a;
+  --accent: #5b9cf0;
+  --warn: #f0b45b;
+  color-scheme: dark;
 }
 
 * {

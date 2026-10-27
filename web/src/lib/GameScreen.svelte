@@ -89,6 +89,20 @@
     return () => clearInterval(id);
   });
 
+  // Écran allumé pendant la partie (la tablette reste au pied du mur). Refus toléré.
+  $effect(() => {
+    if (!game) return;
+    let lock: { release: () => Promise<void> } | null = null;
+    const nav = navigator as Navigator & { wakeLock?: { request: (t: "screen") => Promise<{ release: () => Promise<void> }> } };
+    nav.wakeLock
+      ?.request("screen")
+      .then((l) => (lock = l))
+      .catch(() => {});
+    return () => {
+      lock?.release().catch(() => {});
+    };
+  });
+
   // Fin de partie : cote Chesscalade (une seule fois).
   $effect(() => {
     void version;
