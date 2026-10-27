@@ -217,20 +217,20 @@ en respectant le caractère de la pièce (§7.4).
 ### 7.3 De la difficulté des prises à la cote du bloc
 
 La difficulté repose **au maximum sur les niveaux déjà saisis** dans les catalogues Brlok : chaque prise de main
-a un niveau de **1 à 5**. (La grille pieds de Brlok n'est pas utilisée : sur le pan réel, les « pieds » sont
+a un niveau de **1 à 6** (Brlok desktop limite les mains à 5 ; la version web passe à 6, et les catalogues existants restent valides). (La grille pieds de Brlok n'est pas utilisée : sur le pan réel, les « pieds » sont
 des prises centrales déjà présentes dans la grille des mains. À vérifier sur le catalogue.)
 
 **Cote initiale estimée d'un bloc** :
 
 ```
 cote = 1500
-     + 200 × (niveau moyen des prises − 3)    # niveau général du bloc
+     + 200 × (niveau moyen des prises − 3,5)  # niveau général du bloc
      + 100 × (niveau max − niveau moyen)       # crux = la prise la plus dure
      +  25 × (nombre de prises − 6)            # longueur
 ```
 
-Repères : un bloc de prises de niveau 1 vaut environ **1100** ; un bloc de niveau 3 vaut environ **1500** ;
-un bloc long de niveau 5 vaut **1900 et plus**.
+Repères : chaque niveau vaut 200 points. Un bloc de prises de niveau 1 vaut environ **1000**, un bloc de
+niveau 3 environ **1400**, un bloc de niveau 6 environ **2000**, et plus s'il est long.
 
 Ce que la formule ne voit pas, c'est la difficulté des **enchaînements** (deux prises faciles peuvent faire
 un mouvement très dur). On ne tente pas de la deviner : **Glicko-2 l'apprend**. La cote réelle de chaque bloc
@@ -239,7 +239,7 @@ se corrige à partir des réussites et des chutes. Plus tard, on pourra en dédu
 
 Une prise mal notée dans le catalogue se repère aussi : Chesscalade pourra proposer de corriger son niveau.
 
-**Placement** : un nouveau joueur grimpe 5 blocs de difficulté croissante (de 1100 à 1900 environ) pour
+**Placement** : un nouveau joueur grimpe 5 blocs de difficulté croissante (de 1000 à 2000 environ) pour
 fixer sa cote de grimpe de départ, au lieu de partir à 1500 « à l'aveugle ».
 
 ### 7.4 Algorithme de génération
