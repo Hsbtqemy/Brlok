@@ -6,6 +6,7 @@ const WALLS_KEY = "brlok-web:walls";
 const ACTIVE_KEY = "brlok-web:active-wall";
 const RATINGS_KEY = "brlok-web:ratings";
 const ACTIVE_PLAYER_KEY = "brlok-web:active-player";
+const LIVE_GAME_KEY = "brlok-web:live-game";
 
 function read<T>(key: string, fallback: T): T {
   try {
@@ -32,3 +33,5 @@ export const loadRatings = (): RatingsState => ({ ...emptyRatingsState(), ...rea
 export const saveRatings = (state: RatingsState): void => write(RATINGS_KEY, state);
 export const loadActivePlayerId = (): string | null => read(ACTIVE_PLAYER_KEY, null);
 export const saveActivePlayerId = (id: string | null): void => write(ACTIVE_PLAYER_KEY, id);
+export const loadLiveGame = <T>(): T | null => read<T | null>(LIVE_GAME_KEY, null);
+export const saveLiveGame = (game: unknown): void => write(LIVE_GAME_KEY, game);

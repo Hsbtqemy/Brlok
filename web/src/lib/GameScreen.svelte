@@ -93,6 +93,25 @@
     refresh();
   }
 
+  /** Reprend la partie sauvegardée (après un rechargement, ou depuis un autre appareil). */
+  function resume() {
+    const live = app.liveGame;
+    if (!live) return;
+    game = ChesscaladeGame.restore(live.game, makeBlock, Date.now());
+    ids = { ...live.ids };
+    humanColor = live.humanColor;
+    flipped = !!game.config.engine && humanColor === "b";
+    engineError = "";
+    selected = null;
+    gameRecorded = false;
+    lastDelta = null;
+    refresh();
+  }
+
+  function discardSaved() {
+    app.saveGame(null);
+  }
+
   function climbRating(id: string): number {
     return Math.round(app.ratings.players.find((p) => p.id === id)?.ratings.grimpe.rating ?? 1500);
   }
@@ -151,6 +170,18 @@
         app.recordGame(ids.w, ids.b, score, REASON_LABEL[game.result.reason]);
       }
     }
+  });
+
+  // Sauvegarde après chaque action ; effacée quand la partie est terminée.
+  $effect(() => {
+    void version;
+    const g = game;
+    if (!g) return;
+    if (g.result) {
+      if (app.liveGame) app.saveGame(null);
+      return;
+    }
+    app.saveGame({ game: g.save(Date.now()), ids: { ...ids }, humanColor });
   });
 
   // --- Moteur (solo) ---
@@ -319,6 +350,21 @@
 
 {#if !game || !view}
   <section class="panel setup">
+    {#if app.liveGame}
+      {@const lg = app.liveGame}
+      <div class="resume">
+        <div>
+          <strong>Partie en cours</strong> : {lg.game.config.players.w.name} – {lg.game.config.players.b.name},
+          {lg.game.moves.length} demi-coup(s), {lg.game.config.format === "blitz" ? "Blitz" : "Classique"}
+          · sauvegardée le {new Date(lg.game.savedAt).toLocaleString("fr-FR", { dateStyle: "short", timeStyle: "short" })}
+        </div>
+        <div class="row">
+          <button class="primary" onclick={resume}>Reprendre la partie</button>
+          <button onclick={discardSaved}>Supprimer</button>
+        </div>
+        <p class="hint">Les pendules repartent de leur temps sauvegardé. Commencer une nouvelle partie remplace celle-ci.</p>
+      </div>
+    {/if}
     <h2>Nouvelle partie Chesscalade</h2>
     <p class="hint">Famille D « intrication » (REGLES.md §4 à §6). Les blocs sont générés sur le pan actif{app.wall ? ` (${app.wall.name})` : " — aucun pan chargé"}.</p>
     {#if app.ratings.players.length === 0}
@@ -547,6 +593,14 @@
   .setup {
     max-width: 720px;
     margin: 0 auto;
+  }
+  .resume {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 12px;
+    border-radius: 10px;
+    border: 2px solid var(--accent);
   }
   .grid {
     display: grid;

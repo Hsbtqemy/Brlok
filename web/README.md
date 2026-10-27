@@ -46,4 +46,5 @@ ordinateur du même réseau et ouvrir l'adresse affichée.
 - [x] Placement (5 blocs adaptatifs pour fixer la cote de grimpe de départ)
 - [x] Stockage partagé quand l'app tourne comme page claude.ai (capacité `db`)
 - [x] Solo contre Stockfish (force 400–2800), blocs de défense, contre-attaque
+- [x] Partie en cours sauvegardée à chaque action, reprise après rechargement ou sur un autre appareil
 - [ ] Familles A, B, C (rounds, duels au mur)

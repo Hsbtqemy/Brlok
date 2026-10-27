@@ -9,6 +9,7 @@
  *   walls/<id>                   un pan
  *   journal/attempts-AAAA-MM     tentatives du mois (regroupées : pas un document par tentative)
  *   journal/games                parties
+ *   live/current                 partie en cours (pour la reprendre après un rechargement)
  *   meta/init                    marque la première mise en commun (reprise des données locales)
  */
 import type { Rating } from "../core/glicko2";
@@ -41,7 +42,7 @@ interface Db {
 
 export type SyncStatus = "local" | "connexion" | "partage" | "erreur";
 
-const COLLECTIONS = ["players", "blocks", "walls", "journal"] as const;
+const COLLECTIONS = ["players", "blocks", "walls", "journal", "live"] as const;
 type CollectionName = (typeof COLLECTIONS)[number];
 
 const MONTH_LIMIT = 1000;
@@ -64,6 +65,7 @@ interface Handlers {
   onRatings(state: RatingsState): void;
   onWalls(walls: Wall[]): void;
   onStatus(status: SyncStatus, detail?: string): void;
+  onLiveGame(game: Body | null): void;
 }
 
 export class SharedStore {
@@ -78,6 +80,7 @@ export class SharedStore {
   private walls = new Map<string, Wall>();
   private months = new Map<string, AttemptRecord[]>();
   private games: GameRecord[] = [];
+  private liveGame: Body | null = null;
 
   constructor(private readonly handlers: Handlers) {}
 
@@ -125,6 +128,9 @@ export class SharedStore {
         );
         this.games = (docs.find((d) => d.id === "games")?.body.items as GameRecord[]) ?? [];
         break;
+      case "live":
+        this.liveGame = docs.find((d) => d.id === "current")?.body ?? null;
+        break;
     }
     if (!snap.metadata.fromCache) this.loaded.add(name);
 
@@ -154,6 +160,7 @@ export class SharedStore {
       // Le stockage partagé fait foi.
       this.emit("players");
       this.emit("walls");
+      this.emit("live");
       this.handlers.onStatus("partage");
     } catch (e) {
       this.handlers.onStatus("erreur", e instanceof Error ? e.message : String((e as { message?: string })?.message ?? e));
@@ -161,6 +168,10 @@ export class SharedStore {
   }
 
   private emit(name: CollectionName) {
+    if (name === "live") {
+      this.handlers.onLiveGame(this.liveGame);
+      return;
+    }
     if (name === "walls") {
       this.handlers.onWalls([...this.walls.values()].sort((a, b) => a.name.localeCompare(b.name)));
       return;
@@ -222,6 +233,13 @@ export class SharedStore {
       writes.push(this.write("journal/games", { items: this.games }));
     }
     await Promise.all(writes);
+  }
+
+  /** Partie en cours (null : aucune). */
+  async saveLiveGame(game: Body | null): Promise<void> {
+    if (!this.db) return;
+    this.liveGame = game;
+    await this.write("live/current", game);
   }
 
   async syncWalls(prev: Wall[], next: Wall[]): Promise<void> {

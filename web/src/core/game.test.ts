@@ -273,3 +273,58 @@ describe("réglage du moteur", () => {
     expect(uciCommands("fen", engineSettings(1500), ["e2e4", "d2d4"]).at(-1)).toBe("go movetime 700 searchmoves e2e4 d2d4");
   });
 });
+
+describe("sauvegarde et reprise", () => {
+  it("reprend une partie avec son état complet, à travers du JSON", () => {
+    const { game } = setup("classique", "modere");
+    playLine(game, ["e2e4", "d7d5"]);
+    game.play("e4", "d5", undefined, 0);
+    game.blockResult(false, 0); // V2 : pion épuisé
+    playLine(game, ["g8f6"]);
+    game.play("b1", "c3", undefined, 0);
+    playLine(game, ["f6d5"]); // prise : bloc-défi en suspens côté Noirs
+    expect(game.phase).toBe("move");
+    game.play("c3", "d5", undefined, 10_000); // Cxd5 : bloc-défi en suspens
+    expect(game.phase).toBe("block");
+
+    const saved = JSON.parse(JSON.stringify(game.save(20_000)));
+    const restored = ChesscaladeGame.restore(saved, () => null, 1_000_000);
+    expect(restored.chess.fen()).toBe(game.chess.fen());
+    expect(restored.phase).toBe("block");
+    expect(restored.pending?.move?.san).toBe("Nxd5");
+    expect(restored.pending?.startedAt).toBe(1_000_000);
+    expect(restored.consecutiveFalls).toEqual(game.consecutiveFalls);
+    expect(restored.clock.remainingAt("w", 1_000_000)).toBe(game.clock.remainingAt("w", 20_000));
+    restored.blockResult(true, 1_000_000);
+    expect(restored.chess.get("d5")?.type).toBe("n");
+    expect(restored.turn).toBe("b");
+  });
+
+  it("reprend une déviation en attente", () => {
+    const { game } = setup("classique", "diabolique");
+    playLine(game, ["e2e4", "d7d5", "d2d4", "c8f5", "b1c3"]);
+    game.consecutiveFalls.b = 3;
+    game.play("f5", "e4", undefined, 0);
+    game.blockResult(false, 0);
+    const restored = ChesscaladeGame.restore(JSON.parse(JSON.stringify(game.save(0))), () => null, 0);
+    expect(restored.phase).toBe("deviation");
+    expect(restored.deviation?.options.map((m) => m.lan)).toEqual(game.deviation?.options.map((m) => m.lan));
+    restored.chooseDeviation(restored.deviation!.options[0].to, 0);
+    expect(restored.turn).toBe("w");
+  });
+
+  it("reprend une contre-attaque en cours (coup du moteur déjà joué)", () => {
+    const { game } = setup("classique", "difficile", {
+      players: { w: { name: "Alice", climbRating: 1500, fatigue: false }, b: { name: "SF", climbRating: 0, fatigue: false } },
+      engine: { color: "b", elo: 1500 },
+    });
+    playLine(game, ["e2e4", "e7e5"]);
+    game.requestCounterAttack(0);
+    const restored = ChesscaladeGame.restore(JSON.parse(JSON.stringify(game.save(0))), () => null, 0);
+    expect(restored.pending?.move?.lan).toBe("e7e5");
+    restored.blockResult(true, 0);
+    expect(restored.chess.get("e7")?.type).toBe("p");
+    expect(restored.isEngineTurn()).toBe(true);
+    expect(restored.engineCandidates()).not.toContain("e7e5");
+  });
+});

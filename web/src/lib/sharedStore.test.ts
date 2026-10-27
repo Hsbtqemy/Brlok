@@ -53,6 +53,7 @@ function setup(db: unknown) {
     onRatings: (r) => (seen.ratings = r),
     onWalls: (w) => (seen.walls = w),
     onStatus: (s) => seen.status.push(s),
+    onLiveGame: () => {},
   });
   return { store, seen };
 }
@@ -114,7 +115,7 @@ describe("stockage partagé", () => {
   it("reste en local hors page claude.ai", async () => {
     (globalThis as unknown as { window: unknown }).window = {};
     const seen: SyncStatus[] = [];
-    const store = new SharedStore({ onRatings: () => {}, onWalls: () => {}, onStatus: (s) => seen.push(s) });
+    const store = new SharedStore({ onRatings: () => {}, onWalls: () => {}, onStatus: (s) => seen.push(s), onLiveGame: () => {} });
     await store.connect({ ratings: emptyRatingsState, walls: () => [] });
     expect(seen).toEqual(["local"]);
     expect(store.shared).toBe(false);

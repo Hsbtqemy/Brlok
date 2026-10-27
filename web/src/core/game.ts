@@ -165,6 +165,38 @@ function squareDistance(a: Square, b: Square): number {
   return Math.max(Math.abs(a.charCodeAt(0) - b.charCodeAt(0)), Math.abs(Number(a[1]) - Number(b[1])));
 }
 
+/** Partie sauvegardée (JSON) : de quoi la reprendre après un rechargement ou sur un autre appareil. */
+export interface SavedGame {
+  version: 1;
+  savedAt: number;
+  config: GameConfig;
+  /** Coups joués depuis la position initiale (format UCI). */
+  moves: string[];
+  clock: { remaining: Record<Color, number>; running: Color | null };
+  phase: Phase;
+  pending: (Omit<PendingBlock, "move"> & { move?: string }) | null;
+  deviation: (Omit<DeviationChoice, "options"> & { options: string[] }) | null;
+  result: GameResult | null;
+  log: LogEntry[];
+  lastVerdict: ChesscaladeGame["lastVerdict"];
+  consecutiveFalls: Record<Color, number>;
+  blocksClimbed: Record<Color, number>;
+  movesSinceRecharge: Record<Color, number>;
+  exhausted: Exhaustion[];
+  forbiddenThisTurn: string[];
+  kingOnly: Color | null;
+  lastEngineMove: string | null;
+  counterAttackUsed: boolean;
+  engineExcluded: string[];
+  exhaustionOrder: number;
+}
+
+const SAVED_LOG_LIMIT = 60;
+
+function jsonClone<T>(value: T): T {
+  return JSON.parse(JSON.stringify(value)) as T;
+}
+
 // --- Pendule -----------------------------------------------------------------
 
 export class Clock {
@@ -229,6 +261,75 @@ export class ChesscaladeGame {
   ) {
     this.clock = new Clock(FORMAT[config.format].startMs);
     this.clock.run("w", now);
+  }
+
+  // --- Sauvegarde ------------------------------------------------------------------
+
+  save(now: number): SavedGame {
+    return {
+      version: 1,
+      savedAt: now,
+      config: jsonClone(this.config),
+      moves: this.chess.history({ verbose: true }).map((m) => m.lan),
+      clock: {
+        remaining: { w: this.clock.remainingAt("w", now), b: this.clock.remainingAt("b", now) },
+        running: this.clock.running,
+      },
+      phase: this.phase,
+      // Copie JSON : le bloc peut contenir des objets réactifs de l'interface, que le clonage natif refuse.
+      pending: this.pending ? { ...jsonClone({ ...this.pending, move: undefined }), move: this.pending.move?.lan } : null,
+      deviation: this.deviation ? { ...this.deviation, options: this.deviation.options.map((m) => m.lan) } : null,
+      result: this.result,
+      log: this.log.slice(-SAVED_LOG_LIMIT),
+      lastVerdict: this.lastVerdict,
+      consecutiveFalls: { ...this.consecutiveFalls },
+      blocksClimbed: { ...this.blocksClimbed },
+      movesSinceRecharge: { ...this.movesSinceRecharge },
+      exhausted: this.exhausted.map((e) => ({ ...e })),
+      forbiddenThisTurn: [...this.forbiddenThisTurn],
+      kingOnly: this.kingOnly,
+      lastEngineMove: this.lastEngineMove?.lan ?? null,
+      counterAttackUsed: this.counterAttackUsed,
+      engineExcluded: [...this.engineExcluded],
+      exhaustionOrder: this.exhaustionOrder,
+    };
+  }
+
+  /**
+   * Reprend une partie sauvegardée. Les pendules repartent de leur temps sauvegardé (le temps passé
+   * page fermée ne compte pas) et le bloc en cours repart avec sa limite complète.
+   */
+  static restore(saved: SavedGame, makeBlock: BlockFactory, now: number): ChesscaladeGame {
+    const game = new ChesscaladeGame(jsonClone(saved.config), makeBlock, now);
+    for (const lan of saved.moves) {
+      game.chess.move({ from: lan.slice(0, 2), to: lan.slice(2, 4), promotion: lan[4] });
+    }
+    const history = game.chess.history({ verbose: true });
+    const legal = game.chess.moves({ verbose: true });
+    // Coup en suspens : encore à jouer (bloc-défi), ou déjà joué (défense, contre-attaque).
+    const findMove = (lan: string): Move | undefined => legal.find((m) => m.lan === lan) ?? (history.at(-1)?.lan === lan ? history.at(-1) : undefined);
+
+    game.clock.remaining = { ...saved.clock.remaining };
+    game.clock.run(saved.clock.running, now);
+    game.phase = saved.phase;
+    game.pending = saved.pending ? { ...saved.pending, move: saved.pending.move ? findMove(saved.pending.move) : undefined, startedAt: now } : null;
+    game.deviation = saved.deviation
+      ? { ...saved.deviation, options: saved.deviation.options.map((lan) => legal.find((m) => m.lan === lan)).filter((m): m is Move => !!m) }
+      : null;
+    game.result = saved.result;
+    game.log = [...saved.log];
+    game.lastVerdict = saved.lastVerdict;
+    game.consecutiveFalls = { ...saved.consecutiveFalls };
+    game.blocksClimbed = { ...saved.blocksClimbed };
+    game.movesSinceRecharge = { ...saved.movesSinceRecharge };
+    game.exhausted = saved.exhausted.map((e) => ({ ...e }));
+    game.forbiddenThisTurn = new Set(saved.forbiddenThisTurn);
+    game.kingOnly = saved.kingOnly;
+    game.lastEngineMove = saved.lastEngineMove && history.at(-1)?.lan === saved.lastEngineMove ? history.at(-1)! : null;
+    game.counterAttackUsed = saved.counterAttackUsed;
+    game.engineExcluded = [...saved.engineExcluded];
+    game.exhaustionOrder = saved.exhaustionOrder;
+    return game;
   }
 
   get turn(): Color {

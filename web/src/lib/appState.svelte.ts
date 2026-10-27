@@ -6,14 +6,17 @@
 import type { Block } from "../core/generator";
 import { recordBlockAttempt, recordGame, recordGameVsEngine, type AttemptRecord, type RatingsState } from "../core/players";
 import type { Wall } from "../core/wall";
+import type { SavedGame } from "../core/game";
 import { SharedStore, type SyncStatus } from "./sharedStore";
 import {
   loadActivePlayerId,
   loadActiveWallId,
+  loadLiveGame,
   loadRatings,
   loadWalls,
   saveActivePlayerId,
   saveActiveWallId,
+  saveLiveGame,
   saveRatings,
   saveWalls,
 } from "./storage";
@@ -25,6 +28,8 @@ class AppState {
   activePlayerId = $state<string | null>(loadActivePlayerId());
   syncStatus = $state<SyncStatus>("local");
   syncDetail = $state("");
+  /** Partie en cours sauvegardée, avec qui joue quoi (identifiants des joueurs). */
+  liveGame = $state.raw<LiveGame | null>(loadLiveGame<LiveGame>());
 
   wall = $derived(this.walls.find((w) => w.id === this.activeWallId) ?? this.walls[0]);
   activePlayer = $derived(this.ratings.players.find((p) => p.id === this.activePlayerId) ?? this.ratings.players[0]);
@@ -41,6 +46,10 @@ class AppState {
     onStatus: (status, detail = "") => {
       this.syncStatus = status;
       this.syncDetail = detail;
+    },
+    onLiveGame: (game) => {
+      this.liveGame = game as LiveGame | null;
+      saveLiveGame(game);
     },
   });
 
@@ -80,6 +89,13 @@ class AppState {
     void this.store.syncRatings(prev, next);
   }
 
+  /** Sauvegarde la partie en cours (null quand elle est terminée ou abandonnée). */
+  saveGame(game: LiveGame | null) {
+    this.liveGame = game;
+    saveLiveGame(game);
+    void this.store.saveLiveGame(game as unknown as Record<string, unknown> | null);
+  }
+
   selectPlayer(id: string | null) {
     this.activePlayerId = id;
     saveActivePlayerId(id);
@@ -100,6 +116,12 @@ class AppState {
   recordGameVsEngine(playerId: string, color: "w" | "b", engineElo: number, playerScore: number, reason: string) {
     this.setRatings(recordGameVsEngine(this.snapshotRatings(), playerId, color, engineElo, playerScore, reason));
   }
+}
+
+export interface LiveGame {
+  game: SavedGame;
+  ids: { w: string; b: string };
+  humanColor: "w" | "b";
 }
 
 export const app = new AppState();
