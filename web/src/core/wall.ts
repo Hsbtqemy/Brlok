@@ -23,13 +23,23 @@ export interface Hold {
   active: boolean;
 }
 
-/** Voie existante d'un mur de salle (couleur + cotation). Non utilisée en v1. */
+/** Voie d'un mur de salle (mode salle, MURS.md étape 3). */
 export interface Route {
   id: string;
+  /** Nom ou numéro affiché (facultatif). */
   name: string;
+  /** Nom de la couleur des prises (ex. « vert »). */
   color: string;
+  /** Teinte affichée (prélevée sur la photo, ou couleur type). */
+  colorHex?: string;
+  /** Cotation, échelle Font (ex. « 6a+ »), ou « ? » si inconnue. */
   grade: string;
   styles: string[];
+  /** Voie démontée : gardée pour l'historique, plus proposée. */
+  archived?: boolean;
+  /** Prises de la voie sur la photo du secteur (coordonnées de 0 à 1). */
+  marks?: { x: number; y: number }[];
+  createdAt?: string;
 }
 
 export type WallKind = "pan" | "voies";
@@ -51,6 +61,8 @@ export interface Wall {
   reach: number;
   /** Enchaînements marqués impossibles à la main (paires d'ids, ordre indifférent). */
   forbiddenLinks: [string, string][];
+  /** Mur à voies : photo du secteur (image réduite, data URL). */
+  photo?: string;
 }
 
 export function clampLevel(level: number): number {

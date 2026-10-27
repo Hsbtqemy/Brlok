@@ -6,7 +6,10 @@
   import type { Color } from "../core/game";
   import type { Block } from "../core/generator";
   import { PIECES } from "../core/pieces";
-  import { RoundsGame, type MemeResult } from "../core/rounds";
+  import { RoundsGame, routeIdOf, ROUTE_PREFIX, type MemeResult } from "../core/rounds";
+  import { activeRoutes, gradeToRating, routeBlock, routeHex, routeLabel } from "../core/gym";
+  import { routeKey } from "../core/players";
+  import RouteView from "./RouteView.svelte";
   import { distance, holdAt } from "../core/wall";
   import { app } from "./appState.svelte";
   import Board from "./Board.svelte";
@@ -47,6 +50,7 @@
   let memeAttempts = $state(0);
   let memeStopping = $state(false);
   let composing = $state<string[]>([]);
+  let highestInput = $state(1);
 
   const name = (c: Color) => game.config.players[c].name;
   const engine = $derived(game.config.engine);
@@ -207,9 +211,17 @@
     composing = [];
   }
 
+  /** Cote d'une voie : apprise si elle a déjà été grimpée, sinon celle de sa cotation. */
+  const routeRating = (id: string) => app.wall ? app.ratings.blocks[routeKey(app.wall.id, id)]?.rating : undefined;
+
   function blockOf(holdIds: string[]): Block | null {
     const wall = app.wall;
     if (!wall) return null;
+    const rid = routeIdOf(holdIds);
+    if (rid) {
+      const route = wall.routes.find((r) => r.id === rid);
+      return route ? routeBlock(route, routeRating(rid) ?? gradeToRating(route.grade), null) : null;
+    }
     const holds = holdIds.map((id) => wall.holds.find((h) => h.id === id)).filter((h): h is NonNullable<typeof h> => !!h);
     if (holds.length === 0) return null;
     return { holds, estimatedRating: estimateBlockRating(holds.map((h) => h.level)), relaxations: [] };
@@ -306,6 +318,15 @@
   const bottom: Color = $derived(flipped ? "b" : "w");
 </script>
 
+{#snippet blockView(ids: string[])}
+  {@const rid = routeIdOf(ids)}
+  {#if app.wall && rid}
+    <RouteView wall={app.wall} route={app.wall.routes.find((r) => r.id === rid) ?? null} />
+  {:else if app.wall}
+    <PanView wall={app.wall} sequence={ids} />
+  {/if}
+{/snippet}
+
 <div class="rounds">
   <section class="panel board-panel">
     <div class="status">
@@ -401,7 +422,7 @@
           {/if}
           {#if piece}<span class="hint"> Pièce : {piece.symbol} {piece.label}.</span>{/if}
         </p>
-        {#if app.wall}<PanView wall={app.wall} sequence={duel.block.slice(0, duel.shown)} />{/if}
+        {@render blockView(duel.block.slice(0, duel.shown))}
         <div class="actions">
           <button class="success" onclick={() => soloResult(duel.climber, duel.block.slice(0, duel.shown), true)}>Réussi</button>
           <button class="fall" onclick={() => soloResult(duel.climber, duel.block.slice(0, duel.shown), false)}>Chute</button>
@@ -435,12 +456,20 @@
             {/if}
           {/each}
         </p>
-        {#if app.wall}
+        {#if routeIdOf(duel.block)}
+          {@render blockView(duel.block)}
+        {:else if app.wall}
           <PanView wall={app.wall} sequence={duel.block} onHold={climber && memeStopping ? (id) => onMemeHold(climber, duel.block, id) : undefined} />
         {/if}
         {#if climber}
           <p><strong>{name(climber)}</strong> grimpe · essais : {memeAttempts}</p>
-          {#if memeStopping}
+          {#if memeStopping && routeIdOf(duel.block)}
+            <div class="row">
+              <label class="field">Prises tenues (environ) <input type="number" id="highest" min="0" max="60" bind:value={highestInput} /></label>
+              <button class="fall" onclick={() => memeFinish(climber, duel.block, { success: false, attempts: Math.max(1, memeAttempts), highest: highestInput })}>Valider</button>
+              <button onclick={() => (memeStopping = false)}>Annuler</button>
+            </div>
+          {:else if memeStopping}
             <p class="warn">Touche sur le pan la prise la plus haute atteinte.</p>
             <button onclick={() => (memeStopping = false)}>Annuler</button>
           {:else}
@@ -452,7 +481,21 @@
           {/if}
         {/if}
       {:else if duel.format === "impose"}
-        {#if duel.step === "compose"}
+        {#if duel.step === "compose" && app.wall?.kind === "voies"}
+          <p>
+            <strong>{name(duel.actor)}</strong> choisit la voie de {name(duel.actor === "w" ? "b" : "w")}.
+            Budget : <strong>{duel.budget}</strong>{duel.restarts > 0 ? ` (relance ${duel.restarts})` : ""}.
+          </p>
+          <ul class="route-pick">
+            {#each activeRoutes(app.wall, (r) => routeRating(r.id)).sort((a, b) => b.rating - a.rating) as c (c.route.id)}
+              <li>
+                <button disabled={c.rating > duel.budget} onclick={() => act(() => game.imposeCompose(duel.actor, [`${ROUTE_PREFIX}${c.route.id}`], Math.round(c.rating)))}>
+                  <span class="dot" style:background={routeHex(c.route)}></span>{routeLabel(c.route)} · cote {Math.round(c.rating)}
+                </button>
+              </li>
+            {/each}
+          </ul>
+        {:else if duel.step === "compose"}
           <p>
             <strong>{name(duel.actor)}</strong> compose le bloc de {name(duel.actor === "w" ? "b" : "w")} : touche les prises dans l'ordre.
             Budget : <strong>{duel.budget}</strong>{duel.restarts > 0 ? ` (relance ${duel.restarts})` : ""}.
@@ -471,7 +514,7 @@
         {:else}
           {@const holdsToClimb = duel.composed[duel.actor === "w" ? "b" : "w"] ?? []}
           <p><strong>{name(duel.actor)}</strong> grimpe le bloc composé par {name(duel.actor === "w" ? "b" : "w")}.</p>
-          {#if app.wall}<PanView wall={app.wall} sequence={holdsToClimb} />{/if}
+          {@render blockView(holdsToClimb)}
           <div class="actions">
             <button class="success" onclick={() => imposeResult(duel.actor, holdsToClimb, true)}>Réussi</button>
             <button class="fall" onclick={() => imposeResult(duel.actor, holdsToClimb, false)}>Chute</button>
@@ -571,6 +614,27 @@
   }
   .side p {
     margin: 0;
+  }
+  .route-pick {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .route-pick button {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    justify-content: flex-start;
+  }
+  .dot {
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    border: 1px solid var(--border);
   }
   .log {
     margin: 8px 0 0;

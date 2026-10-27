@@ -3,9 +3,10 @@
  * Toujours gardé dans le navigateur ; en plus, enregistré avec la page quand le stockage partagé
  * est disponible (voir sharedStore.ts), auquel cas c'est lui qui fait foi.
  */
+import { makeChallengeBlock, type ChallengeOptions } from "../core/challenge";
 import type { Block } from "../core/generator";
-import { recordBlockAttempt, recordGame, recordGameVsEngine, type AttemptRecord, type RatingsState } from "../core/players";
-import type { Wall } from "../core/wall";
+import { recordBlockAttempt, recordGame, recordGameVsEngine, routeKey, type AttemptRecord, type RatingsState } from "../core/players";
+import type { Route, Wall } from "../core/wall";
 import type { SavedGame } from "../core/game";
 import type { SavedRounds } from "../core/rounds";
 import { SharedStore, type SyncStatus } from "./sharedStore";
@@ -100,6 +101,17 @@ class AppState {
   selectPlayer(id: string | null) {
     this.activePlayerId = id;
     saveActivePlayerId(id);
+  }
+
+  /** Bloc pour un défi : généré sur un pan, choisi parmi les voies d'un mur de salle (cote apprise). */
+  challenge(options: Omit<ChallengeOptions, "routeRating">): Block | null {
+    const wall = this.wall;
+    if (!wall) return null;
+    const blocks = this.ratings.blocks;
+    return makeChallengeBlock($state.snapshot(wall) as Wall, {
+      ...options,
+      routeRating: (route: Route) => blocks[routeKey(wall.id, route.id)]?.rating,
+    });
   }
 
   /** Enregistre une tentative de bloc ; renvoie la variation de la cote de grimpe. */

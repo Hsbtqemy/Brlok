@@ -82,13 +82,23 @@ export function blockKey(wallId: string, holds: readonly string[], feet?: string
   return `${wallId}:${holds.join("-")}${suffix}`;
 }
 
+/** Clé d'une voie de salle (sa cote vit avec elle, quelle que soit la règle de pieds). */
+export function routeKey(wallId: string, routeId: string): string {
+  return `${wallId}:voie:${routeId}`;
+}
+
 const keyOf = (wallId: string, block: Block) =>
-  blockKey(
-    wallId,
-    block.holds.map((h) => h.id),
-    block.feet,
-    block.noFootMove,
-  );
+  block.route
+    ? routeKey(wallId, block.route.id)
+    : blockKey(
+        wallId,
+        block.holds.map((h) => h.id),
+        block.feet,
+        block.noFootMove,
+      );
+
+/** Prises (ou voie) d'un bloc, pour le journal. */
+const labelOf = (block: Block) => (block.route ? [block.route.label] : block.holds.map((h) => h.id));
 
 export function blockRating(state: RatingsState, wallId: string, block: Block): Rating {
   return state.blocks[keyOf(wallId, block)] ?? { rating: block.estimatedRating, rd: NEW_BLOCK_RD, volatility: 0.06 };
@@ -105,8 +115,8 @@ export function recordBlockAttempt(
   at = new Date().toISOString(),
 ): { state: RatingsState; delta: number } {
   const player = state.players.find((p) => p.id === playerId);
-  if (!player || block.holds.length === 0) return { state, delta: 0 };
-  const ids = block.holds.map((h) => h.id);
+  if (!player || (block.holds.length === 0 && !block.route)) return { state, delta: 0 };
+  const ids = labelOf(block);
   const key = keyOf(wallId, block);
   const before = player.ratings.grimpe;
   const blockBefore = blockRating(state, wallId, block);
@@ -153,7 +163,7 @@ export function recordPlacement(
   const blocks = { ...state.blocks };
   const records: AttemptRecord[] = [];
   for (const { block, result } of attempts) {
-    const ids = block.holds.map((h) => h.id);
+    const ids = labelOf(block);
     if (ids.length === 0) continue;
     const key = keyOf(wallId, block);
     const current = blocks[key] ?? { rating: block.estimatedRating, rd: NEW_BLOCK_RD, volatility: 0.06 };

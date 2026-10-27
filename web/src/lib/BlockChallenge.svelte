@@ -4,6 +4,7 @@
   import { PIECES } from "../core/pieces";
   import type { Wall } from "../core/wall";
   import PanView from "./PanView.svelte";
+  import RouteView from "./RouteView.svelte";
 
   interface Props {
     wall: Wall | undefined;
@@ -54,10 +55,14 @@
   {#if block && wall}
     <p class="meta">
       {#if piece}<span class="symbol">{piece.symbol}</span> {piece.label} ·{/if}
-      cote {block.estimatedRating} · {block.holds.length} prises
+      cote {block.estimatedRating}{block.route ? "" : ` · ${block.holds.length} prises`}
     </p>
-    <PanView {wall} sequence={block.holds.map((h) => h.id)} />
-    <p class="sequence">{block.holds.map((h) => h.id).join(" → ")}</p>
+    {#if block.route}
+      <RouteView {wall} route={wall.routes.find((r) => r.id === block.route!.id) ?? null} />
+    {:else}
+      <PanView {wall} sequence={block.holds.map((h) => h.id)} />
+      <p class="sequence">{block.holds.map((h) => h.id).join(" → ")}</p>
+    {/if}
     {#if block.feet}
       {@const rule = FOOT_RULES.find((r) => r.id === block.feet)}
       <p class="feet">

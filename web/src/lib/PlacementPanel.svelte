@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { generateChessBlock, type Block } from "../core/generator";
+  import type { Block } from "../core/generator";
   import { blockRating, recordPlacement } from "../core/players";
   import {
     nextPlacementTarget,
@@ -29,7 +29,7 @@
   function nextBlock() {
     const target = nextPlacementTarget(attempts.map((a) => a.result));
     current = app.wall
-      ? generateChessBlock(app.wall, { piece: null, targetRating: target, length: PLACEMENT_LENGTH, pattern: "progressive", usage, rng: seededRng(Date.now()) })
+      ? app.challenge({ piece: null, targetRating: target, length: PLACEMENT_LENGTH, pattern: "progressive", usage, rng: seededRng(Date.now()) })
       : null;
     startedAt = Date.now();
   }

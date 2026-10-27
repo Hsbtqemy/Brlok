@@ -53,4 +53,6 @@ ordinateur du même réseau et ouvrir l'adresse affichée.
 - [x] Famille C (intrication rythmée) : cloche toutes les 4 / 8 min de jeu
 - [x] Règles de pieds (libres, sur prises, pieds = mains, un mouvement sans pied)
 - [x] Éditeur de pan (niveaux, types, prises inutilisables, enchaînements impossibles, taille, nouveau pan)
-- [ ] Pan en photo, mur à voies : voir [`docs/chesscalade/MURS.md`](../docs/chesscalade/MURS.md)
+- [x] Mode salle : mur à voies, photo du secteur, détection des prises par couleur, voies choisies selon la
+      cote et le style de la pièce (voir [`docs/chesscalade/MURS.md`](../docs/chesscalade/MURS.md))
+- [ ] Pan en photo (attend une photo avec les 4 coins visibles)

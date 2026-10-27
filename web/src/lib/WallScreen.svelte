@@ -2,7 +2,7 @@
   import exampleCatalog from "../../../data/catalog_collection.json";
   import { exportBrlok, importBrlok, type FootMerge } from "../core/brlokImport";
   import { DISTRIBUTION_PATTERNS, type DistributionPattern } from "../core/distribution";
-  import { generateChessBlock, generateClassicSession, type Block } from "../core/generator";
+  import { generateClassicSession, type Block } from "../core/generator";
   import { FOOT_RULES, type FootRule } from "../core/feet";
   import { PIECES, type Piece } from "../core/pieces";
   import { seededRng } from "../core/random";
@@ -10,6 +10,21 @@
   import { app } from "./appState.svelte";
   import PanView from "./PanView.svelte";
   import WallEditor from "./WallEditor.svelte";
+  import GymEditor from "./GymEditor.svelte";
+  import RouteView from "./RouteView.svelte";
+  import { newWall } from "../core/wallEdit";
+
+  const isGym = $derived(app.wall?.kind === "voies");
+  const currentRoute = $derived.by(() => {
+    const id = currentBlock?.route?.id;
+    return id ? (app.wall?.routes.find((r) => r.id === id) ?? null) : null;
+  });
+
+  function createGym() {
+    const wall = { ...newWall("Ma salle", 1, 1), kind: "voies" as const };
+    app.setWalls([...app.walls, wall], wall.id);
+    editing = true;
+  }
 
   let editing = $state(false);
 
@@ -106,7 +121,7 @@
 
   function generateChess() {
     if (!app.wall) return;
-    chessBlock = generateChessBlock(app.wall, { piece, targetRating, length, cruxLast, feet, usage, rng: seededRng(Date.now()) });
+    chessBlock = app.challenge({ piece, targetRating, length, cruxLast, feet, usage, rng: seededRng(Date.now()) });
     generationFailed = chessBlock === null;
     lastDelta = null;
   }
@@ -162,7 +177,7 @@
 
     {#if app.walls.length > 0 && app.wall}
       <label class="field">
-        Pan actif
+        Pan ou mur actif
         <select
           value={app.wall.id}
           onchange={(e) => {
@@ -171,9 +186,13 @@
             classicSession = [];
           }}
         >
-          {#each app.walls as w (w.id)}<option value={w.id}>{w.name}</option>{/each}
+          {#each app.walls as w (w.id)}<option value={w.id}>{w.name}{w.kind === "voies" ? " (salle)" : ""}</option>{/each}
         </select>
       </label>
+      {#if isGym}
+        <p class="hint">Mur à voies : {app.wall.routes.filter((r) => !r.archived).length} voie(s) en place.</p>
+        <button class="primary" onclick={() => (editing = true)} disabled={editing}>Gérer les voies</button>
+      {:else}
       <label class="field">
         Bas du mur
         <select value={app.wall.bottom} onchange={(e) => app.updateWall({ bottom: (e.currentTarget as HTMLSelectElement).value as Wall["bottom"] })}>
@@ -191,7 +210,9 @@
         <button onclick={copyExport}>Copier le JSON exporté</button>
         <textarea class="export" readonly rows="4" aria-label="JSON exporté">{exportJson}</textarea>
       {/if}
+      {/if}
     {/if}
+    <button onclick={createGym}>Nouveau mur à voies (salle)</button>
 
     {#if message}<p class="message">{message}</p>{/if}
     {#if footMerges.length > 0}
@@ -211,17 +232,35 @@
 
   {#if editing}
     <div class="edit-span">
-      <WallEditor
-        onClose={() => {
-          editing = false;
-          chessBlock = null;
-          classicSession = [];
-        }}
-      />
+      {#if isGym}
+        <GymEditor
+          onClose={() => {
+            editing = false;
+            chessBlock = null;
+          }}
+        />
+      {:else}
+        <WallEditor
+          onClose={() => {
+            editing = false;
+            chessBlock = null;
+            classicSession = [];
+          }}
+        />
+      {/if}
     </div>
   {:else}
   <section class="panel pan-panel">
-    {#if app.wall}
+    {#if app.wall && isGym}
+      {#if currentRoute}
+        <RouteView wall={app.wall} route={currentRoute} />
+      {:else if app.wall.photo}
+        <img class="sector" src={app.wall.photo} alt={`Photo du secteur ${app.wall.name}`} />
+        <p class="hint">Choisis une voie à droite.</p>
+      {:else}
+        <p class="empty">{app.wall.routes.length ? "Choisis une voie à droite." : "Aucune voie : ajoute-les avec « Gérer les voies »."}</p>
+      {/if}
+    {:else if app.wall}
       <PanView wall={app.wall} sequence={currentBlock?.holds.map((h) => h.id) ?? []} />
     {:else}
       <p class="empty">Importe ton <code>catalog_collection.json</code> de Brlok, charge l'exemple, ou <button class="link" onclick={() => (editing = true)}>crée un pan</button>.</p>
@@ -231,11 +270,12 @@
   <section class="panel gen-panel">
     <div class="tabs">
       <button aria-pressed={mode === "chesscalade"} onclick={() => (mode = "chesscalade")}>Chesscalade</button>
-      <button aria-pressed={mode === "classique"} onclick={() => (mode = "classique")}>Brlok classique</button>
+      <button aria-pressed={mode === "classique"} onclick={() => (mode = "classique")} disabled={isGym}>Brlok classique</button>
     </div>
 
-    {#if mode === "chesscalade"}
-      <h2>Bloc-défi</h2>
+    {#if mode === "chesscalade" || isGym}
+      <h2>{isGym ? "Choisir une voie" : "Bloc-défi"}</h2>
+      {#if isGym}<p class="hint">La voie en place la plus proche de la cote visée, de préférence au style de la pièce.</p>{/if}
       <div class="pieces">
         {#each PIECES as p (p.id)}
           <button aria-pressed={piece === p.id} onclick={() => (piece = p.id)} title={p.character}>
@@ -253,6 +293,7 @@
         </span>
         <input type="range" min="800" max="2300" step="50" bind:value={targetRating} />
       </label>
+      {#if !isGym}
       <label class="field">
         Nombre de prises
         <input type="number" min="3" max="12" bind:value={length} />
@@ -264,11 +305,12 @@
           {#each FOOT_RULES as r (r.id)}<option value={r.id}>{r.label}{r.bonus ? ` (+${r.bonus})` : ""}</option>{/each}
         </select>
       </label>
-      <button class="primary" disabled={!app.wall} onclick={generateChess}>Générer</button>
+      {/if}
+      <button class="primary" disabled={!app.wall} onclick={generateChess}>{isGym ? "Choisir" : "Générer"}</button>
 
       {#if chessBlock}
         <div class="result">
-          <p class="sequence">{chessBlock.holds.map((h) => h.id).join(" → ")}</p>
+          <p class="sequence">{chessBlock.route ? chessBlock.route.label : chessBlock.holds.map((h) => h.id).join(" → ")}</p>
           <p>Cote estimée : <strong>{chessBlock.estimatedRating}</strong></p>
           {#if chessBlock.feet}
             <p class="hint">
@@ -447,6 +489,11 @@
   }
   .blocks button {
     width: 100%;
+  }
+  .sector {
+    display: block;
+    width: 100%;
+    border-radius: 10px;
   }
   .empty {
     text-align: center;

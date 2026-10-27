@@ -43,6 +43,18 @@ export const AJOUTE_START = 3;
 export const IMPOSE_STEP = 100;
 export const IMPOSE_MAX_RESTARTS = 2;
 
+/** Mur à voies : un duel porte sur une voie, notée `route:<id>` à la place de la liste des prises. */
+export const ROUTE_PREFIX = "route:";
+
+export function blockIds(block: Block | null): string[] {
+  if (!block) return [];
+  return block.route ? [`${ROUTE_PREFIX}${block.route.id}`] : block.holds.map((h) => h.id);
+}
+
+export function routeIdOf(ids: readonly string[]): string | null {
+  return ids.length === 1 && ids[0].startsWith(ROUTE_PREFIX) ? ids[0].slice(ROUTE_PREFIX.length) : null;
+}
+
 /** Solo : objectifs au mur (§3.4 « En solo »). */
 export const SOLO = {
   blitz: { progressiveLength: 6, cibleAttempts: 2 },
@@ -241,7 +253,7 @@ export class RoundsGame {
         this.duel = {
           format: "meme",
           piece,
-          block: block?.holds.map((h) => h.id) ?? [],
+          block: blockIds(block),
           estimatedRating: block?.estimatedRating ?? avgRating,
           order: [starter, other(starter)],
           results: {},
@@ -264,7 +276,7 @@ export class RoundsGame {
         ? { piece, targetRating: rating + SOLO.progressiveOffset, length: solo.progressiveLength }
         : { piece, targetRating: kind === "impose" ? rating + SOLO.imposedOffset : rating, length: this.params.blockLength };
     const block = this.makeBlock(request);
-    const ids = block?.holds.map((h) => h.id) ?? [];
+    const ids = blockIds(block);
     return {
       format: "solo",
       kind,

@@ -76,16 +76,35 @@ pan. Pistes pour en faire un **agrès** du jeu :
 - **suspension imposée** (ex. 7 s sur la réglette de 20 mm) comme pénalité ou comme recharge ;
 - un type de bloc « poutre » pour la pièce **tour** (puissance, statique).
 
-### Étape 3 — Mur à voies (salle)
+### Étape 3 — Mur à voies (salle) (fait, v1)
 
-- Créer les voies : couleur (prélevée sur la photo), cotation (5c, 6a+…), style (dalle, dévers, dynamique,
-  traversée…) ; placer les prises est facultatif.
-- Cote de départ déduite de la cotation (REGLES.md §13.3), puis corrigée par Glicko-2.
-- La pièce correspond à un style : tour ↔ traversée ou ligne droite, cavalier ↔ dynamique ou décalé,
-  pion ↔ dalle courte, roi ↔ bloc compact, fou ↔ diagonale, dame ↔ long et varié.
-- Modes : blocs-défis, « Même bloc » et « Bloc imposé » choisissent une voie au lieu d'en générer une ;
-  « Ajoute une prise » n'est possible que si les prises sont placées.
-- Les salles changent leurs voies : archiver une voie démontée, avec son historique.
+Dans l'onglet **Pan → Nouveau mur à voies (salle)**, puis **Gérer les voies** :
+
+- **photo du secteur** (facultative) : réduite et enregistrée avec le mur ; les prises de **couleur vive**
+  sont repérées automatiquement (rouge, orange, jaune, vert, bleu, violet, rose ; les grands aplats peints
+  sont écartés). Le blanc, le noir et le gris se placent à la main en touchant la photo ;
+- **créer une voie** : toucher une couleur repérée (ses prises sont marquées d'un coup), ajuster en
+  touchant la photo (ajouter ou retirer une prise), puis donner la **cotation** (Font, ou « inconnue »),
+  un **nom ou numéro** facultatif et les **styles** (dalle, vertical, dévers, toit, dynamique, traversée,
+  diagonale, compact, long, réglettes, plats, compression, technique) ;
+- **démonter** une voie la garde avec son historique mais ne la propose plus ; on peut la remettre.
+
+Dans le jeu, sur un mur à voies, les blocs sont **choisis** et non générés :
+
+- la voie en place dont la cote est **la plus proche de la cote visée** ; cote de départ = cotation
+  (REGLES.md §13.3), puis cote apprise par Glicko-2 dès qu'elle a été grimpée ;
+- de préférence au **style de la pièce** : pion ↔ dalle, vertical ; cavalier ↔ dynamique ; fou ↔ diagonale,
+  technique ; tour ↔ traversée, vertical ; dame ↔ long, dévers, toit ; roi ↔ compact, compression.
+  À défaut, la voie la plus proche en cote (l'app le signale) ;
+- blocs-défis, placement, cloche, défense, contre-attaque : une voie ; **Même bloc** : une voie pour les
+  deux (au lieu de toucher la prise la plus haute, on indique combien de prises on a tenues) ; **Bloc
+  imposé** : chacun choisit pour l'autre une voie sous le budget ; **Ajoute une prise** : indisponible (les
+  prises ne sont pas décrites une à une) ;
+- chaque voie a sa propre cote (indépendante de la règle de pieds) et apparaît au journal sous son nom.
+
+Limites de la v1 : une seule photo par mur (un secteur), pas de redressement (inutile ici : on ne mesure pas
+de distances), et dans les salles où une couleur regroupe plusieurs voies, il faut retirer à la main les
+prises qui n'en font pas partie.
 
 ### Étape 4 — Détection assistée (plus tard)
 

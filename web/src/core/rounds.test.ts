@@ -199,3 +199,17 @@ describe("rounds en solo", () => {
     expect(game.clock.remainingAt("b", CHESS)).toBe(before + 30_000);
   });
 });
+
+describe("rounds sur un mur à voies", () => {
+  it("le duel « Même bloc » porte sur une voie", async () => {
+    const { routeIdOf } = await import("./rounds");
+    const game = new RoundsGame(
+      { family: "A", format: "blitz", duel: "meme", players: { w: { name: "A", climbRating: 1500 }, b: { name: "B", climbRating: 1500 } } },
+      () => ({ holds: [], estimatedRating: 1500, relaxations: [], route: { id: "v3", label: "vert 6b", color: "vert", grade: "6b", styles: [] } }),
+      0,
+    );
+    game.tick(CHESS);
+    const duel = game.duel as Extract<NonNullable<typeof game.duel>, { format: "meme" }>;
+    expect(routeIdOf(duel.block)).toBe("v3");
+  });
+});

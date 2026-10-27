@@ -10,7 +10,6 @@
     type Format,
   } from "../core/game";
   import { engineSettings, pickEngineMove } from "../core/engine";
-  import { generateChessBlock } from "../core/generator";
   import { FOOT_RULES, type FootRule } from "../core/feet";
   import { PIECES } from "../core/pieces";
   import { seededRng } from "../core/random";
@@ -77,8 +76,13 @@
 
   function makeDuelBlock(request: DuelBlockRequest) {
     if (!app.wall) return null;
-    return generateChessBlock(app.wall, { ...request, usage, rng: seededRng(Date.now()) });
+    return app.challenge({ ...request, usage, rng: seededRng(Date.now()) });
   }
+
+  // Sur un mur à voies, « Ajoute une prise » n'a pas de sens : on bascule sur « Même bloc ».
+  $effect(() => {
+    if (app.wall?.kind === "voies" && duelFormat === "ajoute") duelFormat = "meme";
+  });
 
   function start() {
     if (family === "A" || family === "B") {
@@ -167,7 +171,7 @@
 
   function makeBlock(request: BlockRequest) {
     if (!app.wall) return null;
-    return generateChessBlock(app.wall, { ...request, usage, rng: seededRng(Date.now()) });
+    return app.challenge({ ...request, usage, rng: seededRng(Date.now()) });
   }
 
   function refresh() {
@@ -442,7 +446,7 @@
       <div class="field">
         Duel au mur
         <div class="row">
-          <button aria-pressed={duelFormat === "ajoute"} onclick={() => (duelFormat = "ajoute")}>Ajoute une prise</button>
+          <button aria-pressed={duelFormat === "ajoute"} onclick={() => (duelFormat = "ajoute")} disabled={app.wall?.kind === "voies"} title={app.wall?.kind === "voies" ? "Impossible sur un mur à voies : les prises ne sont pas décrites une à une" : undefined}>Ajoute une prise</button>
           <button aria-pressed={duelFormat === "meme"} onclick={() => (duelFormat = "meme")}>Même bloc</button>
           <button aria-pressed={duelFormat === "impose"} onclick={() => (duelFormat = "impose")}>Bloc imposé</button>
         </div>
