@@ -43,18 +43,38 @@
   const REASON_LABEL = { mat: "échec et mat", pat: "pat", nulle: "nulle", temps: "au temps", abandon: "abandon" } as const;
   const COLOR_LABEL: Record<Color, string> = { w: "Blancs", b: "Noirs" };
 
-  // --- Réglages ---
-  let format = $state<Format>("classique");
-  let difficulty = $state<Difficulty>("modere");
-  let deviation = $state<Deviation>("courte");
-  let feetRule = $state<"auto" | FootRule>("auto");
-  let density = $state<Density>("normale");
+  // --- Réglages (retenus d'une partie à l'autre, sur cet appareil) ---
+  const SETUP_KEY = "brlok-web:game-setup";
+  type SetupPrefs = Partial<{
+    format: Format;
+    difficulty: Difficulty;
+    deviation: Deviation;
+    feetRule: "auto" | FootRule;
+    density: Density;
+    rhythmChoice: Rhythm | null;
+    mode: "duo" | "solo";
+    family: "C" | "D" | Family;
+    duelFormat: DuelFormat;
+    soloColor: Color | "hasard";
+  }>;
+  const prefs: SetupPrefs = (() => {
+    try {
+      return JSON.parse(localStorage.getItem(SETUP_KEY) ?? "{}") ?? {};
+    } catch {
+      return {};
+    }
+  })();
+  let format = $state<Format>(prefs.format ?? "classique");
+  let difficulty = $state<Difficulty>(prefs.difficulty ?? "modere");
+  let deviation = $state<Deviation>(prefs.deviation ?? "courte");
+  let feetRule = $state<"auto" | FootRule>(prefs.feetRule ?? "auto");
+  let density = $state<Density>(prefs.density ?? "normale");
   /** Rythme : par défaut, par séries en solo et à chaque bloc à deux. */
-  let rhythmChoice = $state<Rhythm | null>(null);
+  let rhythmChoice = $state<Rhythm | null>(prefs.rhythmChoice ?? null);
   let whiteId = $state(app.ratings.players[0]?.id ?? "");
   let blackId = $state(app.ratings.players[1]?.id ?? app.ratings.players[0]?.id ?? "");
   let fatigue = $state<Record<Color, boolean>>({ w: false, b: false });
-  let mode = $state<"duo" | "solo">("solo");
+  let mode = $state<"duo" | "solo">(prefs.mode ?? "solo");
   const rhythm = $derived<Rhythm>(rhythmChoice ?? (mode === "solo" ? "series" : "immediat"));
   /** Mur à voies : voies retenues pour la partie (vide : toutes). */
   let gameRoutes = $state<string[]>([]);
@@ -73,13 +93,13 @@
     gameRoutes = next.length === all.length ? [] : next.length === 0 ? current : next;
   }
   /** D = intrication ; A et B = rounds (REGLES.md §3). */
-  let family = $state<"C" | "D" | Family>("D");
+  let family = $state<"C" | "D" | Family>(prefs.family ?? "D");
   /** Familles A et B : rounds ; C et D : intrication (C avec cloche). */
   const rounded = $derived(family === "A" || family === "B");
-  let duelFormat = $state<DuelFormat>("ajoute");
+  let duelFormat = $state<DuelFormat>(prefs.duelFormat ?? "ajoute");
   let rounds = $state.raw<RoundsGame | null>(null);
   let soloId = $state(app.activePlayer?.id ?? "");
-  let soloColor = $state<Color | "hasard">("w");
+  let soloColor = $state<Color | "hasard">(prefs.soloColor ?? "w");
   /** Force du moteur : par défaut la cote Chesscalade du joueur (elle monte quand il gagne, §9.1). */
   let engineElo = $state(Math.round(app.activePlayer?.ratings.chesscalade.rating ?? 1500));
   let humanColor = $state<Color>("w");
@@ -103,6 +123,48 @@
     if (!app.wall) return null;
     return app.challenge({ ...request, usage, allowedRoutes: gameRoutes, routeVariants, rng: seededRng(Date.now()) });
   }
+
+  // Réglages retenus d'une partie à l'autre (sur cet appareil).
+  $effect(() => {
+    const setup = { format, difficulty, deviation, feetRule, density, rhythmChoice, mode, family, duelFormat, soloColor };
+    try {
+      localStorage.setItem(SETUP_KEY, JSON.stringify(setup));
+    } catch {
+      // sans persistance
+    }
+  });
+
+  /** Réglage rapide : un niveau d'ensemble, les détails restent modifiables dans « Plus de réglages ». */
+  const PRESETS = [
+    { id: "tranquille", label: "Tranquille", hint: "Facile, peu de blocs", difficulty: "facile", density: "legere" },
+    { id: "standard", label: "Standard", hint: "Modéré, un échange = un bloc", difficulty: "modere", density: "normale" },
+    { id: "costaud", label: "Costaud", hint: "Difficile, pieds = mains", difficulty: "difficile", density: "normale" },
+    { id: "intense", label: "Intense", hint: "Diabolique, tous les blocs", difficulty: "diabolique", density: "intense" },
+  ] as const;
+  const preset = $derived(
+    family === "D" || family === "C"
+      ? PRESETS.find((p) => p.difficulty === difficulty && p.density === density && feetRule === "auto" && deviation === "courte")?.id ?? null
+      : null,
+  );
+  function applyPreset(p: (typeof PRESETS)[number]) {
+    if (family !== "C") family = "D";
+    difficulty = p.difficulty;
+    density = p.density;
+    feetRule = "auto";
+    deviation = "courte";
+  }
+  const FAMILY_LABEL = { D: "Intrication", C: "Intrication rythmée", A: "Rounds", B: "Rounds couplés" } as const;
+  const DENSITY_LABEL = { legere: "densité légère", normale: "densité normale", intense: "densité intense" } as const;
+  const setupSummary = $derived(
+    [
+      mode === "solo" ? `Solo contre Stockfish ${engineElo}` : "À deux",
+      FAMILY_LABEL[family],
+      format === "blitz" ? "Blitz 3 min" : "Classique 10 min",
+      ...(rounded
+        ? []
+        : [DIFFICULTIES.find((d) => d.id === difficulty)?.label ?? "", DENSITY_LABEL[density], rhythm === "series" ? `blocs par ${SERIES_SIZE}` : "bloc à chaque fois"]),
+    ].join(" · "),
+  );
 
   // Sur un mur à voies, « Ajoute une prise » n'a pas de sens : on bascule sur « Même bloc ».
   $effect(() => {
@@ -300,11 +362,19 @@
 
   // Sur téléphone, le bloc s'affiche sous l'échiquier : on l'amène à l'écran quand il apparaît.
   let sidePanel = $state<HTMLElement | null>(null);
+  let boardPanel = $state<HTMLElement | null>(null);
+  /** Téléphone : pendant un bloc, l'échiquier est masqué (le bloc passe en premier) ; on peut le rouvrir. */
+  let showBoard = $state(false);
   let lastPhase: string | null = null;
   $effect(() => {
     const phase = view?.phase ?? null;
+    if (phase !== lastPhase && phase === "block") showBoard = false;
     if (phase !== lastPhase && (phase === "block" || phase === "deviation") && sidePanel && window.innerWidth <= 900) {
       sidePanel.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+    // Retour du mur : on ramène l'échiquier à l'écran.
+    if (lastPhase === "block" && phase === "move" && boardPanel && window.innerWidth <= 900) {
+      boardPanel.scrollIntoView({ behavior: "smooth", block: "start" });
     }
     lastPhase = phase;
   });
@@ -456,7 +526,76 @@
         <p class="hint">Les pendules repartent de leur temps sauvegardé. Commencer une nouvelle partie remplace celle-ci.</p>
       </div>
     {/if}
-    <h2>Nouvelle partie Chesscalade</h2>
+    <h2>Nouvelle partie</h2>
+    {#if app.ratings.players.length === 0}
+      <p class="hint">Partie en invité : crée un joueur (onglet Joueurs) pour suivre tes cotes.</p>
+    {/if}
+    <div class="row seg">
+      <button aria-pressed={mode === "solo"} onclick={() => (mode = "solo")}>Solo (Stockfish)</button>
+      <button aria-pressed={mode === "duo"} onclick={() => (mode = "duo")}>À deux</button>
+    </div>
+    {#if mode === "solo"}
+      <div class="grid">
+        <div class="player">
+          <label class="field">
+            Joueur
+            <select
+              bind:value={soloId}
+              onchange={() => {
+                const p = app.ratings.players.find((x) => x.id === soloId);
+                if (p) engineElo = Math.round(p.ratings.chesscalade.rating);
+              }}
+            >
+              <option value="">Invité</option>
+              {#each app.ratings.players as p (p.id)}<option value={p.id}>{p.name} (Chesscalade {Math.round(p.ratings.chesscalade.rating)})</option>{/each}
+            </select>
+          </label>
+        </div>
+        <div class="field">
+          Couleur
+          <div class="row">
+            <button aria-pressed={soloColor === "w"} onclick={() => (soloColor = "w")}>Blancs</button>
+            <button aria-pressed={soloColor === "b"} onclick={() => (soloColor = "b")}>Noirs</button>
+            <button aria-pressed={soloColor === "hasard"} onclick={() => (soloColor = "hasard")}>Au hasard</button>
+          </div>
+        </div>
+      </div>
+      <label class="field">
+        Force du moteur : <strong>{engineElo}</strong>
+        <input type="range" min="400" max="2800" step="50" bind:value={engineElo} />
+      </label>
+      <p class="hint">
+        {#if !rounded}
+          Le moteur ne grimpe pas : ses prises te font grimper un bloc de défense.
+        {:else}
+          Le moteur joue les rounds d'échecs. Au mur, tu vises un objectif :
+          {duelFormat === "ajoute" ? "un bloc progressif (une prise de plus à chaque réussite, jusqu'à la longueur cible)" : duelFormat === "meme" ? "un bloc à ta cote, à réussir en un nombre d'essais limité" : "un bloc un peu plus dur que ta cote, en un seul essai"}.
+          Raté : le moteur gagne le duel.
+        {/if}
+        Sous 1320, force approximative.
+      </p>
+    {:else}
+    <div class="grid">
+      {#each [["w", "Blancs"], ["b", "Noirs"]] as [color, label] (color)}
+        <div class="player">
+          <label class="field">
+            {label}
+            {#if color === "w"}
+              <select bind:value={whiteId}>
+                <option value="">Invité</option>
+                {#each app.ratings.players as p (p.id)}<option value={p.id}>{p.name} (grimpe {Math.round(p.ratings.grimpe.rating)})</option>{/each}
+              </select>
+            {:else}
+              <select bind:value={blackId}>
+                <option value="">Invité</option>
+                {#each app.ratings.players as p (p.id)}<option value={p.id}>{p.name} (grimpe {Math.round(p.ratings.grimpe.rating)})</option>{/each}
+              </select>
+            {/if}
+          </label>
+        </div>
+      {/each}
+    </div>
+    {/if}
     <label class="field">
       Pan ou mur de la partie
       <select id="game-wall" value={app.wall?.id} onchange={(e) => { app.selectWall((e.currentTarget as HTMLSelectElement).value); gameRoutes = []; }}>
@@ -485,25 +624,43 @@
           </p>
         {/if}
       </div>
+    {/if}
+    <div class="field">
+      Cadence
+      <div class="row seg">
+        <button aria-pressed={format === "blitz"} onclick={() => (format = "blitz")}>
+          Blitz · 3 min{rounded ? " · rounds 2 min, 3 + 3" : ""}
+        </button>
+        <button aria-pressed={format === "classique"} onclick={() => (format = "classique")}>
+          Classique · 10 min{rounded ? " · rounds 4/3 min, 5 + 5" : ""}
+        </button>
+      </div>
+    </div>
+    {#if !rounded}
       <div class="field">
-        Variantes des voies
-        <div class="row wrap">
-          {#each ROUTE_VARIANTS as v (v.id)}
-            <button aria-pressed={routeVariants.includes(v.id)} onclick={() => toggleVariant(v.id)} title={v.description}>
-              {v.label} ({v.bonus > 0 ? "+" : "−"}{Math.abs(v.bonus)})
+        Réglage rapide
+        <div class="presets">
+          {#each PRESETS as p (p.id)}
+            <button aria-pressed={preset === p.id} onclick={() => applyPreset(p)}>
+              <strong>{p.label}</strong><small>{p.hint}</small>
             </button>
           {/each}
         </div>
-        <p class="hint">
-          Pour varier une même voie : quand la cote visée s'éloigne de celle de la voie, une variante permise la rend plus
-          facile ou plus dure (environ 100 points par cran de cotation). Chaque variante a sa propre cote, apprise en jouant.
-          {routeVariants.length === 0 ? "Aucune variante : les voies sont toujours grimpées telles quelles." : ""}
-        </p>
       </div>
     {/if}
-    {#if app.ratings.players.length === 0}
-      <p class="warn">Crée au moins un joueur (onglet Joueurs) pour que les cotes évoluent. Sinon, la partie se joue en invité.</p>
+    {#if !rounded}
+    <div class="field">
+      Difficulté
+      <div class="row seg4">
+        {#each DIFFICULTIES as d (d.id)}
+          <button aria-pressed={difficulty === d.id} onclick={() => (difficulty = d.id)}>{d.label}</button>
+        {/each}
+      </div>
+    </div>
     {/if}
+    <details class="advanced">
+      <summary>Plus de réglages <span>type de partie, densité, passage au mur, pieds{app.wall?.kind === "voies" ? ", variantes" : ""}…</span></summary>
+      <div class="advanced-body">
     <div class="field">
       Type de partie
       <div class="row">
@@ -534,99 +691,7 @@
         </p>
       </div>
     {/if}
-    <div class="row">
-      <button aria-pressed={mode === "solo"} onclick={() => (mode = "solo")}>Solo contre Stockfish</button>
-      <button aria-pressed={mode === "duo"} onclick={() => (mode = "duo")}>À deux</button>
-    </div>
-    {#if mode === "solo"}
-      <div class="grid">
-        <div class="player">
-          <label class="field">
-            Joueur
-            <select
-              bind:value={soloId}
-              onchange={() => {
-                const p = app.ratings.players.find((x) => x.id === soloId);
-                if (p) engineElo = Math.round(p.ratings.chesscalade.rating);
-              }}
-            >
-              <option value="">Invité</option>
-              {#each app.ratings.players as p (p.id)}<option value={p.id}>{p.name} (Chesscalade {Math.round(p.ratings.chesscalade.rating)})</option>{/each}
-            </select>
-          </label>
-          {#if !rounded}
-            <label class="check"><input type="checkbox" bind:checked={fatigue.w} /> Option fatigue</label>
-          {/if}
-        </div>
-        <div class="field">
-          Couleur
-          <div class="row">
-            <button aria-pressed={soloColor === "w"} onclick={() => (soloColor = "w")}>Blancs</button>
-            <button aria-pressed={soloColor === "b"} onclick={() => (soloColor = "b")}>Noirs</button>
-            <button aria-pressed={soloColor === "hasard"} onclick={() => (soloColor = "hasard")}>Au hasard</button>
-          </div>
-        </div>
-      </div>
-      <label class="field">
-        Force du moteur : <strong>{engineElo}</strong>
-        <input type="range" min="400" max="2800" step="50" bind:value={engineElo} />
-      </label>
-      <p class="hint">
-        {#if !rounded}
-          Le moteur ne grimpe pas : quand il prend une pièce ou donne échec, c'est toi qui grimpes un bloc de défense (une chute coûte du temps).
-          En Difficile et Diabolique, une contre-attaque par partie peut annuler son dernier coup.
-        {:else}
-          Le moteur joue les rounds d'échecs. Au mur, tu vises un objectif :
-          {duelFormat === "ajoute" ? "un bloc progressif (une prise de plus à chaque réussite, jusqu'à la longueur cible)" : duelFormat === "meme" ? "un bloc à ta cote, à réussir en un nombre d'essais limité" : "un bloc un peu plus dur que ta cote, en un seul essai"}.
-          Raté : le moteur gagne le duel.
-        {/if}
-        Sous 1320, la force est approximative (coups au hasard).
-      </p>
-    {:else}
-    <div class="grid">
-      {#each [["w", "Blancs"], ["b", "Noirs"]] as [color, label] (color)}
-        <div class="player">
-          <label class="field">
-            {label}
-            {#if color === "w"}
-              <select bind:value={whiteId}>
-                <option value="">Invité</option>
-                {#each app.ratings.players as p (p.id)}<option value={p.id}>{p.name} (grimpe {Math.round(p.ratings.grimpe.rating)})</option>{/each}
-              </select>
-            {:else}
-              <select bind:value={blackId}>
-                <option value="">Invité</option>
-                {#each app.ratings.players as p (p.id)}<option value={p.id}>{p.name} (grimpe {Math.round(p.ratings.grimpe.rating)})</option>{/each}
-              </select>
-            {/if}
-          </label>
-          {#if !rounded}
-            <label class="check"><input type="checkbox" bind:checked={fatigue[color as Color]} /> Option fatigue</label>
-          {/if}
-        </div>
-      {/each}
-    </div>
-    {/if}
-    <div class="field">
-      Rythme
-      <div class="row">
-        <button aria-pressed={format === "blitz"} onclick={() => (format = "blitz")}>
-          Blitz · 3 min{rounded ? " · rounds 2 min, 3 + 3" : ""}
-        </button>
-        <button aria-pressed={format === "classique"} onclick={() => (format = "classique")}>
-          Classique · 10 min{rounded ? " · rounds 4/3 min, 5 + 5" : ""}
-        </button>
-      </div>
-    </div>
     {#if !rounded}
-    <div class="field">
-      Difficulté
-      <div class="row">
-        {#each DIFFICULTIES as d (d.id)}
-          <button aria-pressed={difficulty === d.id} onclick={() => (difficulty = d.id)}>{d.label}</button>
-        {/each}
-      </div>
-    </div>
     <div class="field">
       Déviation
       <div class="row">
@@ -676,15 +741,79 @@
     </div>
     {/if}
     {/if}
-    <button class="primary" onclick={start}>Commencer la partie</button>
+    {#if !rounded}
+      <div class="field">
+        Option fatigue (la cote visée baisse de 15 par bloc grimpé)
+        <div class="row">
+          {#if mode === "solo"}
+            <label class="check"><input type="checkbox" bind:checked={fatigue.w} /> {nameOf(soloId)}</label>
+          {:else}
+            <label class="check"><input type="checkbox" bind:checked={fatigue.w} /> {nameOf(whiteId)} (Blancs)</label>
+            <label class="check"><input type="checkbox" bind:checked={fatigue.b} /> {nameOf(blackId)} (Noirs)</label>
+          {/if}
+        </div>
+      </div>
+    {/if}
+    {#if app.wall?.kind === "voies"}
+      <div class="field">
+        Variantes des voies
+        <div class="row wrap">
+          {#each ROUTE_VARIANTS as v (v.id)}
+            <button aria-pressed={routeVariants.includes(v.id)} onclick={() => toggleVariant(v.id)} title={v.description}>
+              {v.label} ({v.bonus > 0 ? "+" : "−"}{Math.abs(v.bonus)})
+            </button>
+          {/each}
+        </div>
+        <p class="hint">
+          Pour varier une même voie : quand la cote visée s'éloigne de celle de la voie, une variante permise la rend plus
+          facile ou plus dure (environ 100 points par cran de cotation). Chaque variante a sa propre cote, apprise en jouant.
+          {routeVariants.length === 0 ? "Aucune variante : les voies sont toujours grimpées telles quelles." : ""}
+        </p>
+      </div>
+    {/if}
+      </div>
+    </details>
+    <div class="start-bar">
+      <p>{setupSummary}</p>
+      <button class="primary" onclick={start}>Commencer la partie</button>
+    </div>
   </section>
 {:else}
-  <div class="game">
-    <section class="panel board-panel">
+  <div class="game" class:climbing={view.phase === "block" && !showBoard}>
+    <section class="panel board-panel" bind:this={boardPanel}>
+      <div class="status {view.phase === 'over' ? '' : (view.lastEvent?.tone ?? '')}">
+        <div class="status-line">
+          <strong>
+            {#if view.phase === "over" && view.result}
+              {view.result.winner ? `${game.config.players[view.result.winner].name} gagne` : "Nulle"} — {REASON_LABEL[view.result.reason]}
+            {:else if view.phase === "block" && view.pending}
+              Au mur : {KIND_LABEL[view.pending.request.kind]}{view.pending.series ? ` ${view.pending.series.index}/${view.pending.series.total}` : ""}
+            {:else if view.phase === "deviation"}
+              Coup dévié : touche une case en surbrillance
+            {:else if view.engineTurn}
+              {game.config.players[view.turn].name} réfléchit…
+            {:else}
+              À {game.config.players[view.turn].name} de jouer ({COLOR_LABEL[view.turn]})
+            {/if}
+          </strong>
+          {#if game.config.rhythm === "series" && view.phase !== "over"}
+            <span class="queue-dots" title="Blocs en attente">
+              {#each Array.from({ length: SERIES_SIZE }, (_, i) => i) as i (i)}<span class:on={i < view.queued}></span>{/each}
+            </span>
+          {/if}
+          {#if view.phase === "block"}
+            <button class="board-toggle" onclick={() => (showBoard = !showBoard)}>{showBoard ? "Masquer l'échiquier" : "Voir l'échiquier"}</button>
+          {/if}
+        </div>
+        {#if view.lastEvent && view.phase !== "block" && view.phase !== "over"}
+          <p class="status-event"><span class="who">{game.config.players[view.lastEvent.color].name} :</span> {view.lastEvent.text}</p>
+        {/if}
+      </div>
       <div class="clock" class:running={view.running === (flipped ? "w" : "b")}>
         <span>{flipped ? game.config.players.w.name : game.config.players.b.name} · {COLOR_LABEL[flipped ? "w" : "b"]}</span>
         <strong>{clockText(flipped ? "w" : "b")}</strong>
       </div>
+      <div class="board-wrap">
       <Board
         board={view.board}
         {flipped}
@@ -696,6 +825,7 @@
         intended={view.deviation?.intended ?? null}
         {onSquare}
       />
+      </div>
       <div class="clock" class:running={view.running === (flipped ? "b" : "w")}>
         <span>{flipped ? game.config.players.b.name : game.config.players.w.name} · {COLOR_LABEL[flipped ? "b" : "w"]}</span>
         <strong>{clockText(flipped ? "b" : "w")}</strong>
@@ -708,22 +838,23 @@
           {/each}
         </div>
       {/if}
-      <div class="row">
+      <div class="row board-actions">
         <button onclick={() => (flipped = !flipped)}>Retourner</button>
         {#if view.phase !== "over"}
           {@const resigner = game.config.engine ? humanColor : view.turn}
-          <button onclick={() => { game!.resign(resigner, Date.now()); refresh(); }}>Abandon ({COLOR_LABEL[resigner]})</button>
+          <button
+            class="quiet"
+            onclick={() => {
+              if (!confirm(`Abandonner la partie (${game!.config.players[resigner].name}) ?`)) return;
+              game!.resign(resigner, Date.now());
+              refresh();
+            }}>Abandonner</button
+          >
         {/if}
       </div>
     </section>
 
     <section class="panel side" bind:this={sidePanel}>
-      {#if view.lastEvent && view.phase !== "block"}
-        <p class="event {view.lastEvent.tone ?? 'neutre'}">
-          <span class="who">{game.config.players[view.lastEvent.color].name}</span>
-          {view.lastEvent.text}
-        </p>
-      {/if}
       {#if view.phase === "over" && view.result}
         <h2>Partie terminée</h2>
         <p class="big">
@@ -760,9 +891,8 @@
           (case visée : {view.deviation.intended}). Touche une case en surbrillance.
         </p>
       {:else if view.engineTurn}
-        <h2>{game.config.players[view.turn].name} réfléchit…</h2>
+        <p class="hint">Le moteur joue, puis c'est à toi.</p>
       {:else}
-        <h2>Au tour de {game.config.players[view.turn].name} ({COLOR_LABEL[view.turn]})</h2>
         {#if view.kingOnly === view.turn}<p class="warn">Parade ratée : il faut parer avec le roi si c'est possible.</p>{/if}
         {#if view.falls[view.turn] > 0}<p class="hint">Chutes consécutives : {view.falls[view.turn]}</p>{/if}
         <div class="row">
@@ -775,10 +905,11 @@
           {/if}
         </div>
         {#if game.config.rhythm === "series"}
-          <div class="row queue">
-            <span>Blocs en attente : <strong>{view.queued}/{SERIES_SIZE}</strong></span>
-            <button class="primary" disabled={!view.canGoToWall} onclick={goToWall}>Aller au mur maintenant</button>
-          </div>
+          {#if view.canGoToWall}
+            <button class="primary to-wall" onclick={goToWall}>Aller au mur maintenant ({view.queued} bloc{view.queued > 1 ? "s" : ""})</button>
+          {:else}
+            <p class="hint">Aucun bloc en attente : les prises mettent un bloc de côté, à {SERIES_SIZE} tu vas au mur.</p>
+          {/if}
         {/if}
         <p class="hint">
           Recharge : la pendule tourne pendant le bloc. Disponible tous les 5 coups.
@@ -832,13 +963,158 @@
 {/if}
 
 <style>
-  .queue {
+  .status {
+    padding: 8px 12px;
+    border-radius: 10px;
+    border-left: 6px solid var(--border);
+    background: var(--bg);
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .status.bon {
+    border-left-color: #2e7d32;
+  }
+  .status.mauvais {
+    border-left-color: #c62828;
+  }
+  .status-line {
+    display: flex;
     align-items: center;
-    margin-top: 0.5rem;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+  .status-line strong {
+    flex: 1 1 auto;
+  }
+  .status-event {
+    margin: 0;
+    font-size: 1rem;
+    font-weight: 600;
+  }
+  .status-event .who {
+    font-weight: 400;
+    color: var(--muted);
+  }
+  .queue-dots {
+    display: inline-flex;
+    gap: 4px;
+  }
+  .queue-dots span {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    border: 2px solid var(--accent);
+  }
+  .queue-dots span.on {
+    background: var(--accent);
+  }
+  .board-toggle {
+    display: none;
+    min-height: 36px;
+    padding: 0 10px;
+    font-size: 0.85rem;
+  }
+  .to-wall {
+    min-height: 52px;
+  }
+  .quiet {
+    color: var(--muted);
+  }
+  @media (max-width: 900px) {
+    .board-toggle {
+      display: inline-block;
+    }
+    .game.climbing .board-wrap,
+    .game.climbing .board-actions {
+      display: none;
+    }
   }
   .setup {
     max-width: 720px;
     margin: 0 auto;
+  }
+  .seg {
+    flex-wrap: nowrap;
+  }
+  .seg > button {
+    flex: 1 1 0;
+    min-width: 0;
+    padding-inline: 6px;
+  }
+  .seg4 {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+  .seg4 > button {
+    padding-inline: 4px;
+    font-size: 0.9rem;
+  }
+  @media (max-width: 420px) {
+    .seg4 {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+  }
+  .presets {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 8px;
+  }
+  .presets button {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 2px;
+    padding: 8px 12px;
+    text-align: left;
+  }
+  .presets small {
+    color: var(--muted);
+    font-size: 0.8rem;
+  }
+  .advanced {
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 0 12px;
+  }
+  .advanced summary {
+    padding: 12px 0;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  .advanced summary span {
+    display: block;
+    font-weight: 400;
+    font-size: 0.8rem;
+    color: var(--muted);
+  }
+  .advanced-body {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    padding-bottom: 12px;
+  }
+  .start-bar {
+    position: sticky;
+    bottom: 0;
+    z-index: 2;
+    margin: 0 -16px -16px;
+    padding: 10px 16px calc(10px + env(safe-area-inset-bottom, 0px));
+    background: var(--surface);
+    border-top: 1px solid var(--border);
+    border-radius: 0 0 14px 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .start-bar p {
+    margin: 0;
+    font-size: 0.85rem;
+    color: var(--muted);
+  }
+  .start-bar .primary {
+    min-height: 52px;
+    font-size: 1.05rem;
   }
   .route-chips {
     display: flex;
@@ -932,27 +1208,6 @@
   .bell {
     margin: 0;
     font-variant-numeric: tabular-nums;
-  }
-  .event {
-    margin: 0;
-    padding: 12px 14px;
-    border-radius: 10px;
-    font-size: 1.15rem;
-    font-weight: 600;
-    border-left: 6px solid var(--border);
-    background: var(--bg);
-  }
-  .event .who {
-    display: block;
-    font-size: 0.8rem;
-    font-weight: 500;
-    color: var(--muted);
-  }
-  .event.bon {
-    border-left-color: #2e7d32;
-  }
-  .event.mauvais {
-    border-left-color: #c62828;
   }
   .log li.bon {
     color: #2e7d32;

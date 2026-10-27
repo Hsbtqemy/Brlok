@@ -110,6 +110,27 @@
     gap: 6px;
     font-size: 0.9rem;
   }
+  @media (max-width: 600px) {
+    header {
+      gap: 8px;
+      padding-block: 8px;
+    }
+    h1 {
+      font-size: 1.15rem;
+    }
+    nav {
+      order: 3;
+      width: 100%;
+    }
+    nav button {
+      flex: 1;
+      min-height: 40px;
+    }
+    .sync {
+      font-size: 0.7rem;
+      padding: 2px 8px;
+    }
+  }
   main {
     padding-block: 0 24px;
     padding-left: max(16px, env(safe-area-inset-left, 0px));
