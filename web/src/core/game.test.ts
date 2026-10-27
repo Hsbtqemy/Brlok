@@ -203,3 +203,73 @@ describe("partie", () => {
     expect(requests.at(-1)!.targetRating).toBe(1500 - 300 - 15);
   });
 });
+
+describe("solo contre le moteur (§9.1)", () => {
+  function solo(difficulty: Difficulty = "difficile") {
+    return setup("classique", difficulty, {
+      players: {
+        w: { name: "Alice", climbRating: 1500, fatigue: false },
+        b: { name: "Stockfish", climbRating: 0, fatigue: false },
+      },
+      engine: { color: "b", elo: 1500 },
+    });
+  }
+
+  it("le moteur ne grimpe pas : sa prise passe, le joueur grimpe un bloc de défense", () => {
+    const { game, requests } = solo();
+    playLine(game, ["e2e4", "d7d5", "a2a3"]);
+    expect(game.isEngineTurn()).toBe(true);
+    game.play("d5", "e4", undefined, 0);
+    expect(game.chess.get("e4")?.color).toBe("b");
+    expect(game.phase).toBe("block");
+    expect(requests.at(-1)).toMatchObject({ climber: "w", kind: "defense", targetRating: 1500 + 150 - 300 - 200 });
+    const before = game.clock.remainingAt("w", 0);
+    game.blockResult(false, 0);
+    expect(game.clock.remainingAt("w", 0)).toBe(before - 30_000);
+    expect(game.chess.get("e4")?.color).toBe("b");
+  });
+
+  it("pas de parade pour le moteur quand le joueur le met en échec", () => {
+    const { game } = solo();
+    playLine(game, ["e2e4", "d7d5"]);
+    game.play("f1", "b5", undefined, 0); // échec : bloc-défi du joueur
+    expect(game.phase).toBe("block");
+    game.blockResult(true, 0);
+    expect(game.phase).toBe("move");
+    expect(game.isEngineTurn()).toBe(true);
+  });
+
+  it("contre-attaque réussie : le dernier coup du moteur est annulé et ne peut pas être rejoué", () => {
+    const { game, requests } = solo("diabolique");
+    playLine(game, ["e2e4", "d7d5", "a2a3"]);
+    game.play("d5", "e4", undefined, 0);
+    game.blockResult(true, 0); // défense réussie
+    expect(game.canCounterAttack()).toBe(true);
+    game.requestCounterAttack(0);
+    expect(requests.at(-1)).toMatchObject({ kind: "contre-attaque", targetRating: 1500 + 300 + 400 });
+    game.blockResult(true, 0);
+    expect(game.chess.get("e4")?.color).toBe("w");
+    expect(game.isEngineTurn()).toBe(true);
+    expect(game.engineCandidates()).not.toContain("d5e4");
+    expect(game.canCounterAttack()).toBe(false);
+  });
+
+  it("contre-attaque indisponible en Modéré", () => {
+    const { game } = solo("modere");
+    playLine(game, ["e2e4", "d7d5"]);
+    expect(game.canCounterAttack()).toBe(false);
+  });
+});
+
+describe("réglage du moteur", () => {
+  it("utilise UCI_Elo à partir de 1320 et des coups au hasard en dessous", async () => {
+    const { engineSettings, pickEngineMove, uciCommands } = await import("./engine");
+    expect(engineSettings(1800)).toMatchObject({ limitStrength: true, uciElo: 1800, randomMoveChance: 0 });
+    const weak = engineSettings(800);
+    expect(weak.limitStrength).toBe(false);
+    expect(weak.randomMoveChance).toBeCloseTo(0.4, 1);
+    expect(pickEngineMove("e2e4", ["a2a3"], { ...weak, randomMoveChance: 1 }, () => 0)).toBe("a2a3");
+    expect(pickEngineMove("e2e4", ["a2a3"], engineSettings(2000), () => 0)).toBe("e2e4");
+    expect(uciCommands("fen", engineSettings(1500), ["e2e4", "d2d4"]).at(-1)).toBe("go movetime 700 searchmoves e2e4 d2d4");
+  });
+});

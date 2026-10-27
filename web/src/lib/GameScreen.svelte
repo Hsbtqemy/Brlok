@@ -9,12 +9,14 @@
     type Difficulty,
     type Format,
   } from "../core/game";
+  import { engineSettings, pickEngineMove } from "../core/engine";
   import { generateChessBlock } from "../core/generator";
   import { PIECES } from "../core/pieces";
   import { seededRng } from "../core/random";
   import { app } from "./appState.svelte";
   import BlockChallenge from "./BlockChallenge.svelte";
   import Board from "./Board.svelte";
+  import { Stockfish } from "./stockfish";
 
   const DIFFICULTIES: { id: Difficulty; label: string }[] = [
     { id: "facile", label: "Facile" },
@@ -22,7 +24,13 @@
     { id: "difficile", label: "Difficile" },
     { id: "diabolique", label: "Diabolique" },
   ];
-  const KIND_LABEL = { defi: "Bloc-défi", parade: "Bloc de parade", recharge: "Recharge" } as const;
+  const KIND_LABEL = {
+    defi: "Bloc-défi",
+    parade: "Bloc de parade",
+    recharge: "Recharge",
+    defense: "Bloc de défense",
+    "contre-attaque": "Contre-attaque",
+  } as const;
   const TRIGGER_LABEL = { capture: "prise", echec: "échec", promotion: "promotion", roque: "roque", mat: "mat" } as const;
   const REASON_LABEL = { mat: "échec et mat", pat: "pat", nulle: "nulle", temps: "au temps", abandon: "abandon" } as const;
   const COLOR_LABEL: Record<Color, string> = { w: "Blancs", b: "Noirs" };
@@ -34,6 +42,12 @@
   let whiteId = $state(app.ratings.players[0]?.id ?? "");
   let blackId = $state(app.ratings.players[1]?.id ?? app.ratings.players[0]?.id ?? "");
   let fatigue = $state<Record<Color, boolean>>({ w: false, b: false });
+  let mode = $state<"duo" | "solo">("solo");
+  let soloId = $state(app.activePlayer?.id ?? "");
+  let soloColor = $state<Color | "hasard">("w");
+  /** Force du moteur : par défaut la cote Chesscalade du joueur (elle monte quand il gagne, §9.1). */
+  let engineElo = $state(Math.round(app.activePlayer?.ratings.chesscalade.rating ?? 1500));
+  let humanColor = $state<Color>("w");
 
   // --- Partie ---
   let game = $state.raw<ChesscaladeGame | null>(null);
@@ -51,12 +65,28 @@
   const nameOf = (id: string) => app.ratings.players.find((p) => p.id === id)?.name ?? "Invité";
 
   function start() {
-    const players = {
-      w: { name: nameOf(whiteId), climbRating: climbRating(whiteId), fatigue: fatigue.w },
-      b: { name: nameOf(blackId), climbRating: climbRating(blackId), fatigue: fatigue.b },
-    };
-    ids = { w: whiteId, b: blackId };
-    game = new ChesscaladeGame({ format, difficulty, deviation, players }, makeBlock, Date.now());
+    if (mode === "solo") {
+      humanColor = soloColor === "hasard" ? (Math.random() < 0.5 ? "w" : "b") : soloColor;
+      const engineColor: Color = humanColor === "w" ? "b" : "w";
+      const human = { name: nameOf(soloId), climbRating: climbRating(soloId), fatigue: fatigue.w };
+      const engine = { name: `Stockfish ${engineElo}`, climbRating: 0, fatigue: false };
+      const players = humanColor === "w" ? { w: human, b: engine } : { w: engine, b: human };
+      ids = humanColor === "w" ? { w: soloId, b: "" } : { w: "", b: soloId };
+      game = new ChesscaladeGame(
+        { format, difficulty, deviation, players, engine: { color: engineColor, elo: engineElo } },
+        makeBlock,
+        Date.now(),
+      );
+      flipped = humanColor === "b";
+    } else {
+      const players = {
+        w: { name: nameOf(whiteId), climbRating: climbRating(whiteId), fatigue: fatigue.w },
+        b: { name: nameOf(blackId), climbRating: climbRating(blackId), fatigue: fatigue.b },
+      };
+      ids = { w: whiteId, b: blackId };
+      game = new ChesscaladeGame({ format, difficulty, deviation, players }, makeBlock, Date.now());
+    }
+    engineError = "";
     selected = null;
     gameRecorded = false;
     lastDelta = null;
@@ -109,8 +139,54 @@
     if (game?.result && !gameRecorded) {
       gameRecorded = true;
       const score = game.result.winner === "w" ? 1 : game.result.winner === "b" ? 0 : 0.5;
-      app.recordGame(ids.w, ids.b, score, REASON_LABEL[game.result.reason]);
+      const engine = game.config.engine;
+      if (engine) {
+        const humanId = ids[humanColor];
+        const humanScore = humanColor === "w" ? score : 1 - score;
+        app.recordGameVsEngine(humanId, humanColor, engine.elo, humanScore, REASON_LABEL[game.result.reason]);
+        // La partie suivante se joue contre un moteur à la nouvelle cote du joueur.
+        const updated = app.ratings.players.find((p) => p.id === humanId);
+        if (updated) engineElo = Math.round(updated.ratings.chesscalade.rating);
+      } else {
+        app.recordGame(ids.w, ids.b, score, REASON_LABEL[game.result.reason]);
+      }
     }
+  });
+
+  // --- Moteur (solo) ---
+  const stockfish = new Stockfish();
+  let engineThinking = $state(false);
+  let engineError = $state("");
+  let engineBusy = false;
+  $effect(() => () => stockfish.stop());
+  $effect(() => {
+    void version;
+    const g = game;
+    const engine = g?.config.engine;
+    if (!g || !engine || engineBusy || !g.isEngineTurn()) return;
+    engineBusy = true;
+    engineThinking = true;
+    const fen = g.chess.fen();
+    const candidates = g.engineCandidates();
+    const settings = engineSettings(engine.elo);
+    const playMove = (lan: string) => {
+      if (game !== g || g.chess.fen() !== fen || !g.isEngineTurn()) return;
+      g.play(lan.slice(0, 2) as Square, lan.slice(2, 4) as Square, (lan[4] as PieceSymbol | undefined) || undefined, Date.now());
+      refresh();
+    };
+    stockfish
+      .bestMove(fen, settings, g.engineExcluded.length > 0 ? candidates : undefined)
+      .then((best) => playMove(pickEngineMove(best, candidates, settings, Math.random)))
+      .catch((e: unknown) => {
+        // Moteur indisponible : un coup au hasard, pour ne pas bloquer la partie.
+        engineError = `${e instanceof Error ? e.message : String(e)} Coup joué au hasard.`;
+        playMove(candidates[Math.floor(Math.random() * candidates.length)]);
+      })
+      .finally(() => {
+        engineBusy = false;
+        engineThinking = false;
+        refresh();
+      });
   });
 
   // Sur téléphone, le bloc s'affiche sous l'échiquier : on l'amène à l'écran quand il apparaît.
@@ -150,6 +226,8 @@
       log: [...game.log].reverse().slice(0, 12),
       sans: history.map((m) => m.san),
       canRecharge: game.canRecharge(),
+      canCounter: game.canCounterAttack(),
+      engineTurn: game.isEngineTurn(),
       falls: { ...game.consecutiveFalls },
       kingOnly: game.kingOnly,
       running: game.clock.running,
@@ -166,7 +244,7 @@
   });
 
   function onSquare(square: Square) {
-    if (!game || !view) return;
+    if (!game || !view || view.engineTurn) return;
     if (view.phase === "deviation") {
       if (targets.has(square)) {
         game.chooseDeviation(square, Date.now());
@@ -210,6 +288,12 @@
     refresh();
   }
 
+  function counterAttack() {
+    game?.requestCounterAttack(Date.now());
+    selected = null;
+    refresh();
+  }
+
   function recharge(hard: boolean) {
     game?.requestRecharge(hard, Date.now());
     selected = null;
@@ -236,10 +320,50 @@
 {#if !game || !view}
   <section class="panel setup">
     <h2>Nouvelle partie Chesscalade</h2>
-    <p class="hint">Famille D « intrication », à deux sur le même mur (REGLES.md §4 à §6). Les blocs sont générés sur le pan actif{app.wall ? ` (${app.wall.name})` : " — aucun pan chargé"}.</p>
+    <p class="hint">Famille D « intrication » (REGLES.md §4 à §6). Les blocs sont générés sur le pan actif{app.wall ? ` (${app.wall.name})` : " — aucun pan chargé"}.</p>
     {#if app.ratings.players.length === 0}
       <p class="warn">Crée au moins un joueur (onglet Joueurs) pour que les cotes évoluent. Sinon, la partie se joue en invité.</p>
     {/if}
+    <div class="row">
+      <button aria-pressed={mode === "solo"} onclick={() => (mode = "solo")}>Solo contre Stockfish</button>
+      <button aria-pressed={mode === "duo"} onclick={() => (mode = "duo")}>À deux</button>
+    </div>
+    {#if mode === "solo"}
+      <div class="grid">
+        <div class="player">
+          <label class="field">
+            Joueur
+            <select
+              bind:value={soloId}
+              onchange={() => {
+                const p = app.ratings.players.find((x) => x.id === soloId);
+                if (p) engineElo = Math.round(p.ratings.chesscalade.rating);
+              }}
+            >
+              <option value="">Invité</option>
+              {#each app.ratings.players as p (p.id)}<option value={p.id}>{p.name} (Chesscalade {Math.round(p.ratings.chesscalade.rating)})</option>{/each}
+            </select>
+          </label>
+          <label class="check"><input type="checkbox" bind:checked={fatigue.w} /> Option fatigue</label>
+        </div>
+        <div class="field">
+          Couleur
+          <div class="row">
+            <button aria-pressed={soloColor === "w"} onclick={() => (soloColor = "w")}>Blancs</button>
+            <button aria-pressed={soloColor === "b"} onclick={() => (soloColor = "b")}>Noirs</button>
+            <button aria-pressed={soloColor === "hasard"} onclick={() => (soloColor = "hasard")}>Au hasard</button>
+          </div>
+        </div>
+      </div>
+      <label class="field">
+        Force du moteur : <strong>{engineElo}</strong>
+        <input type="range" min="400" max="2800" step="50" bind:value={engineElo} />
+      </label>
+      <p class="hint">
+        Le moteur ne grimpe pas : quand il prend une pièce ou donne échec, c'est toi qui grimpes un bloc de défense (une chute coûte du temps).
+        En Difficile et Diabolique, une contre-attaque par partie peut annuler son dernier coup. Sous 1320, la force est approximative (coups au hasard).
+      </p>
+    {:else}
     <div class="grid">
       {#each [["w", "Blancs"], ["b", "Noirs"]] as [color, label] (color)}
         <div class="player">
@@ -261,6 +385,7 @@
         </div>
       {/each}
     </div>
+    {/if}
     <div class="field">
       Rythme
       <div class="row">
@@ -318,7 +443,8 @@
       <div class="row">
         <button onclick={() => (flipped = !flipped)}>Retourner</button>
         {#if view.phase !== "over"}
-          <button onclick={() => { game!.resign(view.turn, Date.now()); refresh(); }}>Abandon ({COLOR_LABEL[view.turn]})</button>
+          {@const resigner = game.config.engine ? humanColor : view.turn}
+          <button onclick={() => { game!.resign(resigner, Date.now()); refresh(); }}>Abandon ({COLOR_LABEL[resigner]})</button>
         {/if}
       </div>
     </section>
@@ -358,18 +484,27 @@
           {view.deviation.chooser !== view.deviation.player ? `de ${game.config.players[view.deviation.player].name}` : ""}
           (case visée : {view.deviation.intended}). Touche une case en surbrillance.
         </p>
+      {:else if view.engineTurn}
+        <h2>{game.config.players[view.turn].name} réfléchit…</h2>
       {:else}
         <h2>Au tour de {game.config.players[view.turn].name} ({COLOR_LABEL[view.turn]})</h2>
         {#if view.kingOnly === view.turn}<p class="warn">Parade ratée : il faut parer avec le roi si c'est possible.</p>{/if}
         {#if view.falls[view.turn] > 0}<p class="hint">Chutes consécutives : {view.falls[view.turn]}</p>{/if}
         <div class="row">
           <button disabled={!view.canRecharge} onclick={() => recharge(false)}>Recharge</button>
-          {#if format === "classique"}
+          {#if game.config.format === "classique"}
             <button disabled={!view.canRecharge} onclick={() => recharge(true)}>Recharge (bloc dur)</button>
           {/if}
+          {#if view.canCounter}
+            <button class="counter" onclick={counterAttack}>Contre-attaque</button>
+          {/if}
         </div>
-        <p class="hint">Recharge : la pendule tourne pendant le bloc. Disponible tous les 5 coups.</p>
+        <p class="hint">
+          Recharge : la pendule tourne pendant le bloc. Disponible tous les 5 coups.
+          {#if view.canCounter}Contre-attaque (une fois par partie) : un bloc très dur pour annuler le dernier coup du moteur.{/if}
+        </p>
       {/if}
+      {#if engineError}<p class="warn">{engineError}</p>{/if}
 
       {#if lastDelta}
         <p class="hint">Cote de grimpe de {lastDelta.name} : {lastDelta.delta >= 0 ? "+" : ""}{Math.round(lastDelta.delta)}</p>
@@ -393,11 +528,11 @@
       <details>
         <summary>Coups ({view.sans.length})</summary>
         <p class="moves">
-          {#each view.sans as san, i (i)}{i % 2 === 0 ? `${i / 2 + 1}. ` : ""}{san} {/each}
+          {view.sans.map((san, i) => (i % 2 === 0 ? `${i / 2 + 1}. ${san}` : san)).join(" ")}
         </p>
       </details>
       <div class="row">
-        {#each ["w", "b"] as c (c)}
+        {#each (["w", "b"] as Color[]).filter((c) => c !== game!.config.engine?.color) as c (c)}
           <label class="check">
             <input type="checkbox" checked={view.fatigue[c as Color]} onchange={() => toggleFatigue(c as Color)} />
             Fatigue {game.config.players[c as Color].name}
@@ -458,6 +593,11 @@
     font-size: 1.3rem;
     font-weight: 700;
     margin: 0;
+  }
+  .counter {
+    border-color: #6a1b9a;
+    color: #6a1b9a;
+    font-weight: 700;
   }
   .verdict {
     margin: 0;

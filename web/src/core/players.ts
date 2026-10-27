@@ -166,6 +166,39 @@ export function recordPlacement(
   };
 }
 
+/** Identifiant de l'adversaire « moteur » dans le journal des parties. */
+export function engineId(elo: number): string {
+  return `stockfish-${Math.round(elo)}`;
+}
+
+/** Partie en solo contre le moteur : la cote Chesscalade du joueur bouge face à la force du moteur. */
+export function recordGameVsEngine(
+  state: RatingsState,
+  playerId: string,
+  playerColor: "w" | "b",
+  engineElo: number,
+  playerScore: number,
+  reason: string,
+  at = new Date().toISOString(),
+): RatingsState {
+  const engine = engineId(engineElo);
+  const record: GameRecord = {
+    at,
+    white: playerColor === "w" ? playerId : engine,
+    black: playerColor === "w" ? engine : playerId,
+    score: playerColor === "w" ? playerScore : 1 - playerScore,
+    reason,
+  };
+  const player = state.players.find((p) => p.id === playerId);
+  if (!player) return { ...state, games: [record, ...state.games] };
+  const updated = updateRating(player.ratings.chesscalade, [{ opponent: { rating: engineElo, rd: 60, volatility: 0.06 }, score: playerScore }]);
+  return {
+    ...state,
+    players: state.players.map((p) => (p.id === playerId ? { ...p, ratings: { ...p.ratings, chesscalade: updated } } : p)),
+    games: [record, ...state.games],
+  };
+}
+
 /** Résultat d'une partie entre deux joueurs, pour la cote donnée. */
 export function recordGame(
   state: RatingsState,

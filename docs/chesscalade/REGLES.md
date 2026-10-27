@@ -367,17 +367,23 @@ Chaque joueur a **trois cotes** indépendantes :
 
 ### 9.1 Solo contre un moteur
 
-- Force du moteur réglable par cote : **Maia** pour un jeu « humain » (~1100–1900), **Stockfish** limité
-  au-delà, et un niveau d'aptitude réduit en dessous.
+- Moteur : **Stockfish** (version « lite », dans le navigateur). Force réglable de 400 à 2800 : à partir de
+  1320, Stockfish limite lui-même sa force ; en dessous, il joue à son niveau le plus faible et remplace une
+  partie de ses coups par un coup au hasard (de 0 % à 1320 jusqu'à 80 % à 400). C'est une approximation.
+  **Maia** (jeu plus « humain ») reste une piste pour plus tard.
+- Par défaut, la force du moteur est la **cote Chesscalade** du joueur.
 - Le moteur **ne grimpe pas**. Équilibrage proposé :
   - pendule du moteur fixe (temps de départ du format, sans recharge possible) ;
-  - quand le moteur déclenche un événement contre le joueur (il prend une pièce, il met en échec), le joueur
-    grimpe un **bloc de défense**. Une chute coûte **seulement du temps** : les coups du moteur ne sont jamais annulés.
-- **Contre-attaque** (Difficile et Diabolique, **une fois par partie**) : le joueur peut annuler le dernier coup
-  du moteur en réussissant un bloc très dur. Le moteur rejoue alors un autre coup. Difficulté à jauger au mur ;
+  - quand un coup du moteur contient un déclencheur du format (§3.2 : prise, échec…), le joueur grimpe un
+    **bloc de défense** (cote visée : la sienne + bonus du déclencheur − 200). Une chute coûte **seulement du
+    temps** (pénalité du niveau) : le coup du moteur reste joué. Ce bloc remplace la parade ;
+  - le joueur, lui, grimpe ses blocs-défis normalement ; le moteur n'a jamais de bloc de parade.
+- **Contre-attaque** (Difficile et Diabolique, **une fois par partie**) : juste après un coup du moteur, le
+  joueur peut l'annuler en réussissant un bloc très dur. Le moteur rejoue alors un **autre** coup. Difficulté à jauger au mur ;
   point de départ : cote de grimpe du joueur **+300 en Difficile, +400 en Diabolique**, et **+100** de plus si le
   coup annulé est une prise de pièce majeure (tour, dame). En cas de chute, pénalité de temps (−30 s).
-- La cote du moteur s'adapte : une victoire du joueur fait monter la force de la partie suivante.
+- La cote du moteur s'adapte : la partie met à jour la cote Chesscalade du joueur face à la force du moteur,
+  et la partie suivante se joue par défaut à cette nouvelle cote.
 
 ### 9.2 Duo sur un même mur
 

@@ -32,7 +32,8 @@
     if (app.activePlayerId === id) app.selectPlayer(null);
   }
 
-  const nameOf = (id: string) => app.ratings.players.find((p) => p.id === id)?.name ?? "?";
+  const nameOf = (id: string) =>
+    app.ratings.players.find((p) => p.id === id)?.name ?? (id.startsWith("stockfish-") ? `Stockfish ${id.slice(10)}` : id ? "?" : "Invité");
   const date = (iso: string) => new Date(iso).toLocaleString("fr-FR", { dateStyle: "short", timeStyle: "short" });
 </script>
 

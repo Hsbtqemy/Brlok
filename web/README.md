@@ -29,6 +29,7 @@ ordinateur du même réseau et ouvrir l'adresse affichée.
 | `src/core/` | Logique sans interface : modèle de mur générique, import/export Brlok, générateurs, Glicko-2 |
 | `src/lib/` | Composants et utilitaires d'interface |
 | `src/App.svelte` | Navigation entre les écrans Pan, Partie, Joueurs |
+| `public/engine/` | Stockfish.js 19 « lite » (GPLv3, voir son README) |
 
 ## État (v0.2)
 
@@ -44,5 +45,5 @@ ordinateur du même réseau et ouvrir l'adresse affichée.
       verdicts V0–V6, déviation courte/libre, parade, bloc du mat, fatigue, garde-fous §6
 - [x] Placement (5 blocs adaptatifs pour fixer la cote de grimpe de départ)
 - [x] Stockage partagé quand l'app tourne comme page claude.ai (capacité `db`)
-- [ ] Solo contre un moteur (Maia / Stockfish), contre-attaque
+- [x] Solo contre Stockfish (force 400–2800), blocs de défense, contre-attaque
 - [ ] Familles A, B, C (rounds, duels au mur)

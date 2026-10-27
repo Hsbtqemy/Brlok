@@ -12,7 +12,7 @@ export type Format = "blitz" | "classique";
 export type Difficulty = "facile" | "modere" | "difficile" | "diabolique";
 export type Deviation = "courte" | "libre";
 export type Trigger = "capture" | "echec" | "promotion" | "roque" | "mat";
-export type BlockKind = "defi" | "parade" | "recharge";
+export type BlockKind = "defi" | "parade" | "recharge" | "defense" | "contre-attaque";
 export type Verdict = 0 | 1 | 2 | 3 | 4 | 5 | 6;
 
 export interface PlayerSetup {
@@ -27,6 +27,8 @@ export interface GameConfig {
   difficulty: Difficulty;
   deviation: Deviation;
   players: Record<Color, PlayerSetup>;
+  /** Solo contre un moteur (§9.1) : couleur jouée par le moteur, qui ne grimpe pas. */
+  engine?: { color: Color; elo: number };
 }
 
 export interface BlockRequest {
@@ -116,6 +118,10 @@ const V6_PENALTY_MS = 45_000;
 const PARADE_LIMIT_MS = 20_000;
 const PARADE_LENGTH = 4;
 const RECHARGE_EVERY = 5;
+const DEFENSE_BONUS = -200;
+const COUNTER_BONUS = { difficile: 300, diabolique: 400 } as const;
+const COUNTER_MAJOR_BONUS = 100;
+const COUNTER_PENALTY_MS = 30_000;
 
 export const PIECE_OF: Record<PieceSymbol, Piece> = { p: "pion", n: "cavalier", b: "fou", r: "tour", q: "dame", k: "roi" };
 
@@ -210,6 +216,10 @@ export class ChesscaladeGame {
   forbiddenThisTurn = new Set<string>();
   /** Après une parade ratée (Difficile et au-dessus) : parer avec le roi si c'est légal. */
   kingOnly: Color | null = null;
+  /** Solo : dernier coup du moteur, contre-attaque utilisée, coups exclus pour sa nouvelle recherche. */
+  lastEngineMove: Move | null = null;
+  counterAttackUsed = false;
+  engineExcluded: string[] = [];
   private exhaustionOrder = 0;
 
   constructor(
@@ -251,7 +261,46 @@ export class ChesscaladeGame {
   }
 
   canRecharge(): boolean {
-    return this.phase === "move" && this.movesSinceRecharge[this.turn] >= RECHARGE_EVERY;
+    return this.phase === "move" && !this.isEngineTurn() && this.movesSinceRecharge[this.turn] >= RECHARGE_EVERY;
+  }
+
+  isEngineTurn(): boolean {
+    return this.phase === "move" && this.config.engine?.color === this.turn;
+  }
+
+  /** Coups que le moteur peut jouer (au format UCI), hors coup annulé par une contre-attaque. */
+  engineCandidates(): string[] {
+    return this.chess
+      .moves({ verbose: true })
+      .map((m) => m.lan)
+      .filter((lan) => !this.engineExcluded.includes(lan));
+  }
+
+  /** Contre-attaque (§9.1) : Difficile et au-dessus, une fois par partie, juste après un coup du moteur. */
+  canCounterAttack(): boolean {
+    const engine = this.config.engine;
+    if (!engine || this.counterAttackUsed || this.phase !== "move" || this.turn === engine.color) return false;
+    if (this.config.difficulty !== "difficile" && this.config.difficulty !== "diabolique") return false;
+    const last = this.chess.history({ verbose: true }).at(-1);
+    return !!last && !!this.lastEngineMove && last.lan === this.lastEngineMove.lan && last.after === this.lastEngineMove.after;
+  }
+
+  requestCounterAttack(now: number): void {
+    if (!this.canCounterAttack()) throw new Error("Contre-attaque indisponible.");
+    const move = this.lastEngineMove!;
+    const color = this.turn;
+    const difficulty = this.config.difficulty as keyof typeof COUNTER_BONUS;
+    const major = move.captured === "r" || move.captured === "q";
+    this.counterAttackUsed = true;
+    const request: BlockRequest = {
+      climber: color,
+      kind: "contre-attaque",
+      piece: PIECE_OF[move.piece],
+      targetRating: this.baseTarget(color) + COUNTER_BONUS[difficulty] + (major ? COUNTER_MAJOR_BONUS : 0),
+      length: FORMAT[this.config.format].length,
+      cruxLast: false,
+    };
+    this.startBlock({ request, triggers: [], move }, now);
   }
 
   // --- Actions -------------------------------------------------------------------
@@ -263,6 +312,10 @@ export class ChesscaladeGame {
     if (!move) throw new Error("Coup non autorisé.");
 
     const triggers = triggersOf(this.config.format, move);
+    if (this.config.engine?.color === this.turn) {
+      this.playEngineMove(move, triggers, now);
+      return;
+    }
     if (triggers.length === 0) {
       this.applyMove(move, now);
       return;
@@ -333,6 +386,30 @@ export class ChesscaladeGame {
       case "defi":
         this.resolveDefi(pending, success, now);
         break;
+      case "defense":
+        if (success) {
+          this.note(climber, "Bloc de défense réussi.");
+        } else {
+          this.penalize(climber, DIFFICULTY[this.config.difficulty].penaltyMs, now);
+          this.note(climber, "Bloc de défense raté : pénalité de temps.");
+        }
+        this.clock.run(climber, now);
+        break;
+      case "contre-attaque": {
+        const move = pending.move!;
+        if (success) {
+          this.chess.undo();
+          this.engineExcluded = [move.lan];
+          this.lastEngineMove = null;
+          this.note(climber, `Contre-attaque réussie : ${move.san} est annulé, le moteur rejoue.`);
+          this.clock.run(move.color, now);
+        } else {
+          this.penalize(climber, COUNTER_PENALTY_MS, now);
+          this.note(climber, "Contre-attaque ratée : pénalité de temps.");
+          this.clock.run(climber, now);
+        }
+        break;
+      }
     }
     this.checkFlag(now);
     return outcome;
@@ -526,8 +603,8 @@ export class ChesscaladeGame {
     const opponent = other(color);
     this.clock.run(opponent, now);
 
-    // Être mis en échec : bloc de parade, en Classique uniquement (§5.4).
-    if (this.config.format === "classique" && this.chess.inCheck()) {
+    // Être mis en échec : bloc de parade, en Classique uniquement (§5.4). En solo, le bloc de défense le remplace.
+    if (this.config.format === "classique" && this.chess.inCheck() && !this.config.engine) {
       const request: BlockRequest = {
         climber: opponent,
         kind: "parade",
@@ -538,6 +615,25 @@ export class ChesscaladeGame {
       };
       this.startBlock({ request, triggers: [] }, now);
     }
+  }
+
+  /** Coup du moteur : toujours appliqué ; s'il déclenche un événement, le joueur grimpe un bloc de défense. */
+  private playEngineMove(move: Move, triggers: Trigger[], now: number): void {
+    this.applyMove(move, now);
+    this.lastEngineMove = move;
+    this.engineExcluded = [];
+    if (this.phase !== "move" || triggers.length === 0) return;
+    const human = other(move.color);
+    const bonuses = triggers.map((t) => (t === "capture" ? CAPTURE_BONUS[move.captured ?? "p"] : TRIGGER_BONUS[t]));
+    const request: BlockRequest = {
+      climber: human,
+      kind: "defense",
+      piece: PIECE_OF[move.piece],
+      targetRating: this.baseTarget(human) + Math.max(...bonuses) + DEFENSE_BONUS,
+      length: FORMAT[this.config.format].length - 1,
+      cruxLast: false,
+    };
+    this.startBlock({ request, triggers, move }, now);
   }
 
   private exhaust(square: Square, color: Color, turns: number): void {

@@ -4,7 +4,7 @@
  * est disponible (voir sharedStore.ts), auquel cas c'est lui qui fait foi.
  */
 import type { Block } from "../core/generator";
-import { recordBlockAttempt, recordGame, type AttemptRecord, type RatingsState } from "../core/players";
+import { recordBlockAttempt, recordGame, recordGameVsEngine, type AttemptRecord, type RatingsState } from "../core/players";
 import type { Wall } from "../core/wall";
 import { SharedStore, type SyncStatus } from "./sharedStore";
 import {
@@ -95,6 +95,10 @@ class AppState {
 
   recordGame(whiteId: string, blackId: string, score: number, reason: string) {
     this.setRatings(recordGame(this.snapshotRatings(), whiteId, blackId, score, reason));
+  }
+
+  recordGameVsEngine(playerId: string, color: "w" | "b", engineElo: number, playerScore: number, reason: string) {
+    this.setRatings(recordGameVsEngine(this.snapshotRatings(), playerId, color, engineElo, playerScore, reason));
   }
 }
 
