@@ -161,6 +161,22 @@ Précisions :
 > Dilemme recherché : grimper pour gagner du temps, au risque d'être fatigué et de mal calculer,
 > ou jouer vite et garder ses bras.
 
+**Réussir rapporte du temps** (ajouté après le premier test : sans ça, réussir un bloc ne changeait rien de
+visible) :
+
+| Bloc réussi | Blitz | Classique |
+|---|---|---|
+| Bloc-défi (le coup est joué) | +10 s | +20 s |
+| Défense, parade, cloche | +5 s | +10 s |
+| Recharge | +30 s | +60 s (+90 s en bloc dur) |
+
+Chaque résultat est annoncé en clair, juste après le bloc (« Bloc réussi : exd5 est joué, et +20 s »,
+« Chute : exd5 est joué, mais ton pion ne pourra pas bouger au prochain tour »).
+
+**En solo**, le joueur reçoit en plus un **incrément** à chaque coup (+5 s en Blitz, +10 s en Classique),
+pas le moteur : Stockfish joue en moins d'une seconde, et sans incrément le joueur tombait au temps à coup
+sûr.
+
 ---
 
 ## 5. Coups en suspens et verdicts

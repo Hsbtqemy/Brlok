@@ -459,3 +459,36 @@ describe("densité de blocs (§5.5)", () => {
     expect(requests.at(-1)?.kind).toBe("defense");
   });
 });
+
+describe("pendule en solo", () => {
+  it("le joueur reçoit un incrément à chaque coup, pas le moteur", () => {
+    const { game } = setup("blitz", "modere", {
+      players: { w: { name: "A", climbRating: 1500, fatigue: false }, b: { name: "SF", climbRating: 0, fatigue: false } },
+      engine: { color: "b", elo: 1500 },
+    });
+    game.play("e2", "e4", undefined, 10_000); // 10 s de réflexion
+    expect(game.clock.remainingAt("w", 10_000)).toBe(3 * 60_000 - 10_000 + 5_000);
+    game.play("e7", "e5", undefined, 11_000); // le moteur : 1 s, sans incrément
+    expect(game.clock.remainingAt("b", 11_000)).toBe(3 * 60_000 - 1_000);
+  });
+});
+
+describe("réussir un bloc rapporte du temps", () => {
+  it("bloc-défi réussi : +20 s en Classique, avec un message clair", () => {
+    const { game } = setup("classique", "modere");
+    playLine(game, ["e2e4", "d7d5"]);
+    const before = game.clock.remainingAt("w", 0);
+    game.play("e4", "d5", undefined, 0);
+    game.blockResult(true, 0);
+    expect(game.clock.remainingAt("w", 0)).toBe(before + 20_000);
+    expect(game.log.at(-1)).toMatchObject({ text: "Bloc réussi : exd5 est joué, et +20 s.", tone: "bon" });
+  });
+
+  it("chute : la conséquence est expliquée", () => {
+    const { game } = setup("classique", "modere");
+    playLine(game, ["e2e4", "d7d5"]);
+    game.play("e4", "d5", undefined, 0);
+    game.blockResult(false, 0);
+    expect(game.log.at(-1)).toMatchObject({ text: "Chute : exd5 est joué, mais ton pion ne pourra pas bouger au prochain tour.", tone: "mauvais" });
+  });
+});

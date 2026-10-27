@@ -6,7 +6,7 @@
  * données simples (JSON), pour la sauvegarde.
  */
 import { Chess, type Color, type PieceSymbol, type Square } from "chess.js";
-import { Clock, mostActivePiece, other, type Format, type GameResult } from "./game";
+import { Clock, mostActivePiece, other, SOLO_INCREMENT_MS, type Format, type GameResult } from "./game";
 
 export { mostActivePiece };
 import type { Block } from "./generator";
@@ -199,6 +199,8 @@ export class RoundsGame {
     if (this.stage !== "echecs") throw new Error("Le plateau est figé pendant le round de mur.");
     const color = this.turn;
     this.chess.move({ from, to, promotion: promotion ?? "q" });
+    // Solo : incrément pour le joueur (le moteur joue en moins d'une seconde).
+    if (this.config.engine && this.config.engine.color !== color) this.clock.add(color, SOLO_INCREMENT_MS[this.config.format], now);
     if (this.chess.isGameOver()) {
       if (this.chess.isCheckmate()) this.finish({ winner: color, reason: "mat" }, now);
       else this.finish({ winner: null, reason: this.chess.isStalemate() ? "pat" : "nulle" }, now);

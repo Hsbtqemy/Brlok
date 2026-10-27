@@ -213,3 +213,11 @@ describe("rounds sur un mur à voies", () => {
     expect(routeIdOf(duel.block)).toBe("v3");
   });
 });
+
+describe("rounds en solo : pendule", () => {
+  it("incrément pour le joueur à chaque coup", () => {
+    const { game } = setup({ engine: { color: "b", elo: 1500 }, players: { w: { name: "A", climbRating: 1500 }, b: { name: "SF", climbRating: 0 } } });
+    game.play("e2" as Square, "e4" as Square, undefined, 10_000);
+    expect(game.clock.remainingAt("w", 10_000)).toBe(ROUNDS.blitz.clockMs - 10_000 + 5_000);
+  });
+});

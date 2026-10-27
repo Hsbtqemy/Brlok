@@ -94,6 +94,8 @@ export type Phase = "move" | "block" | "deviation" | "over";
 export interface LogEntry {
   color: Color;
   text: string;
+  /** Pour l'affichage : bonne nouvelle, mauvaise, ou simple information. */
+  tone?: "bon" | "mauvais" | "neutre";
 }
 
 /** Résultat d'un bloc, à reporter dans les cotes et le journal par l'appelant. */
@@ -129,6 +131,40 @@ const PARADE_LIMIT_MS = 20_000;
 const PARADE_LENGTH = 4;
 const RECHARGE_EVERY = 5;
 const DEFENSE_BONUS = -200;
+/**
+ * Solo : le moteur joue en moins d'une seconde, le joueur réfléchit. Sans compensation, le joueur tombe
+ * au temps à coup sûr : il reçoit donc un incrément à chaque coup (le moteur, non).
+ */
+export const SOLO_INCREMENT_MS = { blitz: 5_000, classique: 10_000 } as const;
+/** Réussir un bloc rapporte du temps (§4) : le bloc-défi plus que les autres. */
+export const SUCCESS_BONUS_MS = {
+  defi: { blitz: 10_000, classique: 20_000 },
+  autre: { blitz: 5_000, classique: 10_000 },
+} as const;
+
+const possessive = (piece: Piece) => (piece === "dame" || piece === "tour" ? `ta ${piece}` : `ton ${piece}`);
+
+/** Conséquence d'un verdict, en clair (§5.2). */
+export function verdictText(verdict: Verdict, move: Move, penaltyS: number, exhaustTurns: number): string {
+  const piece = possessive(PIECE_OF[move.piece]);
+  const turns = exhaustTurns === 1 ? "au prochain tour" : `pendant ${exhaustTurns} tours`;
+  switch (verdict) {
+    case 0:
+      return `${move.san} est joué`;
+    case 1:
+      return `${move.san} est joué, mais tu perds ${penaltyS} s`;
+    case 2:
+      return `${move.san} est joué, mais ${piece} ne pourra pas bouger ${turns}`;
+    case 3:
+      return `${move.san} est annulé : joue un autre coup`;
+    case 4:
+      return `${move.san} est annulé, et ${piece} est bloqué(e) ce tour-ci puis ${turns}`;
+    case 5:
+      return `${piece} doit quand même bouger, mais sur une autre case, au plus près de ${move.to}`;
+    case 6:
+      return `l'adversaire choisit la case de ${piece}, et tu perds 45 s`;
+  }
+}
 const COUNTER_BONUS = { difficile: 300, diabolique: 400 } as const;
 const COUNTER_MAJOR_BONUS = 100;
 const COUNTER_PENALTY_MS = 30_000;
@@ -537,21 +573,21 @@ export class ChesscaladeGame {
         if (success) {
           const gain = FORMAT[this.config.format].recharge[pending.hard ? "hard" : "normal"];
           this.clock.add(climber, gain, now);
-          this.note(climber, `Recharge réussie : +${gain / 1000} s.`);
+          this.note(climber, `Recharge réussie : +${gain / 1000} s.`, "bon");
         } else {
-          this.note(climber, "Recharge ratée : aucun temps gagné.");
+          this.note(climber, "Recharge ratée : aucun temps gagné.", "mauvais");
         }
         this.clock.run(climber, now);
         break;
       case "parade":
         if (success) {
-          this.note(climber, "Parade réussie.");
+          this.note(climber, `Parade réussie : +${this.reward(climber, "autre", now)} s.`, "bon");
         } else if (this.config.difficulty === "difficile" || this.config.difficulty === "diabolique") {
           this.kingOnly = climber;
-          this.note(climber, "Parade ratée : il faut parer avec le roi si c'est possible.");
+          this.note(climber, "Parade ratée : il faut parer avec le roi si c'est possible.", "mauvais");
         } else {
           this.penalize(climber, DIFFICULTY[this.config.difficulty].penaltyMs, now);
-          this.note(climber, "Parade ratée : pénalité de temps.");
+          this.note(climber, `Parade ratée : tu perds ${DIFFICULTY[this.config.difficulty].penaltyMs / 1000} s.`, "mauvais");
         }
         this.clock.run(climber, now);
         break;
@@ -560,19 +596,19 @@ export class ChesscaladeGame {
         break;
       case "cloche":
         if (success) {
-          this.note(climber, "Bloc de la cloche réussi.");
+          this.note(climber, `Bloc de la cloche réussi : +${this.reward(climber, "autre", now)} s.`, "bon");
         } else {
           this.penalize(climber, DIFFICULTY[this.config.difficulty].penaltyMs, now);
-          this.note(climber, "Bloc de la cloche raté : pénalité de temps.");
+          this.note(climber, `Bloc de la cloche raté : tu perds ${DIFFICULTY[this.config.difficulty].penaltyMs / 1000} s.`, "mauvais");
         }
         this.nextBellClimber(now);
         break;
       case "defense":
         if (success) {
-          this.note(climber, "Bloc de défense réussi.");
+          this.note(climber, `Défense réussie : pas de pénalité, et +${this.reward(climber, "autre", now)} s.`, "bon");
         } else {
           this.penalize(climber, DIFFICULTY[this.config.difficulty].penaltyMs, now);
-          this.note(climber, "Bloc de défense raté : pénalité de temps.");
+          this.note(climber, `Défense ratée : tu perds ${DIFFICULTY[this.config.difficulty].penaltyMs / 1000} s.`, "mauvais");
         }
         this.clock.run(climber, now);
         break;
@@ -582,11 +618,11 @@ export class ChesscaladeGame {
           this.chess.undo();
           this.engineExcluded = [move.lan];
           this.lastEngineMove = null;
-          this.note(climber, `Contre-attaque réussie : ${move.san} est annulé, le moteur rejoue.`);
+          this.note(climber, `Contre-attaque réussie : ${move.san} est annulé, le moteur rejoue.`, "bon");
           this.clock.run(move.color, now);
         } else {
           this.penalize(climber, COUNTER_PENALTY_MS, now);
-          this.note(climber, "Contre-attaque ratée : pénalité de temps.");
+          this.note(climber, `Contre-attaque ratée : tu perds ${COUNTER_PENALTY_MS / 1000} s.`, "mauvais");
           this.clock.run(climber, now);
         }
         break;
@@ -744,7 +780,11 @@ export class ChesscaladeGame {
       if (pending.triggers.includes("mat") && verdict < 3) verdict = 3; // §6 règle 5
     }
     this.lastVerdict = { color, verdict, move: move.san };
-    this.note(color, success ? `Bloc réussi : ${move.san} validé.` : `Chute → V${verdict} ${VERDICT_LABELS[verdict]} (${move.san}).`);
+    if (success) {
+      this.note(color, `Bloc réussi : ${move.san} est joué, et +${this.reward(color, "defi", now)} s.`, "bon");
+    } else {
+      this.note(color, `Chute : ${verdictText(verdict, move, d.penaltyMs / 1000, d.exhaustTurns)}.`, "mauvais");
+    }
     this.clock.run(color, now);
 
     switch (verdict) {
@@ -825,6 +865,9 @@ export class ChesscaladeGame {
     this.forbiddenThisTurn.clear();
     if (this.kingOnly === color) this.kingOnly = null;
     this.movesSinceRecharge[color]++;
+    if (this.config.engine && this.config.engine.color !== color) {
+      this.clock.add(color, SOLO_INCREMENT_MS[this.config.format], now);
+    }
     this.phase = "move";
 
     if (this.chess.isGameOver()) {
@@ -928,8 +971,15 @@ export class ChesscaladeGame {
     this.clock.run(null, now);
   }
 
-  private note(color: Color, text: string): void {
-    this.log.push({ color, text });
+  /** Bonus de temps pour un bloc réussi ; renvoie les secondes gagnées. */
+  private reward(color: Color, kind: keyof typeof SUCCESS_BONUS_MS, now: number): number {
+    const ms = SUCCESS_BONUS_MS[kind][this.config.format];
+    this.clock.add(color, ms, now);
+    return ms / 1000;
+  }
+
+  private note(color: Color, text: string, tone: LogEntry["tone"] = "neutre"): void {
+    this.log.push({ color, text, tone });
   }
 }
 

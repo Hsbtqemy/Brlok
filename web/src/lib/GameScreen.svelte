@@ -329,6 +329,7 @@
       kingOnly: game.kingOnly,
       running: game.clock.running,
       lastVerdict: game.lastVerdict,
+      lastEvent: game.log.at(-1) ?? null,
       fatigue: { w: game.config.players.w.fatigue, b: game.config.players.b.fatigue },
     };
   });
@@ -667,6 +668,12 @@
     </section>
 
     <section class="panel side" bind:this={sidePanel}>
+      {#if view.lastEvent && view.phase !== "block"}
+        <p class="event {view.lastEvent.tone ?? 'neutre'}">
+          <span class="who">{game.config.players[view.lastEvent.color].name}</span>
+          {view.lastEvent.text}
+        </p>
+      {/if}
       {#if view.phase === "over" && view.result}
         <h2>Partie terminée</h2>
         <p class="big">
@@ -735,9 +742,9 @@
       {/if}
 
       {#if view.lastVerdict}
-        <p class="verdict">
+        <p class="hint">
           Dernier verdict ({game.config.players[view.lastVerdict.color].name}, {view.lastVerdict.move}) :
-          <strong>V{view.lastVerdict.verdict} {VERDICT_LABELS[view.lastVerdict.verdict]}</strong>
+          V{view.lastVerdict.verdict} {VERDICT_LABELS[view.lastVerdict.verdict]}
         </p>
       {/if}
 
@@ -745,7 +752,7 @@
         <summary>Journal</summary>
         <ul class="log">
           {#each view.log as entry, i (view.log.length - i)}
-            <li><span class="dot" class:black={entry.color === "b"}></span>{entry.text}</li>
+            <li class={entry.tone ?? "neutre"}><span class="dot" class:black={entry.color === "b"}></span>{entry.text}</li>
           {/each}
         </ul>
       </details>
@@ -864,6 +871,33 @@
   .bell {
     margin: 0;
     font-variant-numeric: tabular-nums;
+  }
+  .event {
+    margin: 0;
+    padding: 12px 14px;
+    border-radius: 10px;
+    font-size: 1.15rem;
+    font-weight: 600;
+    border-left: 6px solid var(--border);
+    background: var(--bg);
+  }
+  .event .who {
+    display: block;
+    font-size: 0.8rem;
+    font-weight: 500;
+    color: var(--muted);
+  }
+  .event.bon {
+    border-left-color: #2e7d32;
+  }
+  .event.mauvais {
+    border-left-color: #c62828;
+  }
+  .log li.bon {
+    color: #2e7d32;
+  }
+  .log li.mauvais {
+    color: #c62828;
   }
   .verdict {
     margin: 0;
