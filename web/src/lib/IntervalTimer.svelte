@@ -29,6 +29,15 @@
   let banked = $state(0);
   let now = $state(Date.now());
   let big = $state(false);
+  /** Grand écran en portrait : le mur garde une hauteur modérée pour laisser le minuteur et ses boutons à l'écran. */
+  let portrait = $state(typeof window !== "undefined" && window.matchMedia("(max-aspect-ratio: 1/1)").matches);
+  $effect(() => {
+    const query = window.matchMedia("(max-aspect-ratio: 1/1)");
+    const apply = () => (portrait = query.matches);
+    query.addEventListener("change", apply);
+    return () => query.removeEventListener("change", apply);
+  });
+  const wallHeight = $derived(portrait ? "46vh" : "72vh");
   let flash = $state(false);
   let chained = $state(false);
   let result = $state<string | null>(null);
@@ -242,9 +251,9 @@
     {#if app.wall && block}
       <div class="big-wall">
         {#if block.route}
-          <RouteView wall={app.wall} route={app.wall.routes.find((r) => r.id === block.route!.id) ?? null} maxHeight="72vh" variant={block.route.variant} variantHold={block.route.variantHold} />
+          <RouteView wall={app.wall} route={app.wall.routes.find((r) => r.id === block.route!.id) ?? null} maxHeight={wallHeight} variant={block.route.variant} variantHold={block.route.variantHold} />
         {:else}
-          <PanView wall={app.wall} sequence={block.holds.map((h) => h.id)} maxHeight="72vh" />
+          <PanView wall={app.wall} sequence={block.holds.map((h) => h.id)} maxHeight={wallHeight} />
         {/if}
       </div>
     {/if}

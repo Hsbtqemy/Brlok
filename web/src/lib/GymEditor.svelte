@@ -254,7 +254,7 @@
     gap: 16px;
     align-items: start;
   }
-  @media (max-width: 860px) {
+  @media (max-width: 699px) {
     .gym {
       grid-template-columns: 1fr;
     }
