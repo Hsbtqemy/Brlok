@@ -46,6 +46,18 @@
   const REASON_LABEL = { mat: "échec et mat", pat: "pat", nulle: "nulle", temps: "au temps", abandon: "abandon" } as const;
   const COLOR_LABEL: Record<Color, string> = { w: "Blancs", b: "Noirs" };
 
+  /**
+   * Disposition à deux sur un même écran : côte à côte (un seul sens), tour à tour (l'échiquier se tourne
+   * vers le joueur au trait), face à face (tablette à plat entre les joueurs : pièces et panneaux tournés
+   * vers chacun). Elle se change aussi en cours de partie.
+   */
+  type Layout = "cote" | "tour" | "face";
+  const LAYOUTS: { id: Layout; label: string; hint: string }[] = [
+    { id: "cote", label: "Côte à côte", hint: "Un seul sens d'échiquier, « Retourner » à la main." },
+    { id: "tour", label: "Tour à tour", hint: "L'échiquier se tourne vers celui qui joue : pour se passer la tablette." },
+    { id: "face", label: "Face à face", hint: "Tablette à plat entre vous : les pièces et la bande de chacun sont tournées vers lui." },
+  ];
+
   // --- Réglages (retenus d'une partie à l'autre, sur cet appareil) ---
   const SETUP_KEY = "brlok-web:game-setup";
   type SetupPrefs = Partial<{
@@ -66,6 +78,7 @@
     /** Une partie a déjà été lancée avec ces réglages (« Rejouer comme la dernière fois »). */
     lastStarted: boolean;
     wallSource: "saved" | "express";
+    layout: Layout;
     expressCols: number;
     expressRows: number;
   }>;
@@ -118,6 +131,7 @@
   let lastStarted = $state(prefs.lastStarted ?? false);
   /** Où : un mur enregistré, ou un pan rapide (une prise par case, niveau moyen) créé pour la partie. */
   let wallSource = $state<"saved" | "express">(prefs.wallSource ?? (app.walls.length ? "saved" : "express"));
+  let layout = $state<Layout>(prefs.layout ?? "cote");
   let expressCols = $state(prefs.expressCols ?? 6);
   let expressRows = $state(prefs.expressRows ?? 7);
   const expressName = $derived(`Pan rapide ${expressCols}×${expressRows}`);
@@ -184,6 +198,7 @@
       engineElo,
       lastStarted,
       wallSource,
+      layout,
       expressCols,
       expressRows,
     };
@@ -535,6 +550,25 @@
     };
   });
 
+  // À deux : qui a la main en ce moment (coup, bloc, choix de déviation), et la disposition de l'écran.
+  const duo = $derived(!!game && !game.config.engine);
+  const actor = $derived<Color | null>(
+    !view || view.phase === "over"
+      ? null
+      : view.phase === "block" && view.pending
+        ? view.pending.request.climber
+        : view.phase === "deviation" && view.deviation
+          ? view.deviation.chooser
+          : view.turn,
+  );
+  const face = $derived(duo && layout === "face");
+  const topColor = $derived<Color>(flipped ? "w" : "b");
+  /** Face à face : ce qui concerne le joueur d'en haut est retourné vers lui. */
+  const actorUpside = $derived(face && actor === topColor);
+  $effect(() => {
+    if (duo && layout === "tour" && actor) flipped = actor === "b";
+  });
+
   const targets = $derived.by(() => {
     if (!view) return new Set<Square>();
     if (view.phase === "deviation" && view.deviation) return new Set(view.deviation.options.map((m) => m.to));
@@ -737,6 +771,18 @@
           </label>
         </div>
       {/each}
+    </div>
+    <div class="field">
+      Disposition sur l'écran
+      <div class="cards three">
+        {#each LAYOUTS as l (l.id)}
+          <button class="card compact" aria-pressed={layout === l.id} onclick={() => (layout = l.id)}>
+            <strong>{l.label}</strong>
+            <small>{l.hint}</small>
+          </button>
+        {/each}
+      </div>
+      <p class="hint">Elle se change aussi pendant la partie, sous l'échiquier.</p>
     </div>
       {/if}
       {#if !rounded}
@@ -972,7 +1018,7 @@
 {:else}
   <div class="game" class:climbing={view.phase === "block" && !showBoard} class:in-block={view.phase === "block"}>
     <section class="panel board-panel" bind:this={boardPanel}>
-      <div class="status {view.phase === 'over' ? '' : (view.lastEvent?.tone ?? '')}">
+      <div class="status {view.phase === 'over' ? '' : (view.lastEvent?.tone ?? '')}" class:upside={actorUpside}>
         <div class="status-line">
           <strong>
             {#if view.phase === "over" && view.result}
@@ -1000,7 +1046,7 @@
           <p class="status-event"><span class="who">{game.config.players[view.lastEvent.color].name} :</span> {view.lastEvent.text}</p>
         {/if}
       </div>
-      <div class="clock" class:running={view.running === (flipped ? "w" : "b")}>
+      <div class="clock" class:running={view.running === (flipped ? "w" : "b")} class:upside={face}>
         <span>{flipped ? game.config.players.w.name : game.config.players.b.name} · {COLOR_LABEL[flipped ? "w" : "b"]}</span>
         <strong>{clockText(flipped ? "w" : "b")}</strong>
       </div>
@@ -1014,6 +1060,7 @@
         lastMove={view.lastMove}
         checkSquare={view.checkSquare}
         intended={view.deviation?.intended ?? null}
+        upsideDown={face ? topColor : null}
         {onSquare}
       />
       </div>
@@ -1022,7 +1069,7 @@
         <strong>{clockText(flipped ? "b" : "w")}</strong>
       </div>
       {#if promotionChoice}
-        <div class="row promo">
+        <div class="row promo" class:upside={actorUpside}>
           Promotion :
           {#each [["q", "Dame"], ["r", "Tour"], ["b", "Fou"], ["n", "Cavalier"]] as [p, label] (p)}
             <button onclick={() => play(promotionChoice!.from, promotionChoice!.to, p as PieceSymbol)}>{label}</button>
@@ -1030,7 +1077,14 @@
         </div>
       {/if}
       <div class="row board-actions">
-        <button onclick={() => (flipped = !flipped)}>Retourner</button>
+        {#if duo}
+          <div class="layout seg" role="group" aria-label="Disposition">
+            {#each LAYOUTS as l (l.id)}
+              <button aria-pressed={layout === l.id} title={l.hint} onclick={() => (layout = l.id)}>{l.label}</button>
+            {/each}
+          </div>
+        {/if}
+        {#if !duo || layout !== "tour"}<button onclick={() => (flipped = !flipped)}>Retourner</button>{/if}
         {#if view.phase !== "over"}
           {@const resigner = game.config.engine ? humanColor : view.turn}
           <button
@@ -1045,7 +1099,7 @@
       </div>
     </section>
 
-    <section class="panel side" bind:this={sidePanel}>
+    <section class="panel side" class:upside={actorUpside} bind:this={sidePanel}>
       {#if view.phase === "over" && view.result}
         <h2>Partie terminée</h2>
         <p class="big">
@@ -1301,6 +1355,22 @@
   .express input[type="number"] {
     width: 90px;
   }
+  .cards.three {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  .upside {
+    transform: rotate(180deg);
+  }
+  .layout {
+    display: flex;
+    flex: 1 1 100%;
+  }
+  .layout button {
+    flex: 1;
+    min-height: 40px;
+    font-size: 0.85rem;
+    padding: 0 6px;
+  }
   .wizard-head {
     display: flex;
     flex-direction: column;
@@ -1428,7 +1498,8 @@
     color: var(--muted);
   }
   @media (max-width: 420px) {
-    .cards {
+    .cards,
+    .cards.three {
       grid-template-columns: 1fr;
     }
   }

@@ -12,10 +12,12 @@
     checkSquare?: Square | null;
     /** Case visée d'un coup dévié, à rappeler pendant le choix. */
     intended?: Square | null;
+    /** Face à face (tablette à plat) : les pièces de ce camp sont retournées, pour le joueur d'en face. */
+    upsideDown?: Color | null;
     onSquare?: (square: Square) => void;
   }
 
-  let { board, flipped = false, selected = null, targets = new Set(), exhausted = new Set(), lastMove = null, checkSquare = null, intended = null, onSquare }: Props = $props();
+  let { board, flipped = false, selected = null, targets = new Set(), exhausted = new Set(), lastMove = null, checkSquare = null, intended = null, upsideDown = null, onSquare }: Props = $props();
 
   // Variante texte (FE0E) : évite le rendu emoji du pion sur certains systèmes.
   const GLYPH: Record<PieceSymbol, string> = { k: "♚︎", q: "♛︎", r: "♜︎", b: "♝︎", n: "♞︎", p: "♟︎" };
@@ -51,7 +53,7 @@
       aria-label={c.square}
     >
       {#if c.piece}
-        <span class="piece" class:white={c.piece.color === "w"} class:tired={exhausted.has(c.square)}>{GLYPH[c.piece.type]}</span>
+        <span class="piece" class:white={c.piece.color === "w"} class:tired={exhausted.has(c.square)} class:upside={c.piece.color === upsideDown}>{GLYPH[c.piece.type]}</span>
       {/if}
       {#if exhausted.has(c.square)}<span class="zz" title="Pièce épuisée">z</span>{/if}
       {#if (flipped ? c.square[1] === "8" : c.square[1] === "1")}<span class="coord file">{c.square[0]}</span>{/if}
@@ -126,6 +128,10 @@
     color: #1b1b1b;
     text-shadow: 0 1px 0 rgba(255, 255, 255, 0.4);
     user-select: none;
+  }
+  .piece.upside {
+    display: inline-block;
+    transform: rotate(180deg);
   }
   .piece.white {
     color: #fff;
