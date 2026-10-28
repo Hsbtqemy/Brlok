@@ -25,6 +25,16 @@
 
   let screen = $state<ScreenId>(initialScreen());
 
+  // Barre de navigation en bas : sur téléphone, et sur tablette tactile (iPad), à portée de pouce.
+  const BOTTOM_NAV = "(max-width: 600px), (pointer: coarse) and (max-width: 1400px)";
+  $effect(() => {
+    const query = window.matchMedia(BOTTOM_NAV);
+    const apply = () => document.body.classList.toggle("bottom-nav", query.matches);
+    apply();
+    query.addEventListener("change", apply);
+    return () => query.removeEventListener("change", apply);
+  });
+
   // Installation de l'app (Android, Chrome et Edge sur ordinateur) : le navigateur la propose, on garde
   // l'invitation pour un bouton. Sur iPhone : Partager → Sur l'écran d'accueil.
   type InstallPrompt = Event & { prompt(): Promise<void>; userChoice: Promise<{ outcome: string }> };
@@ -179,46 +189,6 @@
     h1 {
       font-size: 1.15rem;
     }
-    /* Téléphone : la navigation passe en barre fixe en bas, à portée de pouce. */
-    nav {
-      position: fixed;
-      left: 0;
-      right: 0;
-      bottom: 0;
-      z-index: 20;
-      gap: 0;
-      padding: 4px max(8px, env(safe-area-inset-left, 0px)) calc(4px + env(safe-area-inset-bottom, 0px));
-      background: var(--surface);
-      border-top: 1px solid var(--border);
-      box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.06);
-    }
-    nav button {
-      flex: 1;
-      min-height: 52px;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      gap: 2px;
-      padding: 0;
-      border: none;
-      background: none;
-      border-radius: 10px;
-      font-size: 0.75rem;
-      color: var(--muted);
-    }
-    nav button[aria-pressed="true"] {
-      border-color: transparent;
-      color: var(--accent);
-      font-weight: 700;
-      background: color-mix(in srgb, var(--accent) 12%, transparent);
-    }
-    nav .icon {
-      display: block;
-    }
-    :global(body.climbing) nav {
-      display: none;
-    }
     .sync {
       font-size: 0.7rem;
       padding: 2px 8px;
@@ -233,6 +203,48 @@
     stroke-width: 1.8;
     stroke-linecap: round;
     stroke-linejoin: round;
+  }
+  /* Téléphone et tablette tactile : la navigation passe en barre fixe en bas, à portée de pouce. */
+  :global(body.bottom-nav) nav {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 20;
+    gap: 0;
+    padding: 4px max(8px, env(safe-area-inset-left, 0px)) calc(4px + env(safe-area-inset-bottom, 0px));
+    background: var(--surface);
+    border-top: 1px solid var(--border);
+    box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.06);
+    justify-content: center;
+  }
+  :global(body.bottom-nav) nav button {
+    flex: 1;
+    max-width: 180px;
+    min-height: 52px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+    padding: 0;
+    border: none;
+    background: none;
+    border-radius: 10px;
+    font-size: 0.75rem;
+    color: var(--muted);
+  }
+  :global(body.bottom-nav) nav button[aria-pressed="true"] {
+    border-color: transparent;
+    color: var(--accent);
+    font-weight: 700;
+    background: color-mix(in srgb, var(--accent) 12%, transparent);
+  }
+  :global(body.bottom-nav) nav .icon {
+    display: block;
+  }
+  :global(body.bottom-nav.climbing) nav {
+    display: none;
   }
   main {
     padding-block: 0 calc(24px + var(--nav-h));

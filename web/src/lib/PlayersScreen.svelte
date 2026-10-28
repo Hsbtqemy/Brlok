@@ -44,7 +44,7 @@
       <PlacementPanel playerId={placing} onClose={() => (placing = null)} />
     </section>
   {/if}
-  <section class="panel">
+  <section class="panel players">
     <h2>Joueurs</h2>
     <form
       class="row"
@@ -143,6 +143,12 @@
     grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
     gap: 16px;
     align-items: start;
+  }
+  /* Le tableau des cotes a besoin de largeur : toute la ligne jusqu'aux grands écrans. */
+  @media (max-width: 1199px) {
+    .players {
+      grid-column: 1 / -1;
+    }
   }
   form input {
     flex: 1;

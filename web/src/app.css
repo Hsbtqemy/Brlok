@@ -158,19 +158,18 @@ input[type="text"] {
   background: var(--surface);
 }
 
-/* Barre de navigation du bas (téléphone) : les barres collantes des écrans se posent au-dessus. */
+/* Barre de navigation du bas (téléphone, tablette tactile) : les barres collantes des écrans se posent
+   au-dessus. La classe `bottom-nav` est posée sur body par App.svelte. */
 :root {
   --nav-h: 0px;
   --bar-safe-bottom: env(safe-area-inset-bottom, 0px);
 }
-@media (max-width: 600px) {
-  :root {
-    --nav-h: calc(60px + env(safe-area-inset-bottom, 0px));
-    --bar-safe-bottom: 0px;
-  }
-  /* Pendant un bloc, la barre s'efface : tout l'écran pour le bloc. */
-  body.climbing {
-    --nav-h: 0px;
-    --bar-safe-bottom: env(safe-area-inset-bottom, 0px);
-  }
+body.bottom-nav {
+  --nav-h: calc(60px + env(safe-area-inset-bottom, 0px));
+  --bar-safe-bottom: 0px;
+}
+/* Pendant un bloc, la barre s'efface : tout l'écran pour le bloc. */
+body.bottom-nav.climbing {
+  --nav-h: 0px;
+  --bar-safe-bottom: env(safe-area-inset-bottom, 0px);
 }
