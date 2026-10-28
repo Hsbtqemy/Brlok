@@ -2,6 +2,7 @@
  * Import / export au format JSON de Brlok desktop (catalog_collection.json),
  * pour que les deux versions partagent leurs données.
  */
+import { beamFromDesktop, beamToDesktop } from "./beam";
 import { clampLevel, holdAt, holdId, type Hold, type Wall } from "./wall";
 
 interface BrlokHold {
@@ -95,6 +96,9 @@ function importCatalog(id: string, name: string, catalog: BrlokCatalog, options:
   };
   const footMerges =
     options.footRowOffset === null ? [] : mergeFootGrid(wall, catalog.foot_grid, catalog.foot_levels, options.footRowOffset);
+  // La grille pieds est la poutre du pan (POUTRE.md) ; fusionnée aux prises, elle ne sert plus de poutre.
+  const beam = options.footRowOffset === null ? beamFromDesktop(catalog.foot_grid, catalog.foot_levels) : undefined;
+  if (beam) wall.beam = beam;
   return { wall, footMerges };
 }
 
@@ -137,18 +141,25 @@ export function mergeFootGrid(
  * Export vers Brlok desktop. Brlok desktop limite les prises de main au niveau 5 :
  * les prises de niveau 6 sont ramenées à 5 et listées dans `clamped`.
  */
-export function exportBrlok(walls: readonly Wall[], activeId?: string): { data: BrlokCatalogCollection; clamped: string[] } {
+export function exportBrlok(walls: readonly Wall[], activeId?: string): { data: BrlokCatalogCollection; clamped: string[]; beamCut: string[] } {
   const clamped: string[] = [];
-  const catalogs = walls.map((wall) => ({
-    id: wall.id,
-    name: wall.name,
-    catalog: {
-      grid: { rows: wall.rows, cols: wall.cols },
-      holds: wall.holds.map((h) => {
-        if (h.level > 5) clamped.push(`${wall.name} / ${h.id}`);
-        return { id: h.id, level: Math.min(5, h.level), tags: [...h.tags], position: { ...h.position }, active: h.active };
-      }),
-    },
-  }));
-  return { data: { catalogs, active_id: activeId ?? walls[0]?.id ?? "" }, clamped };
+  const beamCut: string[] = [];
+  const catalogs = walls.map((wall) => {
+    // La poutre repart dans la grille pieds (4 × 6 dans Brlok desktop, qui accepte les niveaux 1 à 6).
+    const beam = wall.beam?.holds.length ? beamToDesktop(wall.beam) : null;
+    if (beam?.cut) beamCut.push(`${wall.name} (${beam.cut} prise(s))`);
+    return {
+      id: wall.id,
+      name: wall.name,
+      catalog: {
+        grid: { rows: wall.rows, cols: wall.cols },
+        holds: wall.holds.map((h) => {
+          if (h.level > 5) clamped.push(`${wall.name} / ${h.id}`);
+          return { id: h.id, level: Math.min(5, h.level), tags: [...h.tags], position: { ...h.position }, active: h.active };
+        }),
+        ...(beam ? { foot_grid: beam.foot_grid, foot_levels: beam.foot_levels } : {}),
+      },
+    };
+  });
+  return { data: { catalogs, active_id: activeId ?? walls[0]?.id ?? "" }, clamped, beamCut };
 }

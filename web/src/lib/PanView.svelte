@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { beamHoldName } from "../core/beam";
   import { holdAt, holdId, type Position, type Wall } from "../core/wall";
   import { LEVEL_COLORS, LEVEL_TEXT } from "./colors";
 
@@ -33,6 +34,8 @@
   );
   const cols = $derived(Array.from({ length: wall.cols }, (_, i) => i));
   const order = $derived(new Map(sequence.map((id, i) => [id, i + 1])));
+  /** Prises de la poutre intégrée (POUTRE.md) : nommées par leur étiquette (« 25 mm », « bac »). */
+  const beamIds = $derived(new Set(wall.beam?.placement === "integree" ? wall.beam.holds.map((h) => h.id) : []));
 </script>
 
 <div class="pan" class:large={!!maxHeight} style={sizeStyle} style:grid-template-columns={`repeat(${wall.cols}, 1fr)`} role="grid" aria-label={`Pan ${wall.name}`}>
@@ -51,6 +54,7 @@
         class:empty={!hold}
         class:inactive={hold && !hold.active}
         class:in-block={rank !== undefined}
+        class:beam={!!hold && beamIds.has(hold.id)}
         style:background={rank !== undefined && hold ? LEVEL_COLORS[hold.level] : undefined}
         style:color={rank !== undefined && hold ? LEVEL_TEXT[hold.level] : undefined}
         style:border-color={hold && hold.active && rank === undefined ? LEVEL_COLORS[hold.level] : undefined}
@@ -59,7 +63,7 @@
         role={(onHold && hold) || onCell ? undefined : "gridcell"}
       >
         {#if hold}
-          <span class="id">{hold.id}</span>
+          <span class="id">{beamIds.has(hold.id) ? beamHoldName(hold) : hold.id}</span>
           <span class="level">{hold.level}</span>
           {#if rank !== undefined}<span class="rank">{rank}</span>{/if}
           {#if hold.id === candidate}<span class="rank plus">+</span>{/if}
@@ -143,6 +147,15 @@
   .id {
     font-weight: 600;
     font-size: 0.95rem;
+  }
+  /* Prises de la poutre : fond bois, étiquette plus petite (« 25 mm »). */
+  .cell.beam:not(.in-block) {
+    background: color-mix(in srgb, #a1887f 22%, var(--surface));
+  }
+  .cell.beam .id {
+    font-size: 0.75rem;
+    text-align: center;
+    line-height: 1.05;
   }
   .level {
     font-size: 0.75rem;

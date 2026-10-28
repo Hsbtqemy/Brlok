@@ -1,4 +1,5 @@
 <script lang="ts">
+  import BeamEditor from "./BeamEditor.svelte";
   import { routeHex, routeLabel } from "../core/gym";
   import { orderedMarks, sectorOf, type Route, type Sector, type Wall } from "../core/wall";
   import { app } from "./appState.svelte";
@@ -244,6 +245,7 @@
       {#if otherCount > 0}<p class="hint">{otherCount} autre(s) voie(s) dans les autres secteurs.</p>{/if}
       <p class="hint">Démonter garde la voie et son historique ; elle n'est simplement plus proposée.</p>
     </section>
+    <BeamEditor />
   </div>
 {/if}
 

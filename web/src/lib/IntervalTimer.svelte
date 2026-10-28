@@ -322,7 +322,7 @@
         {#if block.route}
           <RouteView wall={app.wall} route={app.wall.routes.find((r) => r.id === block.route!.id) ?? null} maxHeight={wallHeight} variant={block.route.variant} variantHold={block.route.variantHold} />
         {:else}
-          <PanView wall={app.wall} sequence={block.holds.map((h) => h.id)} maxHeight={wallHeight} />
+          <PanView wall={app.playWall ?? app.wall} sequence={block.holds.map((h) => h.id)} maxHeight={wallHeight} />
         {/if}
       </div>
     {/if}

@@ -6,6 +6,8 @@
   import { app } from "./appState.svelte";
   import GymEditor from "./GymEditor.svelte";
   import WallEditor from "./WallEditor.svelte";
+  import BeamEditor from "./BeamEditor.svelte";
+  import { emptyBeam } from "../core/beam";
   import { saveFile } from "./fileSave";
 
   /** Onglet Murs : décrire les pans et les murs à voies (l'onglet Grimper sert à les utiliser). */
@@ -44,6 +46,13 @@
     open = true;
   }
 
+  /** Une poutre sans pan (maison, salle) : un mur sans prises, avec sa poutre. */
+  function createBeam() {
+    const wall = { ...newWall("Poutre", 1, 1), beam: emptyBeam() };
+    app.setWalls([...app.walls, wall], wall.id);
+    open = true;
+  }
+
   function createGym() {
     const wall = { ...newWall("Ma salle", 1, 1), kind: "voies" as const };
     app.setWalls([...app.walls, wall], wall.id);
@@ -73,16 +82,21 @@
   }
 
   async function exportFile() {
-    const { data, clamped } = exportBrlok(app.walls, app.wall?.id);
+    const { data, clamped, beamCut } = exportBrlok(app.walls, app.wall?.id);
     exportJson = JSON.stringify(data, null, 2);
     const result = await saveFile("catalog_collection.json", exportJson).catch((e: Error) => {
       message = e.message;
       return null;
     });
     if (result !== "saved") return;
-    message = clamped.length
-      ? `Exporté. Brlok desktop limite les mains au niveau 5 : ${clamped.length} prise(s) de niveau 6 ramenée(s) à 5.`
-      : "Exporté au format Brlok desktop. Si le téléchargement est bloqué, copie le JSON ci-dessous.";
+    message = [
+      clamped.length
+        ? `Exporté. Brlok desktop limite les mains au niveau 5 : ${clamped.length} prise(s) de niveau 6 ramenée(s) à 5.`
+        : "Exporté au format Brlok desktop. Si le téléchargement est bloqué, copie le JSON ci-dessous.",
+      beamCut.length ? `Poutre coupée à 4 × 6 (format de Brlok desktop) : ${beamCut.join(", ")}.` : "",
+    ]
+      .filter(Boolean)
+      .join(" ");
   }
 
   /** Copie du JSON exporté : repli quand le téléchargement est bloqué (page intégrée). */
@@ -99,7 +113,9 @@
   const describe = (w: Wall) =>
     w.kind === "voies"
       ? `Mur à voies · ${w.routes.filter((r) => !r.archived).length} voie(s)${w.sectors?.length ? ` · ${w.sectors.length} secteur(s)` : ""}`
-      : `Pan ${w.cols} × ${w.rows} · ${w.holds.length} prises`;
+      : w.holds.length === 0 && w.beam
+        ? `Poutre · ${w.beam.holds.length} prise(s)`
+        : `Pan ${w.cols} × ${w.rows} · ${w.holds.length} prises${w.beam ? ` · poutre ${w.beam.placement === "integree" ? "intégrée" : "à part"}` : ""}`;
 </script>
 
 {#if open && app.wall}
@@ -127,6 +143,7 @@
         {#if message}<p class="message">{message}</p>{/if}
       </section>
       <WallEditor onClose={() => (open = false)} />
+      <BeamEditor />
     </div>
   {/if}
 {:else}
@@ -159,6 +176,8 @@
       <button class="primary" onclick={createGym}>Mur à voies (salle)</button>
       <p class="hint">Une photo par secteur, puis les voies : couleur, cotation, prises sur la photo.</p>
       <button onclick={createPan}>Pan à grille (vide)</button>
+      <button onclick={createBeam}>Poutre seule</button>
+      <p class="hint">Une poutre sans pan, pour les suspensions. Un pan ou un mur à voies peut aussi avoir sa poutre (sur sa page).</p>
       <details class="express">
         <summary>Pan express</summary>
         <p class="hint">Une prise par case, toutes de niveau moyen : pour jouer tout de suite sans décrire le pan.</p>
@@ -185,7 +204,7 @@
             {#each Array.from({ length: 12 }, (_, i) => i) as r (r)}<option value={r}>{r + 1}</option>{/each}
           </select>
         </label>
-        <p class="hint">Sur ton pan, cette grille décrit la poutre posée au-dessus, pas des prises du pan : ne pas la fusionner.</p>
+        <p class="hint">Sur ton pan, cette grille décrit la poutre posée au-dessus, pas des prises du pan : sans fusion, elle devient la poutre du pan.</p>
       </details>
       {#if footMerges.length > 0}
         <details>

@@ -218,7 +218,7 @@
   const routeRating = (id: string) => app.wall ? app.ratings.blocks[routeKey(app.wall.id, id)]?.rating : undefined;
 
   function blockOf(holdIds: string[]): Block | null {
-    const wall = app.wall;
+    const wall = app.playWall;
     if (!wall) return null;
     const rid = routeIdOf(holdIds);
     if (rid) {
@@ -247,7 +247,7 @@
 
   /** Prise ajoutable : à portée de la dernière prise du bloc. */
   function reachable(holdId: string, sequence: string[]): boolean {
-    const wall = app.wall;
+    const wall = app.playWall;
     const last = sequence.at(-1);
     if (!wall || !last) return true;
     const a = wall.holds.find((h) => h.id === last);
@@ -338,7 +338,7 @@
   {#if app.wall && rid}
     <RouteView wall={app.wall} route={app.wall.routes.find((r) => r.id === rid) ?? null} />
   {:else if app.wall}
-    <PanView wall={app.wall} sequence={ids} />
+    <PanView wall={app.playWall!} sequence={ids} />
   {/if}
 {/snippet}
 
@@ -456,7 +456,7 @@
           {#if piece}<span class="hint">Pièce du round : {piece.symbol} {piece.label} ({piece.character.toLowerCase()}).</span>{/if}
         </p>
         {#if app.wall}
-          <PanView wall={app.wall} sequence={duel.sequence} {candidate} onHold={(id) => (candidate = duel.sequence.includes(id) ? null : id)} />
+          <PanView wall={app.playWall!} sequence={duel.sequence} {candidate} onHold={(id) => (candidate = duel.sequence.includes(id) ? null : id)} />
         {/if}
         {#if candidate && !reachable(candidate, duel.sequence)}
           <p class="warn">{candidate} est hors de portée de {duel.sequence.at(-1)} : à vous de juger si c'est grimpable.</p>
@@ -481,7 +481,7 @@
         {#if routeIdOf(duel.block)}
           {@render blockView(duel.block)}
         {:else if app.wall}
-          <PanView wall={app.wall} sequence={duel.block} onHold={climber && memeStopping ? (id) => onMemeHold(climber, duel.block, id) : undefined} />
+          <PanView wall={app.playWall!} sequence={duel.block} onHold={climber && memeStopping ? (id) => onMemeHold(climber, duel.block, id) : undefined} />
         {/if}
         {#if climber}
           <p><strong>{name(climber)}</strong> grimpe · essais : {memeAttempts}</p>
@@ -523,7 +523,7 @@
             Budget : <strong>{duel.budget}</strong>{duel.restarts > 0 ? ` (relance ${duel.restarts})` : ""}.
           </p>
           {#if app.wall}
-            <PanView wall={app.wall} sequence={composing} onHold={toggleCompose} />
+            <PanView wall={app.playWall!} sequence={composing} onHold={toggleCompose} />
           {/if}
           <p class:warn={composingRating > duel.budget}>
             {composing.length} prise(s) · cote estimée {composing.length ? composingRating : "—"}

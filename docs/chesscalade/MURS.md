@@ -74,16 +74,14 @@ Pas de nouvelle photo possible pour l'instant : l'étape 2 (pan en photo) attend
 ### La poutre
 
 La « grille pieds » de Brlok desktop est en fait la **poutre posée au-dessus du pan** (4 × 6 : bacs,
-plats à 20° et 35°, bi-doigts de 30 et 50 mm, réglettes de 18 à 45 mm). Elle n'est plus fusionnée dans le
-pan. Pistes pour en faire un **agrès** du jeu :
-
-- **sortie** de bloc : finir en se suspendant à une prise de poutre donnée ;
-- **suspension imposée** (ex. 7 s sur la réglette de 20 mm) comme pénalité ou comme recharge ;
-- un type de bloc « poutre » pour la pièce **tour** (puissance, statique).
+plats à 20° et 35°, bi-doigts de 30 et 50 mm, réglettes de 18 à 45 mm). Elle est devenue un **agrès** (fait) :
+voir [POUTRE.md](POUTRE.md). Importée avec le pan (elle n'est plus fusionnée aux prises), elle se décrit sur la
+page du mur, intégrée au pan ou à part ; elle sert aux suspensions (onglet Grimper → Poutre), à la sortie
+des blocs, et aux défis de Chesscalade (poutre seule, défis de la tour, recharge, rachat des pénalités).
 
 ### Organisation de l'app
 
-- **Grimper** : utiliser un mur (séance, carnet, minuteur, choisir une voie ou un bloc) ;
+- **Grimper** : utiliser un mur (séance, carnet, minuteur, choisir une voie ou un bloc, poutre, bibliothèque) ;
 - **Partie** : Chesscalade ;
 - **Murs** : les décrire. La liste des murs, la création (mur à voies, pan à grille, pan express),
   l'import et l'export Brlok. Un pan s'ouvre dans son éditeur de grille ; un mur à voies sur **sa page**

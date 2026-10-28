@@ -13,6 +13,9 @@
   import { expressWall } from "../core/wallEdit";
   import { loadRouteVariants, saveRouteVariants } from "./storage";
   import LibraryPanel from "./LibraryPanel.svelte";
+  import BeamPanel from "./BeamPanel.svelte";
+  import BeamView from "./BeamView.svelte";
+  import { clampSeconds, hangText, withFinishes } from "../core/beam";
   import { HOLD_TYPES } from "../core/wallEdit";
   import { TIMER_PRESETS } from "../core/intervals";
   import {
@@ -81,9 +84,33 @@
   const run = $derived(app.library.current && app.library.current.wallId === app.wall?.id ? app.library.current : null);
 
   // Une séance en cours sur ce mur : on y revient directement.
-  let mode = $state<"chesscalade" | "classique" | "carnet" | "bibliotheque">(
-    app.library.current && app.library.current.wallId === app.wall?.id ? "classique" : "chesscalade",
-  );
+  type Mode = "chesscalade" | "classique" | "carnet" | "bibliotheque" | "poutre";
+  /** Mode d'arrivée : la séance en cours sur ce mur, ou la poutre d'un mur qui n'est qu'une poutre. */
+  function defaultMode(): Mode {
+    if (app.library.current && app.library.current.wallId === app.wall?.id) return "classique";
+    if (app.wall?.beam?.holds.length && app.wall.kind === "pan" && app.wall.holds.length === 0) return "poutre";
+    return "chesscalade";
+  }
+  let mode = $state<Mode>(defaultMode());
+  const hasBeam = $derived(!!app.wall?.beam?.holds.length);
+
+  // Poutre : prises des deux mains montrées en grand, et choix à la main.
+  let beamLeft = $state<string | null>(null);
+  let beamRight = $state<string | null>(null);
+  let beamPicking = $state(false);
+  function pickBeamHold(id: string) {
+    if (!beamLeft || beamRight) {
+      beamLeft = id;
+      beamRight = null;
+    } else {
+      beamRight = id;
+    }
+  }
+
+  // Brlok classique avec la poutre : ses prises dans les blocs (intégrée), ou une sortie (à part).
+  let classicUseBeam = $state(true);
+  let classicFinish = $state(false);
+  let classicFinishS = $state(5);
 
   // Chesscalade
   /** Pièce facultative : sans pièce, simplement un bloc (ou une voie) à la cote visée. */
@@ -150,6 +177,8 @@
       requiredTags: [...requiredTags],
       excludedTags: [...excludedTags],
       ...(blockLevels ? { blockLevels: [...blockLevels] } : {}),
+      ...(app.wall?.beam?.placement === "integree" && !classicUseBeam ? { useBeam: false } : {}),
+      ...(app.wall?.beam?.placement === "agres" && classicFinish ? { finishS: clampSeconds(classicFinishS) } : {}),
     };
   }
 
@@ -244,7 +273,7 @@
   });
 
   function toggleHold(id: string) {
-    const wall = app.wall;
+    const wall = app.playWall;
     if (!wall) return;
     updateRun((r) => ({ ...r, blocks: r.blocks.map((b, i) => (i === r.selected ? toggleBlockHold(wall, b, id) : b)) }));
   }
@@ -280,7 +309,7 @@
   async function exportRun(format: ExportFormat) {
     if (!run || !app.wall) return;
     try {
-      sessionMessage = await exportSession({ ...run, wallName: app.wall.name, playerName: app.activePlayer?.name }, format, app.wall);
+      sessionMessage = await exportSession({ ...run, wallName: app.wall.name, playerName: app.activePlayer?.name }, format, app.playWall);
     } catch (e) {
       sessionMessage = e instanceof Error ? e.message : String(e);
     }
@@ -297,6 +326,9 @@
       requiredTags = [...s.requiredTags];
       excludedTags = [...s.excludedTags];
       blockLevels = s.blockLevels ? [...s.blockLevels] : undefined;
+      classicUseBeam = s.useBeam !== false;
+      classicFinish = !!s.finishS;
+      if (s.finishS) classicFinishS = s.finishS;
     } else {
       gymTarget = s.target;
       gymPattern = s.pattern;
@@ -371,7 +403,15 @@
   }
 
   const currentBlock = $derived(
-    mode === "chesscalade" ? chessBlock : mode === "carnet" ? carnetBlock : mode === "classique" ? (run?.blocks[run.selected] ?? null) : previewBlock,
+    mode === "chesscalade"
+      ? chessBlock
+      : mode === "carnet"
+        ? carnetBlock
+        : mode === "classique"
+          ? (run?.blocks[run.selected] ?? null)
+          : mode === "bibliotheque"
+            ? previewBlock
+            : null,
   );
   let recorded = $state<string | null>(null);
   let lastDelta = $state<number | null>(null);
@@ -397,7 +437,9 @@
 
   function generateClassic() {
     if (!app.wall) return;
-    const blocks = generateClassicSession(app.wall, {
+    const beam = app.wall.beam;
+    const source = beam?.placement === "integree" && classicUseBeam && app.playWall ? app.playWall : app.wall;
+    const generated = generateClassicSession(source, {
       targetLevel: classicLevel,
       blocksCount: classicBlocks,
       holdsPerBlock: classicHolds,
@@ -408,6 +450,10 @@
       blockLevels,
       rng: seededRng(Date.now()),
     });
+    const blocks =
+      beam?.placement === "agres" && classicFinish && beam.holds.length
+        ? withFinishes(generated, beam, { level: classicLevel, seconds: clampSeconds(classicFinishS), rng: seededRng(Date.now() + 1) })
+        : generated;
     sessionMessage = "";
     sessionFailed = blocks.length === 0;
     const settings = panSettings();
@@ -520,6 +566,7 @@
       {#if sel}
         {#if !sel.route}
           <p class="sequence">{sel.holds.map((h) => h.id).join(" → ")}</p>
+          {#if sel.finish?.hang}<p class="variant"><strong>Sortie à la poutre</strong> — {hangText(sel.finish)}</p>{/if}
         {:else if sel.route.variant}
           {@const v = variantText(sel.route.variant, sel.route.variantHold)}
           <p class="variant"><strong>Voie {run.selected + 1} · {v?.label}</strong> — {v?.description}</p>
@@ -642,6 +689,10 @@
             app.selectWall((e.currentTarget as HTMLSelectElement).value);
             chessBlock = null;
             previewBlock = null;
+            beamLeft = null;
+            beamRight = null;
+            beamPicking = false;
+            if (mode === "poutre" && !app.wall?.beam?.holds.length) mode = "chesscalade";
             // Les types de prises et le modèle repris valaient pour l'autre mur.
             requiredTags = [];
             excludedTags = [];
@@ -664,7 +715,9 @@
   </section>
 
   <section class="panel pan-panel">
-    {#if app.wall && isGym}
+    {#if mode === "poutre" && app.wall?.beam}
+      <BeamView beam={app.wall.beam} left={beamLeft} right={beamRight} onHold={beamPicking ? pickBeamHold : undefined} />
+    {:else if app.wall && isGym}
       {#if currentRoute}
         <RouteView wall={app.wall} route={currentRoute} variant={currentBlock?.route?.variant} variantHold={currentBlock?.route?.variantHold} />
       {:else if app.wall.sectors?.[0]?.photo}
@@ -682,7 +735,7 @@
       {#if editing && mode === "classique" && run}
         <p class="editing-hint">Touche une prise pour l'ajouter à la fin du bloc, ou pour la retirer.</p>
       {/if}
-      <PanView wall={app.wall} sequence={currentBlock?.holds.map((h) => h.id) ?? []} onHold={editing && mode === "classique" && run ? toggleHold : undefined} />
+      <PanView wall={app.playWall ?? app.wall} sequence={currentBlock?.holds.map((h) => h.id) ?? []} onHold={editing && mode === "classique" && run ? toggleHold : undefined} />
     {:else}
       <p class="empty">Aucun mur : <button class="link" onclick={onEdit}>crée-en un dans l'onglet Murs</button>.</p>
     {/if}
@@ -693,10 +746,13 @@
       <button aria-pressed={mode === "chesscalade"} onclick={() => (mode = "chesscalade")}>Chesscalade</button>
       <button aria-pressed={mode === "classique"} onclick={() => (mode = "classique")}>{isGym ? "Séance" : "Brlok classique"}</button>
       {#if isGym}<button aria-pressed={mode === "carnet"} onclick={() => (mode = "carnet")}>Carnet</button>{/if}
+      {#if hasBeam}<button aria-pressed={mode === "poutre"} onclick={() => ((mode = "poutre"), (editing = false))}>Poutre</button>{/if}
       <button aria-pressed={mode === "bibliotheque"} onclick={() => ((mode = "bibliotheque"), (editing = false), (previewBlock = null))}>Bibliothèque</button>
     </div>
 
-    {#if mode === "bibliotheque"}
+    {#if mode === "poutre" && app.wall?.beam}
+      <BeamPanel beam={app.wall.beam} bind:left={beamLeft} bind:right={beamRight} bind:picking={beamPicking} />
+    {:else if mode === "bibliotheque"}
       <LibraryPanel onStart={(blocks, settings, name) => beginRun(blocks, settings, name)} onApplyTemplate={applyTemplate} onPreview={(b) => (previewBlock = b)} />
     {:else if mode === "carnet" && isGym}
       <h2>Carnet de voies</h2>
@@ -852,6 +908,16 @@
       <label class="field">Blocs <input type="number" min="1" max="20" bind:value={classicBlocks} oninput={() => (blockLevels = undefined)} /></label>
       <label class="field">Prises par bloc <input type="number" min="1" max="20" bind:value={classicHolds} /></label>
       <label class="check"><input type="checkbox" bind:checked={classicVariety} /> Variété</label>
+      {#if app.wall?.beam?.holds.length && app.wall.beam.placement === "integree"}
+        <label class="check"><input type="checkbox" bind:checked={classicUseBeam} /> Avec les prises de la poutre</label>
+      {:else if app.wall?.beam?.holds.length}
+        <div class="row">
+          <label class="check"><input type="checkbox" bind:checked={classicFinish} /> Sortie à la poutre</label>
+          {#if classicFinish}
+            <label class="field inline">pendant <input type="number" min="3" max="60" bind:value={classicFinishS} /> s</label>
+          {/if}
+        </div>
+      {/if}
       <details class="tags" open={requiredTags.length + excludedTags.length > 0}>
         <summary>
           Types de prises{requiredTags.length || excludedTags.length
@@ -1229,6 +1295,14 @@
   .message {
     margin: 0;
     font-size: 0.9rem;
+  }
+  .field.inline {
+    flex-direction: row;
+    align-items: center;
+    gap: 6px;
+  }
+  .field.inline input {
+    width: 70px;
   }
   .editing-hint {
     margin: 0 0 8px;

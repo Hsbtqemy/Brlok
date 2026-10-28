@@ -4,6 +4,7 @@
  * - generateChessBlock : blocs-défis Chesscalade (REGLES.md §7.4) — chemin dans le graphe de portée,
  *   forme donnée par la pièce, cote estimée la plus proche de la cote visée.
  */
+import type { Hang } from "./beam";
 import type { RouteVariant } from "./gym";
 import { estimateBlockRating, ratingToLevel } from "./blockRating";
 import { distributionLevels, type DistributionPattern } from "./distribution";
@@ -24,6 +25,10 @@ export interface Block {
   noFootMove?: number;
   /** Mur à voies : la voie choisie (le bloc n'a alors pas de prises détaillées). */
   route?: { id: string; label: string; color: string; colorHex?: string; grade: string; styles: string[]; variant?: RouteVariant; variantHold?: number };
+  /** Suspension à la poutre (POUTRE.md) : `holds` porte les prises des deux mains. */
+  hang?: Hang;
+  /** Sortie : le bloc finit par cette suspension (poutre à part). Elle ne change pas la cote du bloc. */
+  finish?: Block;
 }
 
 export interface ClassicOptions {

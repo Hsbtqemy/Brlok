@@ -5,6 +5,7 @@
 import { FOOT_RULES } from "./feet";
 import { blockLabel, desktopSession, runSummary, settingsText, type SessionBlock, type SessionSettings } from "./library";
 import { variantText } from "./gym";
+import { hangText } from "./beam";
 
 export interface SessionDoc {
   wallName: string;
@@ -37,7 +38,9 @@ export function headerLines(doc: SessionDoc): string[] {
 /** Détail d'un bloc : prises dans l'ordre, ou voie, variante, pieds. */
 export function blockLines(block: SessionBlock): string[] {
   const lines: string[] = [];
-  if (block.route) {
+  if (block.hang) {
+    lines.push(`Suspension : ${hangText(block)} (main gauche ${block.hang.left}, main droite ${block.hang.right})`);
+  } else if (block.route) {
     lines.push(`${block.route.label} (${block.route.grade})`);
     if (block.route.variant) {
       const v = variantText(block.route.variant, block.route.variantHold);
@@ -46,6 +49,7 @@ export function blockLines(block: SessionBlock): string[] {
   } else {
     lines.push(block.holds.map((h, i) => `${i + 1}. ${h.id}`).join("  "));
   }
+  if (block.finish?.hang) lines.push(`Sortie à la poutre : ${hangText(block.finish)}`);
   if (block.feet) lines.push(`Pieds : ${FOOT_RULES.find((r) => r.id === block.feet)?.label ?? block.feet}`);
   lines.push(`Cote estimée : ${block.estimatedRating}`);
   if (block.result) lines.push(`Résultat : ${RESULT_TEXT[block.result]}`);

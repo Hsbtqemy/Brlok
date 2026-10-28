@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { withBeam } from "../core/beam";
   import type { Block } from "../core/generator";
   import {
     addFavorite,
@@ -42,7 +43,7 @@
   function preview(id: string) {
     const f = favorites.find((x) => x.id === id);
     previewId = previewId === id || !f || !wall ? null : id;
-    onPreview?.(previewId && f && wall ? refreshBlock(wall, f.block) : null);
+    onPreview?.(previewId && f && wall ? refreshBlock(withBeam(wall), f.block) : null);
   }
 
   let message = $state("");
@@ -72,7 +73,7 @@
   function startFavorites(ids: string[]) {
     if (!wall) return;
     const picked = favorites.filter((f) => ids.includes(f.id));
-    const blocks = picked.map((f) => refreshBlock(wall, f.block)).filter((b): b is Block => b !== null);
+    const blocks = picked.map((f) => refreshBlock(withBeam(wall), f.block)).filter((b): b is Block => b !== null);
     const missing = picked.length - blocks.length;
     if (blocks.length === 0) {
       message = "Ce bloc n'existe plus sur le mur (prise retirée, ou voie démontée).";
@@ -90,7 +91,7 @@
     }
     if (target.id !== wall?.id) app.selectWall(target.id);
     // Les commentaires de la séance passée suivent leurs blocs ; les résultats repartent de zéro (startRun).
-    const blocks = record.blocks.map((b) => refreshBlock(target, b)).filter((b): b is Block => b !== null);
+    const blocks = record.blocks.map((b) => refreshBlock(withBeam(target), b)).filter((b): b is Block => b !== null);
     if (blocks.length === 0) {
       message = "Aucun bloc de cette séance n'existe encore sur le mur.";
       return;
@@ -102,7 +103,8 @@
 
   async function exportRecord(record: SessionRecord, format: ExportFormat) {
     try {
-      message = await exportSession(record, format, app.walls.find((w) => w.id === record.wallId));
+      const recordWall = app.walls.find((w) => w.id === record.wallId);
+      message = await exportSession(record, format, recordWall ? withBeam(recordWall) : undefined);
     } catch (e) {
       message = e instanceof Error ? e.message : String(e);
     }

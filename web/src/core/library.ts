@@ -3,6 +3,7 @@
  * séance en cours (gardée d'un onglet à l'autre et après un rechargement).
  * Logique pure : chaque fonction renvoie une nouvelle valeur.
  */
+import { hangBlock, hangText } from "./beam";
 import { estimateBlockRating } from "./blockRating";
 import { DISTRIBUTION_PATTERNS, type DistributionPattern } from "./distribution";
 import { footBonus } from "./feet";
@@ -45,6 +46,10 @@ export type SessionSettings =
       excludedTags: string[];
       /** Niveau bloc par bloc (modèles importés de Brlok desktop). */
       blockLevels?: number[];
+      /** Poutre intégrée : ses prises font partie des blocs (défaut : oui). */
+      useBeam?: boolean;
+      /** Poutre à part : chaque bloc finit suspendu à la poutre pendant n secondes. */
+      finishS?: number;
     }
   | {
       kind: "voies";
@@ -139,6 +144,7 @@ export function newLibraryId(prefix: string): string {
 
 /** Libellé court d'un bloc : la voie (et sa variante), ou ses prises. */
 export function blockLabel(block: Block): string {
+  if (block.hang) return `Poutre · ${hangText(block)}`;
   if (block.route) {
     const v = block.route.variant ? variantText(block.route.variant, block.route.variantHold)?.label : undefined;
     return v ? `${block.route.label} · ${v}` : block.route.label;
@@ -148,6 +154,7 @@ export function blockLabel(block: Block): string {
 
 /** Identité d'un bloc sur un mur : deux favoris identiques ne sont gardés qu'une fois. */
 export function blockSignature(wallId: string, block: Block): string {
+  if (block.hang) return `${wallId}|poutre:${block.hang.left}|${block.hang.right}:${block.hang.seconds}`;
   if (block.route) return `${wallId}|voie:${block.route.id}~${block.route.variant ?? ""}~${block.route.variantHold ?? ""}`;
   return `${wallId}|${block.holds.map((h) => h.id).join("-")}~${block.feet ?? ""}~${block.noFootMove ?? ""}`;
 }
@@ -213,7 +220,7 @@ function rateHolds(holds: readonly Hold[], block: Block): number {
  * retirée sinon (un bloc garde au moins une prise). La cote estimée suit.
  */
 export function toggleBlockHold(wall: Wall, block: SessionBlock, holdId: string): SessionBlock {
-  if (block.route) return block;
+  if (block.route || block.hang) return block;
   const inBlock = block.holds.some((h) => h.id === holdId);
   if (inBlock) {
     if (block.holds.length <= 1) return block;
@@ -350,6 +357,7 @@ export function favoriteTitle(settings: SessionSettings | undefined, index: numb
  * types), voie toujours en place. Null si le bloc n'existe plus sur ce mur.
  */
 export function refreshBlock(wall: Wall, block: Block): Block | null {
+  if (block.hang) return wall.beam ? hangBlock(wall.beam, block.hang) : null;
   if (block.route) {
     const route = wall.routes.find((r) => r.id === block.route!.id && !r.archived);
     if (!route) return null;
@@ -358,7 +366,10 @@ export function refreshBlock(wall: Wall, block: Block): Block | null {
   const holds = block.holds.map((h) => wall.holds.find((w) => w.id === h.id && w.active));
   if (holds.length === 0 || holds.some((h) => !h)) return null;
   const fresh = holds.map((h) => ({ ...h!, tags: [...h!.tags], position: { ...h!.position } }));
-  return { ...block, holds: fresh, estimatedRating: rateHolds(fresh, block) };
+  // La sortie à la poutre suit la poutre ; si elle n'existe plus, le bloc reste, sans sortie.
+  const { finish, ...rest } = block;
+  const finishFresh = finish?.hang && wall.beam ? hangBlock(wall.beam, finish.hang) : null;
+  return { ...rest, holds: fresh, estimatedRating: rateHolds(fresh, block), ...(finishFresh ? { finish: finishFresh } : {}) };
 }
 
 // --- Modèles -----------------------------------------------------------------------------------
@@ -408,6 +419,8 @@ export function settingsText(settings: SessionSettings): string {
     settings.variety ? "variété" : "",
     settings.requiredTags.length ? `types : ${settings.requiredTags.join(", ")}` : "",
     settings.excludedTags.length ? `sans : ${settings.excludedTags.join(", ")}` : "",
+    settings.useBeam === false ? "sans la poutre" : "",
+    settings.finishS ? `sortie à la poutre ${settings.finishS} s` : "",
   ]
     .filter(Boolean)
     .join(" · ");
