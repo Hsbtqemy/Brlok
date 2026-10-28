@@ -485,12 +485,12 @@
   }
   .save-bar {
     position: sticky;
-    bottom: 0;
+    bottom: calc(var(--nav-h) + 6px);
     z-index: 2;
     display: flex;
     align-items: center;
     gap: 8px;
-    padding: 8px 12px calc(8px + env(safe-area-inset-bottom, 0px));
+    padding: 8px 12px calc(8px + var(--bar-safe-bottom));
     background: var(--surface);
     border: 1px solid var(--border);
     border-radius: 14px;

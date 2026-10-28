@@ -157,3 +157,20 @@ input[type="text"] {
   border: 1px solid var(--border);
   background: var(--surface);
 }
+
+/* Barre de navigation du bas (téléphone) : les barres collantes des écrans se posent au-dessus. */
+:root {
+  --nav-h: 0px;
+  --bar-safe-bottom: env(safe-area-inset-bottom, 0px);
+}
+@media (max-width: 600px) {
+  :root {
+    --nav-h: calc(60px + env(safe-area-inset-bottom, 0px));
+    --bar-safe-bottom: 0px;
+  }
+  /* Pendant un bloc, la barre s'efface : tout l'écran pour le bloc. */
+  body.climbing {
+    --nav-h: 0px;
+    --bar-safe-bottom: env(safe-area-inset-bottom, 0px);
+  }
+}

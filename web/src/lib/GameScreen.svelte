@@ -366,6 +366,11 @@
   let boardPanel = $state<HTMLElement | null>(null);
   /** Téléphone : pendant un bloc, l'échiquier est masqué (le bloc passe en premier) ; on peut le rouvrir. */
   let showBoard = $state(false);
+  // Pendant un bloc, la barre de navigation du bas s'efface (voir app.css).
+  $effect(() => {
+    document.body.classList.toggle("climbing", view?.phase === "block");
+    return () => document.body.classList.remove("climbing");
+  });
   let lastPhase: string | null = null;
   $effect(() => {
     const phase = view?.phase ?? null;
@@ -1112,10 +1117,10 @@
   }
   .start-bar {
     position: sticky;
-    bottom: 0;
+    bottom: var(--nav-h);
     z-index: 2;
     margin: 0 -16px -16px;
-    padding: 10px 16px calc(10px + env(safe-area-inset-bottom, 0px));
+    padding: 10px 16px calc(10px + var(--bar-safe-bottom));
     background: var(--surface);
     border-top: 1px solid var(--border);
     border-radius: 0 0 14px 14px;

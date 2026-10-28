@@ -6,10 +6,11 @@
   import WallsScreen from "./lib/WallsScreen.svelte";
 
   const SCREENS = [
-    { id: "pan", label: "Grimper" },
-    { id: "partie", label: "Partie" },
-    { id: "murs", label: "Murs" },
-    { id: "joueurs", label: "Joueurs" },
+    // Icônes (24 × 24, trait) : prise, cavalier, grille de mur, joueur.
+    { id: "pan", label: "Grimper", icon: "M7 20c-2-3-2-7 1-10s7-4 9-2 1 6-2 9-6 5-8 3Z M10 14a1.5 1.5 0 1 0 3 0a1.5 1.5 0 1 0-3 0" },
+    { id: "partie", label: "Partie", icon: "M7 20h11 M8 20c0-3 1-5 3-7-2 0-4 1-5 0-1-2 2-5 4-7l1-2 1 2c3 1 5 4 5 8 0 2-1 4-1 6" },
+    { id: "murs", label: "Murs", icon: "M4 4h16v16H4Z M4 9.3h16 M4 14.6h16 M9.3 4v16 M14.6 4v16" },
+    { id: "joueurs", label: "Joueurs", icon: "M12 12a4 4 0 1 0 0-8a4 4 0 0 0 0 8Z M4 21c0-4 4-6 8-6s8 2 8 6" },
   ] as const;
   type ScreenId = (typeof SCREENS)[number]["id"];
 
@@ -44,7 +45,8 @@
         onclick={() => {
           if (s.id === "murs") wallOpen = false;
           go(s.id);
-        }}>{s.label}</button
+        }}
+        ><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d={s.icon} /></svg><span>{s.label}</span></button
       >
     {/each}
   </nav>
@@ -135,21 +137,63 @@
     h1 {
       font-size: 1.15rem;
     }
+    /* Téléphone : la navigation passe en barre fixe en bas, à portée de pouce. */
     nav {
-      order: 3;
-      width: 100%;
+      position: fixed;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      z-index: 20;
+      gap: 0;
+      padding: 4px max(8px, env(safe-area-inset-left, 0px)) calc(4px + env(safe-area-inset-bottom, 0px));
+      background: var(--surface);
+      border-top: 1px solid var(--border);
+      box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.06);
     }
     nav button {
       flex: 1;
-      min-height: 40px;
+      min-height: 52px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 2px;
+      padding: 0;
+      border: none;
+      background: none;
+      border-radius: 10px;
+      font-size: 0.75rem;
+      color: var(--muted);
+    }
+    nav button[aria-pressed="true"] {
+      border-color: transparent;
+      color: var(--accent);
+      font-weight: 700;
+      background: color-mix(in srgb, var(--accent) 12%, transparent);
+    }
+    nav .icon {
+      display: block;
+    }
+    :global(body.climbing) nav {
+      display: none;
     }
     .sync {
       font-size: 0.7rem;
       padding: 2px 8px;
     }
   }
+  .icon {
+    display: none;
+    width: 24px;
+    height: 24px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.8;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
   main {
-    padding-block: 0 24px;
+    padding-block: 0 calc(24px + var(--nav-h));
     padding-left: max(16px, env(safe-area-inset-left, 0px));
     padding-right: max(16px, env(safe-area-inset-right, 0px));
   }
