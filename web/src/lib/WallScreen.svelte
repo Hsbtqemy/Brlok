@@ -10,6 +10,7 @@
   import RouteView from "./RouteView.svelte";
   import { activeRoutes, gradeToRating, ROUTE_VARIANTS, routeBlock, routeHex, routeLabel, routeLogs, variantText, type RouteVariant } from "../core/gym";
   import type { Route } from "../core/wall";
+  import { expressWall } from "../core/wallEdit";
   import { loadRouteVariants, saveRouteVariants } from "./storage";
 
   interface Props {
@@ -18,6 +19,16 @@
   }
 
   let { onEdit }: Props = $props();
+
+  // Aucun mur : pan rapide créé sur place (même nom que celui du lancement de partie, pour le réutiliser).
+  let quickCols = $state(6);
+  let quickRows = $state(7);
+  function createQuick() {
+    const cols = Math.max(2, Math.min(26, Math.round(quickCols)));
+    const rows = Math.max(2, Math.min(30, Math.round(quickRows)));
+    const wall = expressWall(`Pan rapide ${cols}×${rows}`, rows, cols);
+    app.setWalls([...app.walls, wall], wall.id);
+  }
 
   /** Variantes de voie permises : le même réglage que pour les parties. */
   let routeVariants = $state<RouteVariant[]>(loadRouteVariants());
@@ -169,6 +180,36 @@
         {/if}
 {/snippet}
 
+{#if app.walls.length === 0}
+  <section class="panel welcome">
+    <h2>Pour grimper, il faut un mur</h2>
+    <p class="hint">Trois façons de commencer : un pan rapide pour grimper tout de suite, ou décrire ton pan ou ta salle dans l'onglet Murs.</p>
+    <div class="welcome-cards">
+      <div class="welcome-card">
+        <span class="card-icon">⚡</span>
+        <strong>Pan rapide</strong>
+        <small>Une prise par case, toutes de niveau moyen. Compte les cases de ton pan :</small>
+        <div class="row">
+          <label class="field">Colonnes <input type="number" min="2" max="26" bind:value={quickCols} /></label>
+          <label class="field">Rangées <input type="number" min="2" max="30" bind:value={quickRows} /></label>
+        </div>
+        <button class="primary" onclick={createQuick}>Créer et grimper</button>
+      </div>
+      <div class="welcome-card">
+        <span class="card-icon">📷</span>
+        <strong>Une salle</strong>
+        <small>Une photo par secteur, puis les voies : couleur, cotation, prises sur la photo.</small>
+        <button onclick={onEdit}>Décrire une salle (Murs)</button>
+      </div>
+      <div class="welcome-card">
+        <span class="card-icon">▦</span>
+        <strong>Ton pan, prise par prise</strong>
+        <small>Niveaux, types de prises, enchaînements impossibles ; ou ton catalogue Brlok desktop.</small>
+        <button onclick={onEdit}>Décrire ou importer (Murs)</button>
+      </div>
+    </div>
+  </section>
+{:else}
 <div class="screen">
   <section class="panel wall-panel">
     <h2>Grimper</h2>
@@ -429,6 +470,7 @@
     {/if}
   </section>
 </div>
+{/if}
 
 <style>
   .screen {
@@ -437,13 +479,70 @@
     gap: 16px;
     align-items: start;
   }
-  @media (max-width: 960px) {
+  /* Tablette : le pan à gauche (il reste à l'écran), le choix du mur et les outils à droite. */
+  @media (max-width: 1199px) {
+    .screen {
+      grid-template-columns: minmax(0, 1.15fr) minmax(300px, 1fr);
+    }
+    .pan-panel {
+      grid-column: 1;
+      grid-row: 1 / span 2;
+      position: sticky;
+      top: 12px;
+    }
+    .wall-panel,
+    .gen-panel {
+      grid-column: 2;
+    }
+  }
+  @media (max-width: 699px) {
     .screen {
       grid-template-columns: 1fr;
     }
     .pan-panel {
+      grid-column: auto;
+      grid-row: auto;
+      position: static;
       order: -1;
     }
+    .wall-panel,
+    .gen-panel {
+      grid-column: auto;
+    }
+  }
+  .welcome {
+    max-width: 960px;
+    margin: 0 auto;
+  }
+  .welcome-cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 12px;
+  }
+  .welcome-card {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 14px;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+  }
+  .welcome-card small {
+    color: var(--muted);
+    line-height: 1.35;
+  }
+  .welcome-card .row {
+    flex-wrap: nowrap;
+  }
+  .welcome-card input[type="number"] {
+    width: 80px;
+  }
+  .welcome-card > button {
+    margin-top: auto;
+  }
+  .card-icon {
+    font-size: 1.6rem;
+    line-height: 1;
   }
   .tabs {
     display: flex;

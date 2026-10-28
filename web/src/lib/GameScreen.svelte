@@ -485,11 +485,11 @@
   $effect(() => {
     const phase = view?.phase ?? null;
     if (phase !== lastPhase && phase === "block") showBoard = false;
-    if (phase !== lastPhase && (phase === "block" || phase === "deviation") && sidePanel && window.innerWidth <= 900) {
+    if (phase !== lastPhase && (phase === "block" || phase === "deviation") && sidePanel && window.innerWidth < 700) {
       sidePanel.scrollIntoView({ behavior: "smooth", block: "start" });
     }
     // Retour du mur : on ramène l'échiquier à l'écran.
-    if (lastPhase === "block" && phase === "move" && boardPanel && window.innerWidth <= 900) {
+    if (lastPhase === "block" && phase === "move" && boardPanel && window.innerWidth < 700) {
       boardPanel.scrollIntoView({ behavior: "smooth", block: "start" });
     }
     lastPhase = phase;
@@ -970,7 +970,7 @@
     </div>
   </section>
 {:else}
-  <div class="game" class:climbing={view.phase === "block" && !showBoard}>
+  <div class="game" class:climbing={view.phase === "block" && !showBoard} class:in-block={view.phase === "block"}>
     <section class="panel board-panel" bind:this={boardPanel}>
       <div class="status {view.phase === 'over' ? '' : (view.lastEvent?.tone ?? '')}">
         <div class="status-line">
@@ -1212,7 +1212,7 @@
   .quiet {
     color: var(--muted);
   }
-  @media (max-width: 900px) {
+  @media (max-width: 699px) {
     .board-toggle {
       display: inline-block;
     }
@@ -1500,7 +1500,13 @@
     gap: 16px;
     align-items: start;
   }
-  @media (max-width: 900px) {
+  /* Tablette : échiquier et panneau côte à côte ; pendant un bloc, le bloc prend la plus grande part. */
+  @media (min-width: 700px) and (max-width: 1199px) {
+    .game.in-block {
+      grid-template-columns: minmax(260px, 0.75fr) minmax(320px, 1.25fr);
+    }
+  }
+  @media (max-width: 699px) {
     .game {
       grid-template-columns: 1fr;
     }
