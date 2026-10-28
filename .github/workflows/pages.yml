@@ -5,7 +5,8 @@ name: Pages
 
 on:
   push:
-    branches: [main]
+    # La branche de travail web publie aussi, en attendant sa fusion dans main.
+    branches: [main, claude/busy-goodall-j5s84f]
     paths: ["web/**", "data/**", ".github/workflows/pages.yml"]
   workflow_dispatch:
 
