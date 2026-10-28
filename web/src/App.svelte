@@ -24,6 +24,22 @@
   }
 
   let screen = $state<ScreenId>(initialScreen());
+
+  // Installation de l'app (Android, Chrome et Edge sur ordinateur) : le navigateur la propose, on garde
+  // l'invitation pour un bouton. Sur iPhone : Partager → Sur l'écran d'accueil.
+  type InstallPrompt = Event & { prompt(): Promise<void>; userChoice: Promise<{ outcome: string }> };
+  let installPrompt = $state<InstallPrompt | null>(null);
+  window.addEventListener("beforeinstallprompt", (e) => {
+    e.preventDefault();
+    installPrompt = e as InstallPrompt;
+  });
+  window.addEventListener("appinstalled", () => (installPrompt = null));
+  async function install() {
+    if (!installPrompt) return;
+    await installPrompt.prompt();
+    await installPrompt.userChoice.catch(() => null);
+    installPrompt = null;
+  }
   /** Murs : éditeur du mur actif ouvert (depuis Grimper, « Modifier »). */
   let wallOpen = $state(false);
   function go(id: ScreenId) {
@@ -50,6 +66,7 @@
       >
     {/each}
   </nav>
+  {#if installPrompt}<button class="install" onclick={install}>Installer l'app</button>{/if}
   <span class="sync" class:shared={app.syncStatus === "partage"} class:error={app.syncStatus === "erreur"} title={app.syncDetail}>
     {app.syncStatus === "partage"
       ? "Données partagées"
@@ -93,7 +110,8 @@
     align-items: center;
     justify-content: space-between;
     gap: 12px;
-    padding-block: 12px;
+    padding-top: max(12px, env(safe-area-inset-top, 0px));
+    padding-bottom: 12px;
     padding-left: max(16px, env(safe-area-inset-left, 0px));
     padding-right: max(16px, env(safe-area-inset-right, 0px));
   }
@@ -107,6 +125,13 @@
   nav {
     display: flex;
     gap: 6px;
+  }
+  .install {
+    min-height: 32px;
+    padding: 0 12px;
+    font-size: 0.85rem;
+    border-color: var(--accent);
+    color: var(--accent);
   }
   .sync {
     font-size: 0.8rem;
@@ -132,7 +157,8 @@
   @media (max-width: 600px) {
     header {
       gap: 8px;
-      padding-block: 8px;
+      padding-top: max(8px, env(safe-area-inset-top, 0px));
+      padding-bottom: 8px;
     }
     h1 {
       font-size: 1.15rem;

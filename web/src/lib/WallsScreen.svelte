@@ -6,6 +6,7 @@
   import { app } from "./appState.svelte";
   import GymEditor from "./GymEditor.svelte";
   import WallEditor from "./WallEditor.svelte";
+  import { saveFile } from "./fileSave";
 
   /** Onglet Murs : décrire les pans et les murs à voies (l'onglet Grimper sert à les utiliser). */
   interface Props {
@@ -71,15 +72,14 @@
     }
   }
 
-  function exportFile() {
+  async function exportFile() {
     const { data, clamped } = exportBrlok(app.walls, app.wall?.id);
     exportJson = JSON.stringify(data, null, 2);
-    const blob = new Blob([exportJson], { type: "application/json" });
-    const a = document.createElement("a");
-    a.href = URL.createObjectURL(blob);
-    a.download = "catalog_collection.json";
-    a.click();
-    URL.revokeObjectURL(a.href);
+    const result = await saveFile("catalog_collection.json", exportJson).catch((e: Error) => {
+      message = e.message;
+      return null;
+    });
+    if (result !== "saved") return;
     message = clamped.length
       ? `Exporté. Brlok desktop limite les mains au niveau 5 : ${clamped.length} prise(s) de niveau 6 ramenée(s) à 5.`
       : "Exporté au format Brlok desktop. Si le téléchargement est bloqué, copie le JSON ci-dessous.";

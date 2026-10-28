@@ -22,13 +22,31 @@ node scripts/artifact-page.mjs <sortie.html>   # adapte dist-single pour une pag
 Sur une tablette, sans serveur : ouvrir la page autonome, ou lancer `npm run dev -- --host` sur un
 ordinateur du même réseau et ouvrir l'adresse affichée.
 
+## App installée (PWA)
+
+L'app est publiée sur GitHub Pages par `.github/workflows/pages.yml` (à chaque push sur `main` qui touche
+`web/`, ou à la main depuis l'onglet Actions) : **https://hsbtqemy.github.io/Brlok/**.
+Prérequis, une fois : *Settings → Pages → Source : GitHub Actions*.
+
+- **Installer** : sur Android (Chrome), bouton « Installer l'app » dans l'en-tête, ou menu ⋮ → *Installer
+  l'application* ; sur iPhone (Safari), *Partager → Sur l'écran d'accueil* ; sur ordinateur, l'icône
+  d'installation de la barre d'adresse.
+- **Hors ligne** : le service worker (`public/sw.js`) garde la page, les scripts et le moteur d'échecs ;
+  l'app s'ouvre sans réseau. Les mises à jour arrivent à l'ouverture suivante avec réseau.
+- **Données** : dans le stockage du navigateur de chaque appareil (pas de partage, contrairement à la page
+  claude.ai). Pour passer de l'une à l'autre, ou d'un appareil à l'autre : *Joueurs → Données de l'app →
+  Enregistrer une sauvegarde*, puis *Remettre une sauvegarde* de l'autre côté. Synchronisation entre
+  appareils par un serveur personnel : voir [`docs/SYNCHRO.md`](../docs/SYNCHRO.md).
+- **Photos de secteur** : « 📷 Photo » ouvre directement l'appareil photo (arrière), « Image… » la galerie.
+
 ## Organisation
 
 | Dossier | Contenu |
 |---|---|
 | `src/core/` | Logique sans interface : modèle de mur générique, import/export Brlok, générateurs, Glicko-2 |
 | `src/lib/` | Composants et utilitaires d'interface |
-| `src/App.svelte` | Navigation entre les écrans Pan, Partie, Joueurs |
+| `src/App.svelte` | Navigation entre les écrans Grimper, Partie, Murs, Joueurs (barre du bas sur téléphone) |
+| `public/` | Manifeste, icônes et service worker de l'app installée ; moteur d'échecs |
 | `public/engine/` | Stockfish.js 19 « lite » (GPLv3, voir son README) |
 
 ## État (v0.2)

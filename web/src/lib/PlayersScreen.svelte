@@ -1,6 +1,7 @@
 <script lang="ts">
   import { createPlayer, removePlayer, type RatingKind } from "../core/players";
   import { app } from "./appState.svelte";
+  import DataPanel from "./DataPanel.svelte";
   import PlacementPanel from "./PlacementPanel.svelte";
 
   const KINDS: { id: RatingKind; label: string }[] = [
@@ -130,6 +131,9 @@
         {/each}
       </ul>
     {/if}
+  </section>
+  <section class="panel">
+    <DataPanel />
   </section>
 </div>
 

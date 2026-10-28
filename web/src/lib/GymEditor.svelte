@@ -137,18 +137,30 @@
               <small>{wall.routes.filter((r) => !r.archived && sectorOf(wall, r)?.id === sec.id).length} voie(s)</small>
             </button>
           {/each}
-          <label class="file sector-add">
-            <input type="file" accept="image/*" onchange={(e) => onPhoto(e, true)} />
-            <span>{busy ? "Analyse…" : sectors.length ? "+ Secteur" : "Ajouter une photo"}</span>
-          </label>
+          <div class="sector-add">
+            <span class="add-title">{busy ? "Analyse…" : sectors.length ? "+ Secteur" : "Premier secteur"}</span>
+            <label class="file small">
+              <input type="file" accept="image/*" capture="environment" onchange={(e) => onPhoto(e, true)} />
+              <span>📷 Photo</span>
+            </label>
+            <label class="file small">
+              <input type="file" accept="image/*" onchange={(e) => onPhoto(e, true)} />
+              <span>Image…</span>
+            </label>
+          </div>
         </div>
       </div>
       {#if sector}
         <div class="row sector-edit">
           <input type="text" aria-label="Nom du secteur" value={sector.name} onchange={(e) => renameSector((e.currentTarget as HTMLInputElement).value)} />
+          <span class="hint">Changer la photo :</span>
+          <label class="file small">
+            <input type="file" accept="image/*" capture="environment" onchange={(e) => onPhoto(e, false)} />
+            <span>📷 Photo</span>
+          </label>
           <label class="file small">
             <input type="file" accept="image/*" onchange={(e) => onPhoto(e, false)} />
-            <span>Changer la photo</span>
+            <span>Image…</span>
           </label>
           <button class="danger small" onclick={deleteSector}>{confirmSectorDelete ? "Supprimer le secteur ?" : "Supprimer"}</button>
         </div>
@@ -272,8 +284,23 @@
   }
   .sector-add {
     flex: none;
-    align-self: stretch;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 4px;
+    padding: 6px;
+    border: 1px dashed var(--accent);
+    border-radius: 10px;
     white-space: nowrap;
+  }
+  .add-title {
+    font-size: 0.85rem;
+    color: var(--accent);
+    font-weight: 600;
+  }
+  .sector-add .file {
+    min-height: 36px;
+    padding: 0 10px;
   }
   .sector-edit {
     align-items: center;
