@@ -116,12 +116,12 @@ export interface BlockOutcome {
 
 // --- Paramètres des règles -------------------------------------------------
 
-const FORMAT = {
+export const FORMAT = {
   blitz: { startMs: 3 * 60_000, blockLimitMs: 45_000, length: 5, recharge: { normal: 30_000, hard: 30_000 } },
   classique: { startMs: 10 * 60_000, blockLimitMs: 90_000, length: 7, recharge: { normal: 60_000, hard: 90_000 } },
 } as const;
 
-const DIFFICULTY = {
+export const DIFFICULTY = {
   facile: { base: 1, cap: 2, attempts: 2, penaltyMs: 10_000, limitFactor: 1, exhaustTurns: 1, ratingBonus: -200 },
   modere: { base: 2, cap: 4, attempts: 1, penaltyMs: 20_000, limitFactor: 1, exhaustTurns: 1, ratingBonus: 0 },
   difficile: { base: 3, cap: 5, attempts: 1, penaltyMs: 30_000, limitFactor: 0.8, exhaustTurns: 2, ratingBonus: 150 },

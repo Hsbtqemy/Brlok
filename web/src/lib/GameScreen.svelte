@@ -16,6 +16,7 @@
   import { FOOT_RULES, type FootRule } from "../core/feet";
   import { ROUTE_VARIANTS, routeHex, routeLabel, type RouteVariant } from "../core/gym";
   import { sectorOf } from "../core/wall";
+  import { FAMILIES, cadenceText, intensityLines, recapLines } from "../core/setupText";
   import { loadRouteVariants, saveRouteVariants } from "./storage";
   import { PIECES } from "../core/pieces";
   import { seededRng } from "../core/random";
@@ -57,6 +58,12 @@
     family: "C" | "D" | Family;
     duelFormat: DuelFormat;
     soloColor: Color | "hasard";
+    soloId: string;
+    whiteId: string;
+    blackId: string;
+    engineElo: number;
+    /** Une partie a déjà été lancée avec ces réglages (« Rejouer comme la dernière fois »). */
+    lastStarted: boolean;
   }>;
   const prefs: SetupPrefs = (() => {
     try {
@@ -72,8 +79,9 @@
   let density = $state<Density>(prefs.density ?? "normale");
   /** Rythme : par défaut, par séries en solo et à chaque bloc à deux. */
   let rhythmChoice = $state<Rhythm | null>(prefs.rhythmChoice ?? null);
-  let whiteId = $state(app.ratings.players[0]?.id ?? "");
-  let blackId = $state(app.ratings.players[1]?.id ?? app.ratings.players[0]?.id ?? "");
+  const knownPlayer = (id: string | undefined) => (id !== undefined && (id === "" || app.ratings.players.some((p) => p.id === id)) ? id : undefined);
+  let whiteId = $state(knownPlayer(prefs.whiteId) ?? app.ratings.players[0]?.id ?? "");
+  let blackId = $state(knownPlayer(prefs.blackId) ?? app.ratings.players[1]?.id ?? app.ratings.players[0]?.id ?? "");
   let fatigue = $state<Record<Color, boolean>>({ w: false, b: false });
   let mode = $state<"duo" | "solo">(prefs.mode ?? "solo");
   const rhythm = $derived<Rhythm>(rhythmChoice ?? (mode === "solo" ? "series" : "immediat"));
@@ -99,10 +107,11 @@
   const rounded = $derived(family === "A" || family === "B");
   let duelFormat = $state<DuelFormat>(prefs.duelFormat ?? "ajoute");
   let rounds = $state.raw<RoundsGame | null>(null);
-  let soloId = $state(app.activePlayer?.id ?? "");
+  let soloId = $state(knownPlayer(prefs.soloId) ?? app.activePlayer?.id ?? "");
   let soloColor = $state<Color | "hasard">(prefs.soloColor ?? "w");
   /** Force du moteur : par défaut la cote Chesscalade du joueur (elle monte quand il gagne, §9.1). */
-  let engineElo = $state(Math.round(app.activePlayer?.ratings.chesscalade.rating ?? 1500));
+  let engineElo = $state(prefs.engineElo ?? Math.round(app.activePlayer?.ratings.chesscalade.rating ?? 1500));
+  let lastStarted = $state(prefs.lastStarted ?? false);
   let humanColor = $state<Color>("w");
 
   // --- Partie ---
@@ -127,7 +136,7 @@
 
   // Réglages retenus d'une partie à l'autre (sur cet appareil).
   $effect(() => {
-    const setup = { format, difficulty, deviation, feetRule, density, rhythmChoice, mode, family, duelFormat, soloColor };
+    const setup = { format, difficulty, deviation, feetRule, density, rhythmChoice, mode, family, duelFormat, soloColor, soloId, whiteId, blackId, engineElo, lastStarted };
     try {
       localStorage.setItem(SETUP_KEY, JSON.stringify(setup));
     } catch {
@@ -167,12 +176,55 @@
     ].join(" · "),
   );
 
+  // --- Lancement en étapes : une question par panneau, et ce que chaque choix change ---
+  type StepId = "joueurs" | "partie" | "mur" | "intensite" | "recap";
+  const STEP_TITLES: Record<StepId, string> = {
+    joueurs: "Qui joue ?",
+    partie: "Quel type de partie ?",
+    mur: "Où ?",
+    intensite: "Quelle intensité ?",
+    recap: "Récapitulatif",
+  };
+  // Pas d'intensité en rounds : la difficulté vient des duels.
+  const steps = $derived<StepId[]>(rounded ? ["joueurs", "partie", "mur", "recap"] : ["joueurs", "partie", "mur", "intensite", "recap"]);
+  let stepIndex = $state(0);
+  const step = $derived(steps[Math.min(stepIndex, steps.length - 1)]);
+  const activeRoutes = $derived(app.wall?.kind === "voies" ? app.wall.routes.filter((r) => !r.archived) : []);
+  const stepBlocked = $derived(
+    step === "mur" ? (!app.wall ? "Aucun mur : crée-en un dans l'onglet Murs." : app.wall.kind === "voies" && activeRoutes.length === 0 ? "Aucune voie en place sur ce mur." : "") : "",
+  );
+  const recap = $derived(
+    recapLines({
+      solo: mode === "solo",
+      color: soloColor,
+      engineElo,
+      playerNames: { solo: nameOf(soloId), w: nameOf(whiteId), b: nameOf(blackId) },
+      family,
+      format,
+      duel: duelFormat,
+      wallName: app.wall?.name ?? null,
+      onRoutes: app.wall?.kind === "voies",
+      routesCount: gameRoutes.length || activeRoutes.length,
+      variantsCount: routeVariants.length,
+      difficulty,
+      density,
+      rhythm,
+      feet: feetRule,
+      fatigue,
+    }),
+  );
+  const presetLines = (p: (typeof PRESETS)[number]) =>
+    intensityLines({ difficulty: p.difficulty, density: p.density, rhythm, feet: "auto", solo: mode === "solo", onRoutes: app.wall?.kind === "voies" });
+  const soloPlayer = $derived(app.ratings.players.find((p) => p.id === soloId));
+
   // Sur un mur à voies, « Ajoute une prise » n'a pas de sens : on bascule sur « Même bloc ».
   $effect(() => {
     if (app.wall?.kind === "voies" && duelFormat === "ajoute") duelFormat = "meme";
   });
 
   function start() {
+    lastStarted = true;
+    stepIndex = 0;
     if (family === "A" || family === "B") {
       if (mode === "solo") {
         humanColor = soloColor === "hasard" ? (Math.random() < 0.5 ? "w" : "b") : soloColor;
@@ -532,15 +584,47 @@
         <p class="hint">Les pendules repartent de leur temps sauvegardé. Commencer une nouvelle partie remplace celle-ci.</p>
       </div>
     {/if}
-    <h2>Nouvelle partie</h2>
-    {#if app.ratings.players.length === 0}
-      <p class="hint">Partie en invité : crée un joueur (onglet Joueurs) pour suivre tes cotes.</p>
-    {/if}
-    <div class="row seg">
-      <button aria-pressed={mode === "solo"} onclick={() => (mode = "solo")}>Solo (Stockfish)</button>
-      <button aria-pressed={mode === "duo"} onclick={() => (mode = "duo")}>À deux</button>
+    <div class="wizard-head">
+      <h2>Nouvelle partie · {STEP_TITLES[step]}</h2>
+      <ol class="steps" aria-label="Étapes">
+        {#each steps as st, i (st)}
+          <li>
+            <button
+              class:done={i < stepIndex}
+              aria-current={st === step ? "step" : undefined}
+              disabled={i > stepIndex}
+              onclick={() => (stepIndex = i)}
+              title={STEP_TITLES[st]}>{i + 1}</button
+            >
+          </li>
+        {/each}
+      </ol>
     </div>
-    {#if mode === "solo"}
+
+    {#if step === "joueurs"}
+      {#if lastStarted}
+        <button class="replay" onclick={start} disabled={!app.wall}>
+          <strong>Rejouer comme la dernière fois</strong>
+          <small>{setupSummary}</small>
+        </button>
+        <p class="or">ou choisis étape par étape :</p>
+      {/if}
+      {#if app.ratings.players.length === 0}
+        <p class="hint">Partie en invité : crée un joueur (onglet Joueurs) pour suivre tes cotes.</p>
+      {/if}
+      <div class="cards two">
+        <button class="card" aria-pressed={mode === "solo"} onclick={() => (mode = "solo")}>
+          <span class="card-icon">♞</span>
+          <strong>Solo contre Stockfish</strong>
+          <small>Le moteur joue l'autre camp et ne grimpe pas : ses prises te font grimper des blocs de défense.</small>
+        </button>
+        <button class="card" aria-pressed={mode === "duo"} onclick={() => (mode = "duo")}>
+          <span class="card-icon">♞♘</span>
+          <strong>À deux</strong>
+          <small>Chacun son camp et ses blocs ; le premier à court de temps ou mat perd.</small>
+        </button>
+      </div>
+      {#if mode === "solo"}
       <div class="grid">
         <div class="player">
           <label class="field">
@@ -556,10 +640,11 @@
               {#each app.ratings.players as p (p.id)}<option value={p.id}>{p.name} (Chesscalade {Math.round(p.ratings.chesscalade.rating)})</option>{/each}
             </select>
           </label>
+          {#if soloPlayer}<p class="hint">Cotes : échecs {Math.round(soloPlayer.ratings.echecs.rating)} · Chesscalade {Math.round(soloPlayer.ratings.chesscalade.rating)} · grimpe {Math.round(soloPlayer.ratings.grimpe.rating)}</p>{/if}
         </div>
         <div class="field">
-          Couleur
-          <div class="row">
+          Ta couleur
+          <div class="row seg">
             <button aria-pressed={soloColor === "w"} onclick={() => (soloColor = "w")}>Blancs</button>
             <button aria-pressed={soloColor === "b"} onclick={() => (soloColor = "b")}>Noirs</button>
             <button aria-pressed={soloColor === "hasard"} onclick={() => (soloColor = "hasard")}>Au hasard</button>
@@ -567,20 +652,14 @@
         </div>
       </div>
       <label class="field">
-        Force du moteur : <strong>{engineElo}</strong>
+        Force de Stockfish : <strong>{engineElo}</strong>
         <input type="range" min="400" max="2800" step="50" bind:value={engineElo} />
       </label>
       <p class="hint">
-        {#if !rounded}
-          Le moteur ne grimpe pas : ses prises te font grimper un bloc de défense.
-        {:else}
-          Le moteur joue les rounds d'échecs. Au mur, tu vises un objectif :
-          {duelFormat === "ajoute" ? "un bloc progressif (une prise de plus à chaque réussite, jusqu'à la longueur cible)" : duelFormat === "meme" ? "un bloc à ta cote, à réussir en un nombre d'essais limité" : "un bloc un peu plus dur que ta cote, en un seul essai"}.
-          Raté : le moteur gagne le duel.
-        {/if}
-        Sous 1320, force approximative.
+        {engineElo < 1000 ? "Débutant : il laisse souvent des pièces en prise." : engineElo < 1500 ? "Joueur de club débutant." : engineElo < 2000 ? "Bon joueur de club." : "Très fort : expert et au-delà."}
+        Par défaut, ta cote Chesscalade (elle monte quand tu gagnes). Sous 1320, la force est approximative.
       </p>
-    {:else}
+      {:else}
     <div class="grid">
       {#each [["w", "Blancs"], ["b", "Noirs"]] as [color, label] (color)}
         <div class="player">
@@ -601,16 +680,69 @@
         </div>
       {/each}
     </div>
-    {/if}
-    <label class="field">
-      Pan ou mur de la partie
-      <select id="game-wall" value={app.wall?.id} onchange={(e) => { app.selectWall((e.currentTarget as HTMLSelectElement).value); gameRoutes = []; }}>
-        {#each app.walls as w (w.id)}<option value={w.id}>{w.name}{w.kind === "voies" ? " (salle)" : ""}</option>{/each}
-      </select>
-    </label>
-    {#if !app.wall}<p class="warn">Aucun pan : charge ou crée-en un dans l'onglet Pan.</p>{/if}
-    {#if app.wall?.kind === "voies"}
-      {@const routes = app.wall.routes.filter((r) => !r.archived)}
+      {/if}
+      {#if !rounded}
+      <div class="field">
+        Option fatigue (la cote visée baisse de 15 par bloc grimpé)
+        <div class="row">
+          {#if mode === "solo"}
+            <label class="check"><input type="checkbox" bind:checked={fatigue.w} /> {nameOf(soloId)}</label>
+          {:else}
+            <label class="check"><input type="checkbox" bind:checked={fatigue.w} /> {nameOf(whiteId)} (Blancs)</label>
+            <label class="check"><input type="checkbox" bind:checked={fatigue.b} /> {nameOf(blackId)} (Noirs)</label>
+          {/if}
+        </div>
+      </div>
+      {/if}
+
+    {:else if step === "partie"}
+      <div class="cards">
+        {#each FAMILIES as f (f.id)}
+          <button class="card" aria-pressed={family === f.id} onclick={() => (family = f.id)}>
+            <strong>{f.label}</strong>
+            <span class="flow">
+              {#each f.flow as part, i (i)}{#if i > 0}<span class="arrow">→</span>{/if}<span class="token">{part}</span>{/each}
+            </span>
+            <small>{f.tagline}</small>
+          </button>
+        {/each}
+      </div>
+      <div class="field">
+        Cadence
+        <div class="cards two">
+          {#each [["blitz", "Blitz"], ["classique", "Classique"]] as [id, label] (id)}
+            <button class="card compact" aria-pressed={format === id} onclick={() => (format = id as Format)}>
+              <strong>{label}</strong>
+              <small>{cadenceText(family, id as Format)}</small>
+            </button>
+          {/each}
+        </div>
+      </div>
+      {#if rounded}
+      <div class="field">
+        Duel au mur
+        <div class="row">
+          <button aria-pressed={duelFormat === "ajoute"} onclick={() => (duelFormat = "ajoute")} disabled={app.wall?.kind === "voies"} title={app.wall?.kind === "voies" ? "Impossible sur un mur à voies : les prises ne sont pas décrites une à une" : undefined}>Ajoute une prise</button>
+          <button aria-pressed={duelFormat === "meme"} onclick={() => (duelFormat = "meme")}>Même bloc</button>
+          <button aria-pressed={duelFormat === "impose"} onclick={() => (duelFormat = "impose")}>Bloc imposé</button>
+        </div>
+        <p class="hint">
+          {#if duelFormat === "ajoute"}Chacun répète le bloc et ajoute une prise ; le premier qui tombe ou se trompe perd.
+          {:else if duelFormat === "meme"}Le même bloc pour les deux : la réussite en moins d'essais gagne, sinon la prise la plus haute.
+          {:else}Chacun compose le bloc de l'autre sous un budget de cote ; celui qui réussit le bloc adverse gagne.{/if}
+        </p>
+      </div>
+      {/if}
+
+    {:else if step === "mur"}
+      <label class="field">
+        Pan ou mur de la partie
+        <select id="game-wall" value={app.wall?.id} onchange={(e) => { app.selectWall((e.currentTarget as HTMLSelectElement).value); gameRoutes = []; }}>
+          {#each app.walls as w (w.id)}<option value={w.id}>{w.name}{w.kind === "voies" ? " (salle)" : ""}</option>{/each}
+        </select>
+      </label>
+      {#if app.wall?.kind === "voies"}
+        {@const routes = activeRoutes}
       <div class="field">
         Voies de la partie
         {#if routes.length === 0}
@@ -644,74 +776,48 @@
           </p>
         {/if}
       </div>
-    {/if}
-    <div class="field">
-      Cadence
-      <div class="row seg">
-        <button aria-pressed={format === "blitz"} onclick={() => (format = "blitz")}>
-          Blitz · 3 min{rounded ? " · rounds 2 min, 3 + 3" : ""}
-        </button>
-        <button aria-pressed={format === "classique"} onclick={() => (format = "classique")}>
-          Classique · 10 min{rounded ? " · rounds 4/3 min, 5 + 5" : ""}
-        </button>
-      </div>
-    </div>
-    {#if !rounded}
       <div class="field">
-        Réglage rapide
-        <div class="presets">
-          {#each PRESETS as p (p.id)}
-            <button aria-pressed={preset === p.id} onclick={() => applyPreset(p)}>
-              <strong>{p.label}</strong><small>{p.hint}</small>
+        Variantes des voies
+        <div class="row wrap">
+          {#each ROUTE_VARIANTS as v (v.id)}
+            <button aria-pressed={routeVariants.includes(v.id)} onclick={() => toggleVariant(v.id)} title={v.description}>
+              {v.label} ({v.bonus > 0 ? "+" : "−"}{Math.abs(v.bonus)}){v.for === "ordre" ? " · voies numérotées" : ""}
             </button>
           {/each}
         </div>
-      </div>
-    {/if}
-    {#if !rounded}
-    <div class="field">
-      Difficulté
-      <div class="row seg4">
-        {#each DIFFICULTIES as d (d.id)}
-          <button aria-pressed={difficulty === d.id} onclick={() => (difficulty = d.id)}>{d.label}</button>
-        {/each}
-      </div>
-    </div>
-    {/if}
-    <details class="advanced">
-      <summary>Plus de réglages <span>type de partie, densité, passage au mur, pieds{app.wall?.kind === "voies" ? ", variantes" : ""}…</span></summary>
-      <div class="advanced-body">
-    <div class="field">
-      Type de partie
-      <div class="row">
-        <button aria-pressed={family === "D"} onclick={() => (family = "D")}>Intrication</button>
-        <button aria-pressed={family === "C"} onclick={() => (family = "C")}>Intrication rythmée</button>
-        <button aria-pressed={family === "A"} onclick={() => (family = "A")}>Rounds</button>
-        <button aria-pressed={family === "B"} onclick={() => (family = "B")}>Rounds couplés</button>
-      </div>
-      <p class="hint">
-        {#if family === "D"}La partie déclenche la grimpe : prises, échecs, recharges (REGLES.md §4–6).
-        {:else if family === "C"}L'intrication, plus une cloche toutes les 4 min (Blitz) ou 8 min (Classique) de jeu : chacun grimpe alors un bloc sur sa pièce la plus active. Impossible de fuir le mur en évitant les prises.
-        {:else if family === "A"}Comme le chessboxing : rounds d'échecs et rounds de mur alternent. On gagne par mat, au temps, par KO (3 duels perdus de suite) ou aux points.
-        {:else}Rounds dont le bloc vient de la position (pièce la plus active), et le gagnant du duel prend un bonus : +30 s ou un joker (indice du moteur).{/if}
-      </p>
-    </div>
-    {#if rounded}
-      <div class="field">
-        Duel au mur
-        <div class="row">
-          <button aria-pressed={duelFormat === "ajoute"} onclick={() => (duelFormat = "ajoute")} disabled={app.wall?.kind === "voies"} title={app.wall?.kind === "voies" ? "Impossible sur un mur à voies : les prises ne sont pas décrites une à une" : undefined}>Ajoute une prise</button>
-          <button aria-pressed={duelFormat === "meme"} onclick={() => (duelFormat = "meme")}>Même bloc</button>
-          <button aria-pressed={duelFormat === "impose"} onclick={() => (duelFormat = "impose")}>Bloc imposé</button>
-        </div>
         <p class="hint">
-          {#if duelFormat === "ajoute"}Chacun répète le bloc et ajoute une prise ; le premier qui tombe ou se trompe perd.
-          {:else if duelFormat === "meme"}Le même bloc pour les deux : la réussite en moins d'essais gagne, sinon la prise la plus haute.
-          {:else}Chacun compose le bloc de l'autre sous un budget de cote ; celui qui réussit le bloc adverse gagne.{/if}
+          Pour varier une même voie : quand la cote visée s'éloigne de celle de la voie, une variante permise la rend plus
+          facile ou plus dure (environ 100 points par cran de cotation). Chaque variante a sa propre cote, apprise en jouant.
+          Les variantes « voies numérotées » visent une prise précise d'une voie dont l'ordre est donné (au moins 4 prises).
+          {routeVariants.length === 0 ? "Aucune variante : les voies sont toujours grimpées telles quelles." : ""}
         </p>
       </div>
-    {/if}
-    {#if !rounded}
+      {:else if app.wall}
+        <p class="hint">Pan {app.wall.cols} × {app.wall.rows}, {app.wall.holds.length} prises : les blocs sont générés pendant la partie, à la cote visée et selon le caractère de la pièce.</p>
+      {/if}
+
+    {:else if step === "intensite"}
+      <div class="cards">
+        {#each PRESETS as p (p.id)}
+          <button class="card" aria-pressed={preset === p.id} onclick={() => applyPreset(p)}>
+            <strong>{p.label}</strong>
+            <ul class="lines">
+              {#each presetLines(p) as line, i (i)}<li>{line}</li>{/each}
+            </ul>
+          </button>
+        {/each}
+      </div>
+      <details class="advanced" open={preset === null}>
+        <summary>Personnaliser <span>niveau, déviation, densité, passage au mur{app.wall?.kind === "voies" ? "" : ", pieds"}</span></summary>
+        <div class="advanced-body">
+          <div class="field">
+            Niveau
+            <div class="row seg4">
+              {#each DIFFICULTIES as d (d.id)}
+                <button aria-pressed={difficulty === d.id} onclick={() => (difficulty = d.id)}>{d.label}</button>
+              {/each}
+            </div>
+          </div>
     <div class="field">
       Déviation
       <div class="row">
@@ -760,43 +866,25 @@
       </p>
     </div>
     {/if}
-    {/if}
-    {#if !rounded}
-      <div class="field">
-        Option fatigue (la cote visée baisse de 15 par bloc grimpé)
-        <div class="row">
-          {#if mode === "solo"}
-            <label class="check"><input type="checkbox" bind:checked={fatigue.w} /> {nameOf(soloId)}</label>
-          {:else}
-            <label class="check"><input type="checkbox" bind:checked={fatigue.w} /> {nameOf(whiteId)} (Blancs)</label>
-            <label class="check"><input type="checkbox" bind:checked={fatigue.b} /> {nameOf(blackId)} (Noirs)</label>
-          {/if}
         </div>
-      </div>
+      </details>
+
+    {:else}
+      <ul class="recap">
+        {#each recap as line, i (i)}<li>{line}</li>{/each}
+      </ul>
     {/if}
-    {#if app.wall?.kind === "voies"}
-      <div class="field">
-        Variantes des voies
-        <div class="row wrap">
-          {#each ROUTE_VARIANTS as v (v.id)}
-            <button aria-pressed={routeVariants.includes(v.id)} onclick={() => toggleVariant(v.id)} title={v.description}>
-              {v.label} ({v.bonus > 0 ? "+" : "−"}{Math.abs(v.bonus)}){v.for === "ordre" ? " · voies numérotées" : ""}
-            </button>
-          {/each}
-        </div>
-        <p class="hint">
-          Pour varier une même voie : quand la cote visée s'éloigne de celle de la voie, une variante permise la rend plus
-          facile ou plus dure (environ 100 points par cran de cotation). Chaque variante a sa propre cote, apprise en jouant.
-          Les variantes « voies numérotées » visent une prise précise d'une voie dont l'ordre est donné (au moins 4 prises).
-          {routeVariants.length === 0 ? "Aucune variante : les voies sont toujours grimpées telles quelles." : ""}
-        </p>
-      </div>
-    {/if}
-      </div>
-    </details>
+
     <div class="start-bar">
-      <p>{setupSummary}</p>
-      <button class="primary" onclick={start}>Commencer la partie</button>
+      {#if stepBlocked}<p class="warn">{stepBlocked}</p>{:else if step !== "recap"}<p>{setupSummary}</p>{/if}
+      <div class="nav">
+        <button disabled={stepIndex === 0} onclick={() => (stepIndex = Math.max(0, stepIndex - 1))}>Retour</button>
+        {#if step === "recap"}
+          <button class="primary" onclick={start} disabled={!app.wall}>Commencer la partie</button>
+        {:else}
+          <button class="primary" disabled={!!stepBlocked} onclick={() => (stepIndex = Math.min(steps.length - 1, stepIndex + 1))}>Suivant</button>
+        {/if}
+      </div>
     </div>
   </section>
 {:else}
@@ -1076,23 +1164,6 @@
       grid-template-columns: repeat(2, minmax(0, 1fr));
     }
   }
-  .presets {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-    gap: 8px;
-  }
-  .presets button {
-    display: flex;
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 2px;
-    padding: 8px 12px;
-    text-align: left;
-  }
-  .presets small {
-    color: var(--muted);
-    font-size: 0.8rem;
-  }
   .advanced {
     border: 1px solid var(--border);
     border-radius: 10px;
@@ -1132,6 +1203,154 @@
     margin: 0;
     font-size: 0.85rem;
     color: var(--muted);
+  }
+  .start-bar .nav {
+    display: flex;
+    gap: 8px;
+  }
+  .start-bar .nav button {
+    flex: 1;
+    min-height: 52px;
+    font-size: 1.05rem;
+  }
+  .start-bar .nav .primary {
+    flex: 2;
+  }
+  .wizard-head {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .steps {
+    list-style: none;
+    display: flex;
+    gap: 6px;
+    margin: 0;
+    padding: 0;
+  }
+  .steps li {
+    flex: 1;
+  }
+  .steps button {
+    width: 100%;
+    min-height: 8px;
+    height: 8px;
+    padding: 0;
+    border: none;
+    border-radius: 999px;
+    background: var(--border);
+    font-size: 0;
+  }
+  .steps button.done {
+    background: color-mix(in srgb, var(--accent) 55%, transparent);
+    cursor: pointer;
+  }
+  .steps button[aria-current="step"] {
+    background: var(--accent);
+  }
+  .cards {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+  }
+  .card {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 6px;
+    padding: 12px 14px;
+    text-align: left;
+    border-radius: 12px;
+    min-height: 0;
+  }
+  .card strong {
+    font-size: 1.02rem;
+  }
+  .card small {
+    color: var(--muted);
+    font-size: 0.85rem;
+    line-height: 1.35;
+  }
+  .card[aria-pressed="true"] {
+    border-width: 2px;
+    background: color-mix(in srgb, var(--accent) 8%, var(--surface));
+  }
+  .card.compact {
+    padding: 10px 12px;
+  }
+  .card-icon {
+    font-size: 1.6rem;
+    line-height: 1;
+  }
+  .flow {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px;
+    font-size: 0.85rem;
+  }
+  .flow .token {
+    padding: 2px 8px;
+    border-radius: 999px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+  }
+  .flow .arrow {
+    color: var(--muted);
+  }
+  .lines {
+    margin: 0;
+    padding-left: 18px;
+    font-size: 0.85rem;
+    color: var(--muted);
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+  .recap {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    font-size: 1rem;
+    line-height: 1.4;
+  }
+  .recap li {
+    padding: 10px 12px;
+    border-left: 4px solid var(--accent);
+    background: var(--bg);
+    border-radius: 8px;
+  }
+  .replay {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+    padding: 14px 16px;
+    text-align: left;
+    border: 2px solid var(--accent);
+    border-radius: 12px;
+    color: var(--accent);
+  }
+  .replay small {
+    color: var(--muted);
+  }
+  .or {
+    margin: 0;
+    font-size: 0.85rem;
+    color: var(--muted);
+  }
+  @media (max-width: 420px) {
+    .cards {
+      grid-template-columns: 1fr;
+    }
+  }
+  @media (max-width: 600px) {
+    .start-bar p:not(.warn) {
+      display: none;
+    }
   }
   .start-bar .primary {
     min-height: 52px;
