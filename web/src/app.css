@@ -173,3 +173,69 @@ body.bottom-nav.climbing {
   --nav-h: 0px;
   --bar-safe-bottom: env(safe-area-inset-bottom, 0px);
 }
+
+/* Feuille de séance imprimée (export PDF) : posée dans body le temps de l'impression. */
+#print-root {
+  display: none;
+}
+@media print {
+  body.printing {
+    background: #fff;
+  }
+  body.printing > *:not(#print-root) {
+    display: none !important;
+  }
+  body.printing #print-root {
+    display: block;
+    color: #000;
+    background: #fff;
+    font: 11pt/1.4 system-ui, sans-serif;
+  }
+  #print-root h1 {
+    font-size: 18pt;
+    margin: 0 0 6pt;
+  }
+  #print-root h2 {
+    font-size: 13pt;
+    margin: 0 0 4pt;
+  }
+  #print-root p {
+    margin: 0 0 2pt;
+  }
+  #print-root .meta {
+    color: #333;
+  }
+  #print-root .block {
+    break-inside: avoid;
+    border-top: 1px solid #999;
+    padding-top: 8pt;
+    margin-top: 10pt;
+  }
+  #print-root .body {
+    display: flex;
+    gap: 14pt;
+    align-items: flex-start;
+  }
+  #print-root .comment {
+    font-style: italic;
+  }
+  #print-root .grid {
+    border-collapse: collapse;
+    flex: none;
+  }
+  #print-root .grid td {
+    width: 16pt;
+    height: 14pt;
+    border: 1px solid #bbb;
+    text-align: center;
+    font-size: 8pt;
+    color: #999;
+  }
+  #print-root .grid td.on {
+    background: #000;
+    color: #fff;
+    font-weight: 700;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+}

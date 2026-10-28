@@ -1,8 +1,10 @@
 /**
- * Sauvegarde complète (un fichier JSON) : murs avec leurs photos, joueurs, cotes, journal, partie en cours.
+ * Sauvegarde complète (un fichier JSON) : murs avec leurs photos, joueurs, cotes, journal, partie en cours,
+ * favoris, modèles et historique des séances.
  * Sert à passer d'un appareil ou d'un hébergement à l'autre (page claude.ai → app installée), et de copie
  * de secours tant qu'il n'y a pas de synchronisation entre appareils.
  */
+import { emptyLibrary, normalizeLibrary, type Library } from "./library";
 import { emptyRatingsState, type RatingsState } from "./players";
 import { migrateWall, type Wall } from "./wall";
 
@@ -16,10 +18,12 @@ export interface Backup {
   walls: Wall[];
   ratings: RatingsState;
   liveGame: unknown | null;
+  /** Null pour une sauvegarde faite avant les favoris et l'historique : la remettre garde la bibliothèque actuelle. */
+  library: Library | null;
 }
 
-export function makeBackup(walls: Wall[], ratings: RatingsState, liveGame: unknown | null, at = new Date().toISOString()): Backup {
-  return { app: BACKUP_APP, version: BACKUP_VERSION, exportedAt: at, walls, ratings, liveGame };
+export function makeBackup(walls: Wall[], ratings: RatingsState, liveGame: unknown | null, library: Library = emptyLibrary(), at = new Date().toISOString()): Backup {
+  return { app: BACKUP_APP, version: BACKUP_VERSION, exportedAt: at, walls, ratings, liveGame, library };
 }
 
 /** Lit une sauvegarde ; lève une erreur lisible si le fichier n'en est pas une. */
@@ -53,6 +57,7 @@ export function parseBackup(text: string): Backup {
       bestTimes: r.bestTimes ?? empty.bestTimes,
     },
     liveGame: b.liveGame ?? null,
+    library: b.library === undefined || b.library === null ? null : normalizeLibrary(b.library),
   };
 }
 
@@ -66,6 +71,9 @@ export function describeBackup(b: Backup): string {
     `${b.ratings.attempts.length} tentative(s)`,
     `${b.ratings.games.length} partie(s)`,
     b.liveGame ? "une partie en cours" : "",
+    b.library?.favorites.length ? `${b.library.favorites.length} favori(s)` : "",
+    b.library?.templates.length ? `${b.library.templates.length} modèle(s)` : "",
+    b.library?.history.length ? `${b.library.history.length} séance(s) à l'historique` : "",
   ]
     .filter(Boolean)
     .join(", ");

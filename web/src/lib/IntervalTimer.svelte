@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { onDestroy } from "svelte";
   import type { Block } from "../core/generator";
   import { formatClock, planIntervals, timerState, TIMER_PRESETS, totalSeconds, type TimerConfig, type TimerMode } from "../core/intervals";
   import { app } from "./appState.svelte";
@@ -10,9 +11,22 @@
     block: Block | null;
     /** Bloc suivant de la séance (absent : dernier bloc). */
     onNext?: () => void;
+    /** Réglages, liés à l'écran de séance (un modèle de séance les garde). */
+    preset?: string;
+    config?: TimerConfig;
+    chained?: boolean;
+    /** Pause entre deux blocs (s), avant le bloc suivant ; 0 : aucune. */
+    pauseS?: number;
   }
 
-  let { block, onNext }: Props = $props();
+  let {
+    block,
+    onNext,
+    preset = $bindable(TIMER_PRESETS[0].id),
+    config = $bindable({ ...TIMER_PRESETS[0].config }),
+    chained = $bindable(false),
+    pauseS = $bindable(0),
+  }: Props = $props();
 
   const MODES: { id: TimerMode; label: string }[] = [
     { id: "fixe", label: "Travail / repos" },
@@ -21,8 +35,6 @@
     { id: "chrono", label: "Chrono" },
   ];
 
-  let config = $state<TimerConfig>({ ...TIMER_PRESETS[0].config });
-  let preset = $state(TIMER_PRESETS[0].id);
   let running = $state(false);
   let startedAt = $state(0);
   /** Temps déjà écoulé avant la dernière reprise (pause). */
@@ -39,7 +51,6 @@
   });
   const wallHeight = $derived(portrait ? "46vh" : "72vh");
   let flash = $state(false);
-  let chained = $state(false);
   let result = $state<string | null>(null);
 
   const plan = $derived(planIntervals(config));
@@ -55,11 +66,62 @@
     reset();
   }
 
-  // Tic d'affichage.
+  // Tic d'affichage (minuteur, ou pause entre deux blocs).
   $effect(() => {
-    if (!running) return;
+    if (!running && pauseUntil === null) return;
     const id = setInterval(() => (now = Date.now()), 100);
     return () => clearInterval(id);
+  });
+
+  // Pause entre deux blocs : le bloc suivant arrive à la fin du décompte (ou sur « Passer »).
+  let pauseUntil = $state<number | null>(null);
+  let pauseAutostart = false;
+  const pauseLeft = $derived(pauseUntil === null ? 0 : Math.max(0, pauseUntil - now));
+
+  // Enchaînement en attente (1,5 s après la fin) : annulé si l'on passe au bloc suivant à la main, ou si
+  // l'écran du minuteur disparaît (autre onglet) — sinon la séance avancerait toute seule, en arrière-plan.
+  let chainTimer: ReturnType<typeof setTimeout> | null = null;
+  function cancelChain() {
+    if (chainTimer !== null) clearTimeout(chainTimer);
+    chainTimer = null;
+  }
+  onDestroy(cancelChain);
+
+  function goNext(autostart: boolean) {
+    cancelChain();
+    if (!onNext) return;
+    const seconds = Math.max(0, Math.round(pauseS || 0));
+    if (seconds > 0) {
+      reset();
+      pauseAutostart = autostart;
+      now = Date.now();
+      pauseUntil = now + seconds * 1000;
+      return;
+    }
+    advance(autostart);
+  }
+
+  function advance(autostart: boolean) {
+    pauseUntil = null;
+    onNext?.();
+    reset();
+    if (autostart) start();
+  }
+
+  $effect(() => {
+    if (pauseUntil !== null && now >= pauseUntil) {
+      signal(1);
+      advance(pauseAutostart);
+    }
+  });
+
+  // Un autre bloc choisi à la main pendant la pause : elle s'arrête. (On compare les prises ou la voie, pas
+  // l'objet : noter le résultat du bloc pendant la pause ne doit pas l'interrompre.)
+  let pausedLabel = "";
+  $effect(() => {
+    const current = label;
+    if (pauseUntil === null) pausedLabel = current;
+    else if (current !== pausedLabel) pauseUntil = null;
   });
 
   // Écran allumé tant que le minuteur tourne.
@@ -134,6 +196,7 @@
   }
 
   function reset() {
+    cancelChain();
     running = false;
     banked = 0;
     result = null;
@@ -144,11 +207,8 @@
     banked = totalSeconds(plan) * 1000;
     result = "Terminé !";
     if (chained && onNext) {
-      setTimeout(() => {
-        onNext?.();
-        reset();
-        start();
-      }, 1500);
+      cancelChain();
+      chainTimer = setTimeout(() => goNext(true), 1500);
     }
   }
 
@@ -186,15 +246,21 @@
 {#snippet controls()}
   <div class="controls">
     {#if !running}
-      <button class="primary" onclick={start} disabled={timer.finished && config.mode !== "chrono"}>{started ? "Reprendre" : "Démarrer"}</button>
+      <button class="primary" onclick={start} disabled={(timer.finished && config.mode !== "chrono") || pauseUntil !== null}>{started ? "Reprendre" : "Démarrer"}</button>
     {:else if config.mode === "chrono"}
       <button class="primary" onclick={arrived}>Arrivé !</button>
     {:else}
       <button onclick={pause}>Pause</button>
     {/if}
     {#if started}<button onclick={reset}>Remettre à zéro</button>{/if}
-    {#if onNext}<button onclick={() => (reset(), onNext?.())}>Bloc suivant</button>{/if}
+    {#if onNext && pauseUntil === null}<button onclick={() => goNext(false)}>Bloc suivant</button>{/if}
   </div>
+  {#if pauseUntil !== null}
+    <div class="pause" role="status">
+      <span>Pause · bloc suivant dans <strong>{formatClock(pauseLeft)}</strong></span>
+      <button onclick={() => advance(pauseAutostart)}>Passer</button>
+    </div>
+  {/if}
 {/snippet}
 
 <div class="timer">
@@ -240,6 +306,9 @@
     <button onclick={() => (big = true)}>Grand écran</button>
     {#if onNext && config.mode !== "chrono"}
       <label class="check"><input type="checkbox" bind:checked={chained} /> Enchaîner les blocs</label>
+    {/if}
+    {#if onNext}
+      <label class="field pause-field">Pause entre les blocs (s) <input type="number" id="timer-pause" min="0" max="300" bind:value={pauseS} /></label>
     {/if}
   </div>
   {#if result}<p class="result">{result}</p>{/if}
@@ -340,6 +409,26 @@
   .result {
     margin: 0;
     font-weight: 700;
+  }
+  .pause {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 8px 12px;
+    border-radius: 10px;
+    background: #1565c0;
+    color: #fff;
+    width: 100%;
+    box-sizing: border-box;
+  }
+  .pause button {
+    color: #fff;
+    background: transparent;
+    border-color: rgba(255, 255, 255, 0.8);
+  }
+  .pause-field input {
+    width: 80px;
   }
   .overlay {
     position: fixed;

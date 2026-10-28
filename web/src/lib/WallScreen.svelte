@@ -12,6 +12,37 @@
   import type { Route } from "../core/wall";
   import { expressWall } from "../core/wallEdit";
   import { loadRouteVariants, saveRouteVariants } from "./storage";
+  import LibraryPanel from "./LibraryPanel.svelte";
+  import { HOLD_TYPES } from "../core/wallEdit";
+  import { TIMER_PRESETS } from "../core/intervals";
+  import {
+    addFavorite,
+    addToHistory,
+    blockSignature,
+    endRun,
+    favoriteTitle,
+    LEVEL_PROFILES,
+    levelLabel,
+    markRated,
+    removeFavorite,
+    restartRun,
+    runHasProgress,
+    runSummary,
+    saveTemplate,
+    selectBlock,
+    setBlockComment,
+    setBlockResult,
+    startRun,
+    toggleBlockHold,
+    type BlockResult,
+    type Library,
+    type SessionRun,
+    type SessionSettings,
+    type SessionTemplate,
+    type TimerSettings,
+  } from "../core/library";
+  import { EXPORT_FORMATS, exportSession, type ExportFormat } from "./sessionFiles";
+  import { onDestroy } from "svelte";
 
   interface Props {
     /** Ouvrir le mur actif dans l'onglet Murs. */
@@ -46,17 +77,13 @@
   });
 
 
-  const LEVEL_PROFILES = [
-    { label: "Très facile", level: 1 },
-    { label: "Facile", level: 2 },
-    { label: "Modéré", level: 3 },
-    { label: "Difficile", level: 4 },
-    { label: "Très difficile", level: 5 },
-    { label: "Extrême", level: 6 },
-  ];
+  /** Séance en cours (gardée d'un onglet à l'autre) : celle du mur affiché seulement. */
+  const run = $derived(app.library.current && app.library.current.wallId === app.wall?.id ? app.library.current : null);
 
-
-  let mode = $state<"chesscalade" | "classique" | "carnet">("chesscalade");
+  // Une séance en cours sur ce mur : on y revient directement.
+  let mode = $state<"chesscalade" | "classique" | "carnet" | "bibliotheque">(
+    app.library.current && app.library.current.wallId === app.wall?.id ? "classique" : "chesscalade",
+  );
 
   // Chesscalade
   /** Pièce facultative : sans pièce, simplement un bloc (ou une voie) à la cote visée. */
@@ -75,8 +102,233 @@
   let classicBlocks = $state(5);
   let classicPattern = $state<DistributionPattern>("uniforme");
   let classicVariety = $state(true);
-  let classicSession = $state<Block[]>([]);
-  let classicSelected = $state(0);
+  /** Types de prises exigés ou exclus (Brlok desktop : tags « forcer » et « filtrer »). */
+  let requiredTags = $state<string[]>([]);
+  let excludedTags = $state<string[]>([]);
+  /** Niveau bloc par bloc, venu d'un modèle de Brlok desktop ; effacé dès qu'on change le niveau. */
+  let blockLevels = $state<number[] | undefined>(undefined);
+  /** Réglages du minuteur (un modèle les garde avec la séance). */
+  let timer = $state<TimerSettings>({ preset: TIMER_PRESETS[0].id, config: { ...TIMER_PRESETS[0].config }, chained: false, pauseS: 0 });
+  /** Dernier modèle repris : son nom suit la séance tant que ses réglages n'ont pas été changés. */
+  let appliedTemplate = $state<SessionTemplate | null>(null);
+  let sessionMessage = $state("");
+  /** Favori montré sur le mur depuis la bibliothèque. */
+  let previewBlock = $state<Block | null>(null);
+  let sessionFailed = $state(false);
+  /** Modifier la séquence du bloc affiché en touchant le pan. */
+  let editing = $state(false);
+  let templateName = $state("");
+  let savingTemplate = $state(false);
+
+  /** Types de prises présents sur le pan (types connus d'abord). */
+  const wallTags = $derived.by(() => {
+    const tags = new Set(app.wall?.holds.flatMap((h) => h.tags) ?? []);
+    const known = HOLD_TYPES.filter((t) => tags.has(t));
+    return [...known, ...[...tags].filter((t) => !(HOLD_TYPES as readonly string[]).includes(t)).sort()];
+  });
+
+  /** Neutre → exigé → exclu → neutre. */
+  function cycleTag(tag: string) {
+    if (requiredTags.includes(tag)) {
+      requiredTags = requiredTags.filter((t) => t !== tag);
+      excludedTags = [...excludedTags, tag];
+    } else if (excludedTags.includes(tag)) {
+      excludedTags = excludedTags.filter((t) => t !== tag);
+    } else {
+      requiredTags = [...requiredTags, tag];
+    }
+  }
+
+  function panSettings(): SessionSettings {
+    return {
+      kind: "pan",
+      level: classicLevel,
+      pattern: classicPattern,
+      blocks: classicBlocks,
+      holds: classicHolds,
+      variety: classicVariety,
+      requiredTags: [...requiredTags],
+      excludedTags: [...excludedTags],
+      ...(blockLevels ? { blockLevels: [...blockLevels] } : {}),
+    };
+  }
+
+  function gymSettings(): SessionSettings {
+    return { kind: "voies", target: gymTarget, pattern: gymPattern, count: gymCount, variants: withVariants ? [...routeVariants] : null };
+  }
+
+  /** Le modèle repris, s'il correspond encore aux réglages. */
+  function templateFor(settings: SessionSettings): string | undefined {
+    return appliedTemplate && JSON.stringify(appliedTemplate.settings) === JSON.stringify(settings) ? appliedTemplate.name : undefined;
+  }
+
+  function setRun(next: SessionRun | null) {
+    app.updateLibrary((l) => ({ ...l, current: next }));
+  }
+
+  function updateRun(change: (r: SessionRun) => SessionRun) {
+    if (run) setRun(change(run));
+  }
+
+  /** Range une séance dans l'historique. */
+  function archive(lib: Library, r: SessionRun): Library {
+    const wallName = app.walls.find((w) => w.id === r.wallId)?.name ?? "Mur supprimé";
+    return addToHistory(lib, endRun(r, wallName, app.activePlayer?.name));
+  }
+
+  /** Nouvelle séance ; celle en cours va d'abord à l'historique si l'on y a noté quelque chose. */
+  function beginRun(blocks: Block[], settings?: SessionSettings, name?: string) {
+    const wall = app.wall;
+    if (!wall || blocks.length === 0) return;
+    let lib = app.library;
+    if (lib.current && runHasProgress(lib.current)) lib = archive(lib, lib.current);
+    app.setLibrary({ ...lib, current: startRun(wall.id, blocks, settings, name) });
+    // Séance refaite depuis l'historique : le formulaire reprend ses réglages.
+    if (settings && settings.kind === wall.kind) loadSettings(settings);
+    lastDelta = null;
+    editing = false;
+    sessionFailed = false;
+    mode = "classique";
+  }
+
+  function endSession() {
+    if (!run) return;
+    app.setLibrary({ ...archive(app.library, run), current: null });
+    editing = false;
+    lastDelta = null;
+    sessionMessage = "Séance rangée dans l'historique (onglet Bibliothèque).";
+  }
+
+  function restartSession() {
+    if (!run) return;
+    const progress = runHasProgress(run);
+    const lib = progress ? archive(app.library, run) : app.library;
+    app.setLibrary({ ...lib, current: restartRun(run) });
+    lastDelta = null;
+    sessionMessage = progress ? "Même séance, résultats remis à zéro (la précédente est à l'historique)." : "";
+  }
+
+  function pickBlock(index: number) {
+    updateRun((r) => selectBlock(r, index));
+    lastDelta = null;
+  }
+
+  /** Résultat du bloc affiché ; la tentative compte une seule fois pour les cotes. */
+  function noteResult(result: BlockResult | null) {
+    const r = run;
+    if (!r) return;
+    const i = r.selected;
+    const block = r.blocks[i];
+    let next = setBlockResult(r, i, result);
+    const player = app.activePlayer;
+    if (result && player && !block.rated) {
+      lastDelta = app.recordAttempt(player.id, block, result === "reussi", "libre");
+      next = markRated(next, i);
+    }
+    setRun(next);
+  }
+
+  // Commentaire : enregistré peu après la frappe (pour ne pas écrire à chaque lettre), et en quittant le champ.
+  let commentTimer: ReturnType<typeof setTimeout> | null = null;
+  function saveComment(index: number, text: string) {
+    if (commentTimer !== null) clearTimeout(commentTimer);
+    commentTimer = null;
+    if ((run?.blocks[index]?.comment ?? "") !== text.trim()) updateRun((r) => setBlockComment(r, index, text));
+  }
+  function saveCommentSoon(index: number, text: string) {
+    if (commentTimer !== null) clearTimeout(commentTimer);
+    commentTimer = setTimeout(() => saveComment(index, text), 600);
+  }
+  onDestroy(() => {
+    if (commentTimer !== null) clearTimeout(commentTimer);
+  });
+
+  function toggleHold(id: string) {
+    const wall = app.wall;
+    if (!wall) return;
+    updateRun((r) => ({ ...r, blocks: r.blocks.map((b, i) => (i === r.selected ? toggleBlockHold(wall, b, id) : b)) }));
+  }
+
+  function favoriteOf(block: Block) {
+    const wall = app.wall;
+    if (!wall) return undefined;
+    const sig = blockSignature(wall.id, block);
+    return app.library.favorites.find((f) => blockSignature(f.wallId, f.block) === sig);
+  }
+
+  function toggleFavorite(block: Block, title: string, comment?: string) {
+    const wall = app.wall;
+    if (!wall) return;
+    const existing = favoriteOf(block);
+    app.updateLibrary((l) => (existing ? removeFavorite(l, existing.id) : addFavorite(l, wall.id, block, title, comment).lib));
+  }
+
+  function favoriteAll() {
+    const wall = app.wall;
+    if (!wall || !run) return;
+    let lib = app.library;
+    let added = 0;
+    run.blocks.forEach((b, i) => {
+      const r = addFavorite(lib, wall.id, b, favoriteTitle(run.settings, i), b.comment);
+      lib = r.lib;
+      if (r.added) added++;
+    });
+    app.setLibrary(lib);
+    sessionMessage = added ? `${added} bloc(s) ajouté(s) aux favoris.` : "Tous les blocs de la séance sont déjà en favoris.";
+  }
+
+  async function exportRun(format: ExportFormat) {
+    if (!run || !app.wall) return;
+    try {
+      sessionMessage = await exportSession({ ...run, wallName: app.wall.name, playerName: app.activePlayer?.name }, format, app.wall);
+    } catch (e) {
+      sessionMessage = e instanceof Error ? e.message : String(e);
+    }
+  }
+
+  /** Remet des réglages de séance dans le formulaire. */
+  function loadSettings(s: SessionSettings) {
+    if (s.kind === "pan") {
+      classicLevel = s.level;
+      classicPattern = s.pattern;
+      classicBlocks = s.blocks;
+      classicHolds = s.holds;
+      classicVariety = s.variety;
+      requiredTags = [...s.requiredTags];
+      excludedTags = [...s.excludedTags];
+      blockLevels = s.blockLevels ? [...s.blockLevels] : undefined;
+    } else {
+      gymTarget = s.target;
+      gymPattern = s.pattern;
+      gymCount = s.count;
+      withVariants = s.variants !== null;
+      // Les variantes du modèle valent pour cette séance, sans changer le réglage des parties.
+      if (s.variants) routeVariants = [...s.variants];
+    }
+  }
+
+  function applyTemplate(t: SessionTemplate) {
+    loadSettings(t.settings);
+    if (t.timer) timer = JSON.parse(JSON.stringify(t.timer)) as TimerSettings;
+    appliedTemplate = t;
+    sessionFailed = false;
+    sessionMessage = `Modèle « ${t.name} » repris : ${isGym ? "Préparer la séance" : "Générer la séance"} pour la lancer.`;
+    mode = "classique";
+  }
+
+  function saveAsTemplate() {
+    const name = templateName.trim();
+    if (!name) return;
+    const settings = isGym ? gymSettings() : panSettings();
+    const replaced = app.library.templates.some((t) => t.name === name && t.settings.kind === settings.kind);
+    app.updateLibrary((l) => saveTemplate(l, name, settings, $state.snapshot(timer) as TimerSettings));
+    appliedTemplate = app.library.templates.find((t) => t.name === name && t.settings.kind === settings.kind) ?? null;
+    savingTemplate = false;
+    templateName = "";
+    sessionMessage = replaced ? `Modèle « ${name} » mis à jour.` : `Modèle « ${name} » enregistré (onglet Bibliothèque).`;
+  }
+
+  const kindTemplates = $derived(app.library.templates.filter((t) => t.settings.kind === (isGym ? "voies" : "pan")));
 
   /** Bloc affiché, et s'il a déjà été noté (une seule tentative enregistrée par bloc affiché). */
   // Séance de voies et carnet (mur à voies)
@@ -96,7 +348,7 @@
   );
 
   function generateGymSession() {
-    classicSession = app.routeSession({
+    const blocks = app.routeSession({
       targetRating: gymTarget,
       count: gymCount,
       pattern: gymPattern,
@@ -104,8 +356,10 @@
       variants: withVariants ? routeVariants : [],
       rng: seededRng(Date.now()),
     });
-    classicSelected = 0;
-    lastDelta = null;
+    sessionMessage = "";
+    sessionFailed = blocks.length === 0;
+    const settings = gymSettings();
+    beginRun(blocks, settings, templateFor(settings));
   }
 
   function carnetRecord(route: Route, rating: number, success: boolean) {
@@ -117,12 +371,12 @@
   }
 
   const currentBlock = $derived(
-    mode === "chesscalade" ? chessBlock : mode === "carnet" ? carnetBlock : (classicSession[classicSelected] ?? null),
+    mode === "chesscalade" ? chessBlock : mode === "carnet" ? carnetBlock : mode === "classique" ? (run?.blocks[run.selected] ?? null) : previewBlock,
   );
   let recorded = $state<string | null>(null);
   let lastDelta = $state<number | null>(null);
   const currentKey = $derived(
-    currentBlock ? `${mode}:${classicSelected}:${currentBlock.route?.id ?? currentBlock.holds.map((h) => h.id).join("-")}` : null,
+    currentBlock ? `${mode}:${currentBlock.route?.id ?? currentBlock.holds.map((h) => h.id).join("-")}` : null,
   );
 
   function generateChess() {
@@ -143,16 +397,27 @@
 
   function generateClassic() {
     if (!app.wall) return;
-    classicSession = generateClassicSession(app.wall, {
+    const blocks = generateClassicSession(app.wall, {
       targetLevel: classicLevel,
       blocksCount: classicBlocks,
       holdsPerBlock: classicHolds,
       pattern: classicPattern,
       variety: classicVariety,
+      requiredTags,
+      excludedTags,
+      blockLevels,
       rng: seededRng(Date.now()),
     });
-    classicSelected = 0;
-    lastDelta = null;
+    sessionMessage = "";
+    sessionFailed = blocks.length === 0;
+    const settings = panSettings();
+    beginRun(blocks, settings, templateFor(settings));
+  }
+
+  // De retour sur l'écran (autre onglet, rechargement) : le formulaire reprend les réglages de la séance en cours.
+  {
+    const current = app.library.current;
+    if (current?.settings && current.wallId === app.wall?.id && current.settings.kind === app.wall?.kind) loadSettings(current.settings);
   }
 
   function record(success: boolean) {
@@ -178,6 +443,161 @@
             <p class="hint">Le même réglage que pour les parties. Une variante n'est choisie que si elle rapproche nettement de la cote visée.</p>
           </details>
         {/if}
+{/snippet}
+
+{#snippet templatePick()}
+  {#if kindTemplates.length > 0}
+    <label class="field">
+      Modèle
+      <select
+        value={appliedTemplate && kindTemplates.some((t) => t.id === appliedTemplate!.id) ? appliedTemplate.id : ""}
+        onchange={(e) => {
+          const t = kindTemplates.find((x) => x.id === (e.currentTarget as HTMLSelectElement).value);
+          if (t) applyTemplate(t);
+        }}
+      >
+        <option value="" disabled>Reprendre un modèle…</option>
+        {#each kindTemplates as t (t.id)}<option value={t.id}>{t.name}</option>{/each}
+      </select>
+    </label>
+  {/if}
+{/snippet}
+
+{#snippet templateSave()}
+  {#if savingTemplate}
+    <form
+      class="row"
+      onsubmit={(e) => {
+        e.preventDefault();
+        saveAsTemplate();
+      }}
+    >
+      <input type="text" bind:value={templateName} placeholder="Nom du modèle" aria-label="Nom du modèle" />
+      <button class="primary" type="submit" disabled={!templateName.trim()}>Enregistrer</button>
+      <button type="button" onclick={() => (savingTemplate = false)}>Annuler</button>
+    </form>
+    <p class="hint">Garde ces réglages{isGym ? "" : ", les types de prises"} et ceux du minuteur. Un modèle du même nom est remplacé.</p>
+  {:else}
+    <button class="link" onclick={() => ((savingTemplate = true), (templateName = appliedTemplate?.name ?? ""))}>Enregistrer ces réglages comme modèle</button>
+  {/if}
+  {#if sessionFailed}
+    <p class="warn">
+      {isGym
+        ? "Aucune voie en place sur ce mur."
+        : requiredTags.length || excludedTags.length
+          ? "Aucune prise ne répond à ces types (ou un type est à la fois exigé et exclu) : relâche-les."
+          : "Aucune prise de ce niveau sur ce pan."}
+    </p>
+  {/if}
+  {#if sessionMessage && !run}<p class="message" role="status">{sessionMessage}</p>{/if}
+{/snippet}
+
+{#snippet runView()}
+  {#if run}
+    {@const sum = runSummary(run.blocks)}
+    {@const sel = run.blocks[run.selected]}
+    <div class="run">
+      <h3>
+        Séance en cours{run.templateName ? ` · ${run.templateName}` : ""}
+        <small>{sum.done ? `${sum.success}/${sum.done} réussi(s) · ` : ""}{sum.total} {isGym ? "voie(s)" : "bloc(s)"}</small>
+      </h3>
+      <ol class={isGym ? "session" : "blocks"}>
+        {#each run.blocks as b, i (i)}
+          <li>
+            <button aria-pressed={run.selected === i} onclick={() => pickBlock(i)}>
+              {#if b.result}<span class="mark" class:ok={b.result === "reussi"}>{b.result === "reussi" ? "✓" : "✗"}</span>{/if}
+              {#if isGym}
+                <span class="dot" style:background={b.route?.colorHex}></span>
+                {i + 1}. {b.route?.label}{b.route?.variant ? ` · ${variantText(b.route.variant, b.route.variantHold)?.label}` : ""} · {b.estimatedRating}
+              {:else}
+                Bloc {i + 1} · {b.estimatedRating}
+              {/if}
+              {#if b.comment}<span class="has-comment" title="Commenté" aria-label="commenté">✎</span>{/if}
+            </button>
+          </li>
+        {/each}
+      </ol>
+      {#if sel}
+        {#if !sel.route}
+          <p class="sequence">{sel.holds.map((h) => h.id).join(" → ")}</p>
+        {:else if sel.route.variant}
+          {@const v = variantText(sel.route.variant, sel.route.variantHold)}
+          <p class="variant"><strong>Voie {run.selected + 1} · {v?.label}</strong> — {v?.description}</p>
+        {/if}
+
+        <div class="attempt">
+          {#if sel.result}
+            <p>
+              <strong class:ok-text={sel.result === "reussi"} class:ko-text={sel.result === "chute"}>{sel.result === "reussi" ? "✓ Réussi" : "✗ Chute"}</strong>
+              <button class="link" onclick={() => noteResult(null)}>changer</button>
+            </p>
+            {#if sel.rated && app.activePlayer && lastDelta !== null}
+              <p class="hint">
+                Cote de grimpe de {app.activePlayer.name} : {lastDelta >= 0 ? "+" : ""}{Math.round(lastDelta)} → {Math.round(app.activePlayer.ratings.grimpe.rating)}
+              </p>
+            {/if}
+          {:else}
+            <div class="row two">
+              <button class="success" onclick={() => noteResult("reussi")}>Réussi</button>
+              <button class="fall" onclick={() => noteResult("chute")}>Chute</button>
+            </div>
+            <p class="hint">
+              {#if !app.activePlayer}
+                Noté pour la séance ; crée un joueur (onglet Joueurs) pour que ta cote évolue aussi.
+              {:else if sel.rated}
+                Tentative déjà comptée pour {app.activePlayer.name} : le résultat change seulement dans la séance.
+              {:else}
+                Tentative de <strong>{app.activePlayer.name}</strong> (cote de grimpe {Math.round(app.activePlayer.ratings.grimpe.rating)}).
+              {/if}
+            </p>
+          {/if}
+          <!-- Un champ par bloc : le commentaire va au bloc pour lequel il a été tapé, même si la séance passe
+               seule au bloc suivant (fin de pause, enchaînement) avant qu'on quitte le champ. -->
+          {#key run.selected}
+            {@const index = run.selected}
+            <label class="field">
+              Commentaire
+              <input
+                type="text"
+                value={sel.comment ?? ""}
+                placeholder={isGym ? "Note ou retour sur cette voie…" : "Note ou retour sur ce bloc…"}
+                oninput={(e) => saveCommentSoon(index, (e.currentTarget as HTMLInputElement).value)}
+                onchange={(e) => saveComment(index, (e.currentTarget as HTMLInputElement).value)}
+              />
+            </label>
+          {/key}
+          <div class="row">
+            <button class="fav" aria-pressed={!!favoriteOf(sel)} onclick={() => toggleFavorite(sel, favoriteTitle(run!.settings, run!.selected), sel.comment)}
+              >{favoriteOf(sel) ? "★ Dans les favoris" : "☆ Favori"}</button
+            >
+            {#if !isGym}
+              <button aria-pressed={editing} onclick={() => (editing = !editing)}>{editing ? "Fin de la modification" : "Modifier la séquence"}</button>
+            {/if}
+          </div>
+        </div>
+      {/if}
+
+      <div class="row run-actions">
+        <button onclick={favoriteAll}>☆ Toute la séance</button>
+        <button onclick={restartSession}>Recommencer</button>
+        <select
+          aria-label="Exporter la séance"
+          value=""
+          onchange={(e) => {
+            const el = e.currentTarget as HTMLSelectElement;
+            const format = el.value as ExportFormat;
+            el.value = "";
+            if (format) void exportRun(format);
+          }}
+        >
+          <option value="" disabled>Exporter…</option>
+          {#each EXPORT_FORMATS as f (f.id)}<option value={f.id}>{f.label}</option>{/each}
+        </select>
+        <button class="primary" onclick={endSession}>Fin de séance</button>
+      </div>
+      {#if sessionMessage}<p class="message" role="status">{sessionMessage}</p>{/if}
+    </div>
+  {/if}
 {/snippet}
 
 {#if app.walls.length === 0}
@@ -221,7 +641,13 @@
           onchange={(e) => {
             app.selectWall((e.currentTarget as HTMLSelectElement).value);
             chessBlock = null;
-            classicSession = [];
+            previewBlock = null;
+            // Les types de prises et le modèle repris valaient pour l'autre mur.
+            requiredTags = [];
+            excludedTags = [];
+            editing = false;
+            sessionMessage = "";
+            sessionFailed = false;
           }}
         >
           {#each app.walls as w (w.id)}<option value={w.id}>{w.name}{w.kind === "voies" ? " (salle)" : ""}</option>{/each}
@@ -253,7 +679,10 @@
         <p class="empty">{app.wall.routes.length ? "Choisis une voie à droite." : "Aucune voie : ajoute-les avec « Gérer les voies »."}</p>
       {/if}
     {:else if app.wall}
-      <PanView wall={app.wall} sequence={currentBlock?.holds.map((h) => h.id) ?? []} />
+      {#if editing && mode === "classique" && run}
+        <p class="editing-hint">Touche une prise pour l'ajouter à la fin du bloc, ou pour la retirer.</p>
+      {/if}
+      <PanView wall={app.wall} sequence={currentBlock?.holds.map((h) => h.id) ?? []} onHold={editing && mode === "classique" && run ? toggleHold : undefined} />
     {:else}
       <p class="empty">Aucun mur : <button class="link" onclick={onEdit}>crée-en un dans l'onglet Murs</button>.</p>
     {/if}
@@ -264,9 +693,12 @@
       <button aria-pressed={mode === "chesscalade"} onclick={() => (mode = "chesscalade")}>Chesscalade</button>
       <button aria-pressed={mode === "classique"} onclick={() => (mode = "classique")}>{isGym ? "Séance" : "Brlok classique"}</button>
       {#if isGym}<button aria-pressed={mode === "carnet"} onclick={() => (mode = "carnet")}>Carnet</button>{/if}
+      <button aria-pressed={mode === "bibliotheque"} onclick={() => ((mode = "bibliotheque"), (editing = false), (previewBlock = null))}>Bibliothèque</button>
     </div>
 
-    {#if mode === "carnet" && isGym}
+    {#if mode === "bibliotheque"}
+      <LibraryPanel onStart={(blocks, settings, name) => beginRun(blocks, settings, name)} onApplyTemplate={applyTemplate} onPreview={(b) => (previewBlock = b)} />
+    {:else if mode === "carnet" && isGym}
       <h2>Carnet de voies</h2>
       <div class="row">
         <button aria-pressed={carnetFilter === "toutes"} onclick={() => (carnetFilter = "toutes")}>Toutes</button>
@@ -360,12 +792,22 @@
           {#if chessBlock.relaxations.length > 0}
             <p class="warn">Assoupli : {chessBlock.relaxations.join(", ")}.</p>
           {/if}
+          <button
+            class="fav"
+            aria-pressed={!!favoriteOf(chessBlock)}
+            onclick={() =>
+              toggleFavorite(
+                chessBlock!,
+                `${piece ? PIECES.find((p) => p.id === piece)?.label : isGym ? "Voie" : "Bloc"} · ${new Date().toLocaleDateString("fr-FR", { day: "numeric", month: "short" })}`,
+              )}>{favoriteOf(chessBlock) ? "★ Dans les favoris" : "☆ Ajouter aux favoris"}</button
+          >
         </div>
       {:else if generationFailed}
         <p class="warn">Aucun bloc possible sur ce pan.</p>
       {/if}
     {:else if isGym}
       <h2>Séance de voies</h2>
+      {@render templatePick()}
       <label class="field">
         <span>
           Autour de la cote : <strong>{gymTarget}</strong>
@@ -384,57 +826,61 @@
       <label class="field">Voies <input type="number" min="1" max="20" bind:value={gymCount} /></label>
       {@render variantsControl()}
       <button class="primary" disabled={!app.wall} onclick={generateGymSession}>Préparer la séance</button>
-      {#if classicSession.length > 0}
-        <ol class="session">
-          {#each classicSession as b, i (i)}
-            <li>
-              <button aria-pressed={classicSelected === i} onclick={() => { classicSelected = i; lastDelta = null; }}>
-                <span class="dot" style:background={b.route?.colorHex}></span>
-                {i + 1}. {b.route?.label}{b.route?.variant ? ` · ${variantText(b.route.variant, b.route.variantHold)?.label}` : ""} · {b.estimatedRating}
-              </button>
-            </li>
-          {/each}
-        </ol>
-        {@const sel = classicSession[classicSelected]}
-        {#if sel?.route?.variant}
-          {@const v = variantText(sel.route.variant, sel.route.variantHold)}
-          <p class="variant"><strong>Voie {classicSelected + 1} · {v?.label}</strong> — {v?.description}</p>
-        {/if}
-      {/if}
+      {@render templateSave()}
+      {@render runView()}
     {:else}
       <h2>Séance</h2>
+      {@render templatePick()}
       <label class="field">
         Difficulté
-        <select bind:value={classicLevel}>
+        <select bind:value={classicLevel} onchange={() => (blockLevels = undefined)}>
           {#each LEVEL_PROFILES as p (p.level)}<option value={p.level}>{p.label}</option>{/each}
         </select>
       </label>
+      {#if blockLevels}
+        <p class="hint">
+          Niveau bloc par bloc (modèle) : {blockLevels.map(levelLabel).join(" / ")}
+          <button class="link" onclick={() => (blockLevels = undefined)}>le même pour tous</button>
+        </p>
+      {/if}
       <label class="field">
         Répartition
         <select bind:value={classicPattern}>
           {#each DISTRIBUTION_PATTERNS as p (p.id)}<option value={p.id}>{p.label}</option>{/each}
         </select>
       </label>
-      <label class="field">Blocs <input type="number" min="1" max="20" bind:value={classicBlocks} /></label>
+      <label class="field">Blocs <input type="number" min="1" max="20" bind:value={classicBlocks} oninput={() => (blockLevels = undefined)} /></label>
       <label class="field">Prises par bloc <input type="number" min="1" max="20" bind:value={classicHolds} /></label>
       <label class="check"><input type="checkbox" bind:checked={classicVariety} /> Variété</label>
+      <details class="tags" open={requiredTags.length + excludedTags.length > 0}>
+        <summary>
+          Types de prises{requiredTags.length || excludedTags.length
+            ? ` : ${[requiredTags.length ? `que ${requiredTags.join(", ")}` : "", excludedTags.length ? `sans ${excludedTags.join(", ")}` : ""].filter(Boolean).join(" · ")}`
+            : ""}
+        </summary>
+        {#if wallTags.length === 0}
+          <p class="hint">Aucun type de prise renseigné sur ce pan : on les donne dans l'éditeur du pan (onglet Murs).</p>
+        {:else}
+          <p class="hint">Toucher un type : ✓ seulement des prises de ce type (au moins un des types cochés), puis ✕ aucune prise de ce type, puis neutre.</p>
+          <div class="row">
+            {#each wallTags as t (t)}
+              <button
+                class="mini-chip"
+                class:required={requiredTags.includes(t)}
+                class:excluded={excludedTags.includes(t)}
+                aria-label={`${t} : ${requiredTags.includes(t) ? "exigé" : excludedTags.includes(t) ? "exclu" : "indifférent"}`}
+                onclick={() => cycleTag(t)}>{requiredTags.includes(t) ? "✓ " : excludedTags.includes(t) ? "✕ " : ""}{t}</button
+              >
+            {/each}
+          </div>
+        {/if}
+      </details>
       <button class="primary" disabled={!app.wall} onclick={generateClassic}>Générer la séance</button>
-
-      {#if classicSession.length > 0}
-        <ol class="blocks">
-          {#each classicSession as b, i (i)}
-            <li>
-              <button aria-pressed={classicSelected === i} onclick={() => { classicSelected = i; lastDelta = null; }}>
-                Bloc {i + 1} · {b.estimatedRating}
-              </button>
-            </li>
-          {/each}
-        </ol>
-        <p class="sequence">{classicSession[classicSelected]?.holds.map((h) => h.id).join(" → ")}</p>
-      {/if}
+      {@render templateSave()}
+      {@render runView()}
     {/if}
 
-    {#if currentBlock && mode !== "carnet"}
+    {#if currentBlock && mode === "chesscalade"}
       <div class="attempt">
         {#if app.activePlayer}
           {#if recorded === currentKey}
@@ -457,14 +903,15 @@
         {/if}
       </div>
     {/if}
-    {#if currentBlock}
+    {#if currentBlock && mode !== "bibliotheque"}
       <IntervalTimer
         block={currentBlock}
-        onNext={mode === "classique" && classicSelected < classicSession.length - 1
-          ? () => {
-              classicSelected++;
-              lastDelta = null;
-            }
+        bind:preset={timer.preset}
+        bind:config={timer.config}
+        bind:chained={timer.chained}
+        bind:pauseS={timer.pauseS}
+        onNext={mode === "classique" && run && run.selected < run.blocks.length - 1
+          ? () => pickBlock(run!.selected + 1)
           : undefined}
       />
     {/if}
@@ -713,5 +1160,82 @@
   }
   input[type="range"] {
     width: 100%;
+  }
+  .tabs {
+    flex-wrap: wrap;
+  }
+  .run {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    border-top: 1px solid var(--border);
+    padding-top: 10px;
+  }
+  .run h3 {
+    margin: 0;
+    font-size: 1rem;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 6px 10px;
+  }
+  .run h3 small {
+    font-weight: 400;
+    color: var(--muted);
+  }
+  .run-actions select,
+  .run-actions button {
+    min-height: 44px;
+  }
+  .mark {
+    color: #c62828;
+    font-weight: 700;
+  }
+  .mark.ok {
+    color: #2e7d32;
+  }
+  .ok-text {
+    color: #2e7d32;
+  }
+  .ko-text {
+    color: #c62828;
+  }
+  .has-comment {
+    color: var(--muted);
+    margin-left: auto;
+  }
+  .fav[aria-pressed="true"] {
+    color: #b8860b;
+    border-color: #b8860b;
+  }
+  .tags summary {
+    cursor: pointer;
+    font-size: 0.9rem;
+  }
+  .tags .row {
+    margin-top: 6px;
+  }
+  .mini-chip.required {
+    background: #2e7d32;
+    border-color: #2e7d32;
+    color: #fff;
+  }
+  .mini-chip.excluded {
+    background: #c62828;
+    border-color: #c62828;
+    color: #fff;
+    text-decoration: line-through;
+  }
+  .message {
+    margin: 0;
+    font-size: 0.9rem;
+  }
+  .editing-hint {
+    margin: 0 0 8px;
+    padding: 6px 10px;
+    border-radius: 8px;
+    background: #fff3cd;
+    color: #5c4400;
+    font-size: 0.9rem;
   }
 </style>
