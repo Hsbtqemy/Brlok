@@ -3,10 +3,12 @@
   import GameScreen from "./lib/GameScreen.svelte";
   import PlayersScreen from "./lib/PlayersScreen.svelte";
   import WallScreen from "./lib/WallScreen.svelte";
+  import WallsScreen from "./lib/WallsScreen.svelte";
 
   const SCREENS = [
-    { id: "pan", label: "Pan" },
+    { id: "pan", label: "Grimper" },
     { id: "partie", label: "Partie" },
+    { id: "murs", label: "Murs" },
     { id: "joueurs", label: "Joueurs" },
   ] as const;
   type ScreenId = (typeof SCREENS)[number]["id"];
@@ -21,6 +23,8 @@
   }
 
   let screen = $state<ScreenId>(initialScreen());
+  /** Murs : éditeur du mur actif ouvert (depuis Grimper, « Modifier »). */
+  let wallOpen = $state(false);
   function go(id: ScreenId) {
     screen = id;
     try {
@@ -35,7 +39,13 @@
   <h1>Brlok <span>·</span> Chesscalade</h1>
   <nav>
     {#each SCREENS as s (s.id)}
-      <button aria-pressed={screen === s.id} onclick={() => go(s.id)}>{s.label}</button>
+      <button
+        aria-pressed={screen === s.id}
+        onclick={() => {
+          if (s.id === "murs") wallOpen = false;
+          go(s.id);
+        }}>{s.label}</button
+      >
     {/each}
   </nav>
   <span class="sync" class:shared={app.syncStatus === "partage"} class:error={app.syncStatus === "erreur"} title={app.syncDetail}>
@@ -59,7 +69,14 @@
 
 <main>
   {#if screen === "pan"}
-    <WallScreen />
+    <WallScreen
+      onEdit={() => {
+        wallOpen = !!app.wall;
+        go("murs");
+      }}
+    />
+  {:else if screen === "murs"}
+    <WallsScreen bind:open={wallOpen} />
   {:else if screen === "partie"}
     <GameScreen />
   {:else}

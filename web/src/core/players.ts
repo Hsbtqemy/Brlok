@@ -2,7 +2,7 @@
  * Joueurs, cotes (REGLES.md §8) et journal des tentatives.
  * Trois cotes par joueur ; les blocs ont aussi leur cote, partagée entre Brlok classique et Chesscalade.
  */
-import { routeVariantInfo } from "./gym";
+import { variantText } from "./gym";
 import type { Block } from "./generator";
 import { newRating, recordAttempt, updateRating, type Rating } from "./glicko2";
 import { placementRating, type PlacementResult } from "./placement";
@@ -111,7 +111,7 @@ const keyOf = (wallId: string, block: Block) =>
 
 /** Prises (ou voie) d'un bloc, pour le journal. */
 const labelOf = (block: Block) =>
-  block.route ? [block.route.variant ? `${block.route.label} · ${routeVariantInfo(block.route.variant)?.label}` : block.route.label] : block.holds.map((h) => h.id);
+  block.route ? [block.route.variant ? `${block.route.label} · ${variantText(block.route.variant, block.route.variantHold)?.label}` : block.route.label] : block.holds.map((h) => h.id);
 
 export function blockRating(state: RatingsState, wallId: string, block: Block): Rating {
   return state.blocks[keyOf(wallId, block)] ?? { rating: block.estimatedRating, rd: NEW_BLOCK_RD, volatility: 0.06 };

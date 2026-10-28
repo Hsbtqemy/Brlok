@@ -1,34 +1,22 @@
 <script lang="ts">
-  import exampleCatalog from "../../../data/catalog_collection.json";
-  import { exportBrlok, importBrlok, type FootMerge } from "../core/brlokImport";
   import { DISTRIBUTION_PATTERNS, type DistributionPattern } from "../core/distribution";
   import { generateClassicSession, type Block } from "../core/generator";
   import { FOOT_RULES, type FootRule } from "../core/feet";
   import { PIECES, type Piece } from "../core/pieces";
   import { seededRng } from "../core/random";
-  import type { Wall } from "../core/wall";
   import { app } from "./appState.svelte";
   import PanView from "./PanView.svelte";
-  import WallEditor from "./WallEditor.svelte";
   import IntervalTimer from "./IntervalTimer.svelte";
-  import GymEditor from "./GymEditor.svelte";
   import RouteView from "./RouteView.svelte";
-  import { EXPRESS_LEVEL, expressWall, newWall } from "../core/wallEdit";
+  interface Props {
+    /** Ouvrir le mur actif dans l'onglet Murs. */
+    onEdit: () => void;
+  }
+
+  let { onEdit }: Props = $props();
+
   import { activeRoutes, gradeToRating, routeBlock, routeHex, routeLabel, routeLogs } from "../core/gym";
   import type { Route } from "../core/wall";
-
-  let expressCols = $state(6);
-  let expressRows = $state(7);
-
-  /** Pan express : une prise par case, niveau moyen, pour jouer tout de suite. */
-  function createExpress() {
-    const date = new Date().toLocaleDateString("fr-FR", { day: "numeric", month: "short" });
-    const wall = expressWall(`Pan express ${expressCols}×${expressRows} (${date})`, expressRows, expressCols);
-    app.setWalls([...app.walls, wall], wall.id);
-    chessBlock = null;
-    classicSession = [];
-    message = `Pan express créé : ${wall.holds.length} prises de niveau ${EXPRESS_LEVEL}. Tu peux jouer tout de suite, ou l'affiner avec « Modifier le pan ».`;
-  }
 
   const isGym = $derived(app.wall?.kind === "voies");
   const currentRoute = $derived.by(() => {
@@ -36,13 +24,6 @@
     return id ? (app.wall?.routes.find((r) => r.id === id) ?? null) : null;
   });
 
-  function createGym() {
-    const wall = { ...newWall("Ma salle", 1, 1), kind: "voies" as const };
-    app.setWalls([...app.walls, wall], wall.id);
-    editing = true;
-  }
-
-  let editing = $state(false);
 
   const LEVEL_PROFILES = [
     { label: "Très facile", level: 1 },
@@ -53,9 +34,6 @@
     { label: "Extrême", level: 6 },
   ];
 
-  let footRowOffset = $state<number | null>(null);
-  let footMerges = $state<FootMerge[]>([]);
-  let message = $state("");
 
   let mode = $state<"chesscalade" | "classique" | "carnet">("chesscalade");
 
@@ -119,57 +97,6 @@
     currentBlock ? `${mode}:${classicSelected}:${currentBlock.route?.id ?? currentBlock.holds.map((h) => h.id).join("-")}` : null,
   );
 
-  function loadData(data: unknown, source: string) {
-    try {
-      const imported = importBrlok(data, { footRowOffset });
-      const ids = new Set(imported.map((i) => i.wall.id));
-      app.setWalls([...app.walls.filter((w) => !ids.has(w.id)), ...imported.map((i) => i.wall)], imported[0]?.wall.id);
-      footMerges = imported.flatMap((i) => i.footMerges);
-      chessBlock = null;
-      classicSession = [];
-      message = `${imported.length} pan(s) importé(s) depuis ${source}.`;
-    } catch (e) {
-      message = e instanceof Error ? e.message : String(e);
-    }
-  }
-
-  async function onFile(event: Event) {
-    const file = (event.currentTarget as HTMLInputElement).files?.[0];
-    if (!file) return;
-    try {
-      loadData(JSON.parse(await file.text()), file.name);
-    } catch {
-      message = "Fichier JSON illisible.";
-    }
-  }
-
-  /** Copie du JSON exporté : repli quand le téléchargement est bloqué (page intégrée). */
-  let exportJson = $state<string | null>(null);
-
-  async function copyExport() {
-    if (!exportJson) return;
-    try {
-      await navigator.clipboard.writeText(exportJson);
-      message = "JSON copié : colle-le dans un fichier catalog_collection.json.";
-    } catch {
-      message = "Copie refusée : sélectionne le texte ci-dessous et copie-le à la main.";
-    }
-  }
-
-  function exportFile() {
-    const { data, clamped } = exportBrlok(app.walls, app.wall?.id);
-    exportJson = JSON.stringify(data, null, 2);
-    const blob = new Blob([exportJson], { type: "application/json" });
-    const a = document.createElement("a");
-    a.href = URL.createObjectURL(blob);
-    a.download = "catalog_collection.json";
-    a.click();
-    URL.revokeObjectURL(a.href);
-    message = clamped.length
-      ? `Exporté. Brlok desktop limite les mains au niveau 5 : ${clamped.length} prise(s) de niveau 6 ramenée(s) à 5.`
-      : "Exporté au format Brlok desktop.";
-  }
-
   function generateChess() {
     if (!app.wall) return;
     chessBlock = app.challenge({ piece, targetRating, length, cruxLast, feet, usage, rng: seededRng(Date.now()) });
@@ -201,34 +128,10 @@
 
 <div class="screen">
   <section class="panel wall-panel">
-    <h2>Pan</h2>
-    <div class="row">
-      <label class="file">
-        <input type="file" accept="application/json,.json" onchange={onFile} />
-        <span>Importer un catalogue Brlok…</span>
-      </label>
-      <button onclick={() => loadData(exampleCatalog, "l'exemple du dépôt")}>Charger l'exemple</button>
-    </div>
-    <details>
-      <summary>Option d'import : « grille pieds » de Brlok desktop</summary>
-      <label class="field">
-        Fusionner la grille pieds dans le pan, à partir de la rangée
-        <select bind:value={footRowOffset}>
-          <option value={null}>ne pas fusionner (recommandé)</option>
-          {#each Array.from({ length: app.wall?.rows ?? 7 }, (_, i) => i) as r (r)}
-            <option value={r}>{r + 1}</option>
-          {/each}
-        </select>
-      </label>
-      <p class="hint">
-        Sur ton pan, cette grille décrit la poutre posée au-dessus, pas des prises du pan : ne pas la fusionner.
-        L'option reste là pour un autre catalogue où elle décrirait de vraies prises.
-      </p>
-    </details>
-
+    <h2>Grimper</h2>
     {#if app.walls.length > 0 && app.wall}
       <label class="field">
-        Pan ou mur actif
+        Pan ou mur
         <select
           value={app.wall.id}
           onchange={(e) => {
@@ -240,76 +143,16 @@
           {#each app.walls as w (w.id)}<option value={w.id}>{w.name}{w.kind === "voies" ? " (salle)" : ""}</option>{/each}
         </select>
       </label>
-      {#if isGym}
-        <p class="hint">Mur à voies : {app.wall.routes.filter((r) => !r.archived).length} voie(s) en place.</p>
-        <button class="primary" onclick={() => (editing = true)} disabled={editing}>Gérer les voies</button>
-      {:else}
-      <label class="field">
-        Bas du mur
-        <select value={app.wall.bottom} onchange={(e) => app.updateWall({ bottom: (e.currentTarget as HTMLSelectElement).value as Wall["bottom"] })}>
-          <option value="last">rangée {app.wall.rows} (comme Brlok desktop)</option>
-          <option value="first">rangée 1</option>
-        </select>
-      </label>
-      <label class="field">
-        Portée entre deux prises (cases)
-        <input type="number" min="1" max="4" value={app.wall.reach} onchange={(e) => app.updateWall({ reach: Number((e.currentTarget as HTMLInputElement).value) })} />
-      </label>
-      <button class="primary" onclick={() => (editing = true)} disabled={editing}>Modifier le pan</button>
-      <button onclick={exportFile}>Exporter pour Brlok desktop</button>
-      {#if exportJson}
-        <button onclick={copyExport}>Copier le JSON exporté</button>
-        <textarea class="export" readonly rows="4" aria-label="JSON exporté">{exportJson}</textarea>
-      {/if}
-      {/if}
-    {/if}
-    <details class="express" open={app.walls.length === 0}>
-      <summary>Pan express</summary>
-      <p class="hint">Une prise par case, toutes de niveau moyen : pour jouer tout de suite sans décrire le pan.</p>
-      <div class="row">
-        <label class="field">Colonnes <input type="number" id="express-cols" min="2" max="26" bind:value={expressCols} /></label>
-        <label class="field">Rangées <input type="number" id="express-rows" min="2" max="30" bind:value={expressRows} /></label>
-      </div>
-      <button class="primary" onclick={createExpress}>Créer le pan express</button>
-    </details>
-    <button onclick={createGym}>Nouveau mur à voies (salle)</button>
-
-    {#if message}<p class="message">{message}</p>{/if}
-    {#if footMerges.length > 0}
-      <details>
-        <summary>{footMerges.length} prise(s) enrichie(s) par la grille pieds</summary>
-        <ul class="merges">
-          {#each footMerges as m (m.holdId + m.spec)}
-            <li>
-              <strong>{m.holdId}</strong> ← « {m.spec} »
-              {#if m.previousLevel === null}(nouvelle prise, niveau {m.level}){:else if m.previousLevel !== m.level}(niveau {m.previousLevel} → {m.level}){/if}
-            </li>
-          {/each}
-        </ul>
-      </details>
+      <p class="hint">
+        {isGym ? `Mur à voies : ${app.wall.routes.filter((r) => !r.archived).length} voie(s) en place.` : `Pan ${app.wall.cols} × ${app.wall.rows} : ${app.wall.holds.length} prises.`}
+      </p>
+      <button onclick={onEdit}>{isGym ? "Gérer les voies" : "Modifier le pan"} (onglet Murs)</button>
+    {:else}
+      <p class="hint">Aucun mur : crée-en un dans l'onglet Murs (pan express, mur à voies) ou importe ton catalogue Brlok.</p>
+      <button class="primary" onclick={onEdit}>Aller à Murs</button>
     {/if}
   </section>
 
-  {#if editing}
-    <div class="edit-span">
-      {#if isGym}
-        <GymEditor
-          onClose={() => {
-            editing = false;
-            chessBlock = null;
-          }}
-        />
-      {:else}
-        <WallEditor
-          onClose={() => {
-            editing = false;
-            chessBlock = null;
-            classicSession = [];
-          }}
-        />
-      {/if}
-    </div>
-  {:else}
   <section class="panel pan-panel">
     {#if app.wall && isGym}
       {#if currentRoute}
@@ -328,7 +171,7 @@
     {:else if app.wall}
       <PanView wall={app.wall} sequence={currentBlock?.holds.map((h) => h.id) ?? []} />
     {:else}
-      <p class="empty">Importe ton <code>catalog_collection.json</code> de Brlok, charge l'exemple, ou <button class="link" onclick={() => (editing = true)}>crée un pan</button>.</p>
+      <p class="empty">Aucun mur : <button class="link" onclick={onEdit}>crée-en un dans l'onglet Murs</button>.</p>
     {/if}
   </section>
 
@@ -531,7 +374,6 @@
       />
     {/if}
   </section>
-  {/if}
 </div>
 
 <style>
@@ -541,55 +383,13 @@
     gap: 16px;
     align-items: start;
   }
-  .edit-span {
-    grid-column: span 2;
-    min-width: 0;
-  }
   @media (max-width: 960px) {
-    .edit-span {
-      grid-column: auto;
-      order: -1;
-    }
     .screen {
       grid-template-columns: 1fr;
     }
     .pan-panel {
       order: -1;
     }
-  }
-  .file {
-    position: relative;
-    display: inline-flex;
-    align-items: center;
-    min-height: 44px;
-    padding: 0 16px;
-    border-radius: 10px;
-    border: 1px solid var(--accent);
-    color: var(--accent);
-    cursor: pointer;
-  }
-  .file input {
-    position: absolute;
-    inset: 0;
-    opacity: 0;
-    cursor: pointer;
-  }
-  .export {
-    width: 100%;
-    font: 0.75rem ui-monospace, monospace;
-    border-radius: 8px;
-    border: 1px solid var(--border);
-    background: var(--bg);
-    color: var(--text);
-  }
-  .message {
-    margin: 0;
-    font-size: 0.9rem;
-  }
-  .merges {
-    margin: 8px 0 0;
-    padding-left: 18px;
-    font-size: 0.85rem;
   }
   .tabs {
     display: flex;
@@ -638,17 +438,6 @@
   }
   .blocks button {
     width: 100%;
-  }
-  .express .row {
-    align-items: flex-end;
-  }
-  .express input[type="number"] {
-    width: 80px;
-  }
-  .express {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
   }
   .carnet,
   .session {

@@ -8,7 +8,7 @@ const ACTIVE_KEY = "brlok-web:active-wall";
 const RATINGS_KEY = "brlok-web:ratings";
 const ACTIVE_PLAYER_KEY = "brlok-web:active-player";
 const LIVE_GAME_KEY = "brlok-web:live-game";
-const ROUTE_VARIANTS_KEY = "brlok-web:route-variants";
+const ROUTE_VARIANTS_OFF_KEY = "brlok-web:route-variants-off";
 
 function read<T>(key: string, fallback: T): T {
   try {
@@ -66,5 +66,13 @@ export const loadLiveGame = <T>(): T | null => read<T | null>(LIVE_GAME_KEY, nul
 export const saveLiveGame = (game: unknown): void => write(LIVE_GAME_KEY, game);
 
 /** Variantes de voie permises dans les parties (toutes par défaut). */
-export const loadRouteVariants = (): RouteVariant[] => read(ROUTE_VARIANTS_KEY, ROUTE_VARIANTS.map((v) => v.id));
-export const saveRouteVariants = (variants: RouteVariant[]): void => write(ROUTE_VARIANTS_KEY, variants);
+// On retient les variantes écartées : une variante ajoutée plus tard est permise d'office.
+export function loadRouteVariants(): RouteVariant[] {
+  const off = new Set(read<RouteVariant[]>(ROUTE_VARIANTS_OFF_KEY, []));
+  return ROUTE_VARIANTS.map((v) => v.id).filter((id) => !off.has(id));
+}
+export const saveRouteVariants = (variants: RouteVariant[]): void =>
+  write(
+    ROUTE_VARIANTS_OFF_KEY,
+    ROUTE_VARIANTS.map((v) => v.id).filter((id) => !variants.includes(id)),
+  );

@@ -6,7 +6,7 @@ import { distributionLevels, type DistributionPattern } from "./distribution";
 import type { Block } from "./generator";
 import type { Piece } from "./pieces";
 import type { Rng } from "./random";
-import type { Route, Wall } from "./wall";
+import { orderedMarks, type Route, type Wall } from "./wall";
 
 /** Cotation (bloc, échelle Font) → cote de départ (REGLES.md §13.3), corrigée ensuite par Glicko-2. */
 export const GRADES: { grade: string; rating: number }[] = [
@@ -91,18 +91,59 @@ export function routeHex(route: Route): string {
  * Variantes d'une voie (REGLES.md §13.4) : une contrainte qui rend la même voie plus facile ou plus dure,
  * choisie selon l'écart entre la cote visée et la cote de la voie. Un cran de cotation ≈ 100 points.
  */
-export type RouteVariant = "pieds-libres" | "sans-pied" | "desescalade" | "saute-prise" | "deux-fois";
+export type RouteVariant =
+  | "pieds-libres"
+  | "sans-pied"
+  | "desescalade"
+  | "saute-prise"
+  | "deux-fois"
+  | "jusqu-a"
+  | "saute-numero"
+  | "sans-doubler";
 
-export const ROUTE_VARIANTS: { id: RouteVariant; label: string; description: string; bonus: number }[] = [
+/** `ordre` : variante d'une voie numérotée (au moins ORDERED_MIN prises dans l'ordre) ; `libre` : d'une voie qui ne l'est pas. */
+export const ROUTE_VARIANTS: { id: RouteVariant; label: string; description: string; bonus: number; for?: "ordre" | "libre" }[] = [
   { id: "pieds-libres", label: "Pieds libres", description: "Les pieds sur n'importe quelle prise ou sur le mur.", bonus: -100 },
+  { id: "jusqu-a", label: "Jusqu'à une prise", description: "La voie s'arrête plus tôt : tenir la prise indiquée suffit.", bonus: -150, for: "ordre" },
   { id: "sans-pied", label: "Un mouvement sans pied", description: "Un passage au choix se fait pieds décollés.", bonus: 150 },
   { id: "desescalade", label: "Aller-retour", description: "Monte, puis redescends la voie jusqu'au départ.", bonus: 150 },
-  { id: "saute-prise", label: "Saute une prise", description: "Une prise de main au choix est interdite.", bonus: 200 },
+  { id: "sans-doubler", label: "Sans doubler", description: "Une seule main par prise numérotée : pas de rétablissement à deux mains.", bonus: 150, for: "ordre" },
+  { id: "saute-prise", label: "Saute une prise", description: "Une prise de main au choix est interdite.", bonus: 200, for: "libre" },
+  { id: "saute-numero", label: "Sans une prise", description: "La prise indiquée est interdite : il faut la sauter.", bonus: 200, for: "ordre" },
   { id: "deux-fois", label: "Deux fois", description: "Enchaîne la voie deux fois, sans poser les pieds au sol entre les deux.", bonus: 250 },
 ];
 
+/** Nombre de prises numérotées à partir duquel une voie a les variantes liées à l'ordre. */
+export const ORDERED_MIN = 4;
+
 export function routeVariantInfo(variant: RouteVariant | undefined) {
   return ROUTE_VARIANTS.find((v) => v.id === variant);
+}
+
+/** Variantes applicables à une voie : celles « ordre » demandent une voie numérotée, « libre » l'inverse. */
+export function variantFits(route: Route, variant: (typeof ROUTE_VARIANTS)[number]): boolean {
+  const ordered = orderedMarks(route.marks).length >= ORDERED_MIN;
+  return !variant.for || (variant.for === "ordre") === ordered;
+}
+
+/**
+ * Prise visée par une variante liée à l'ordre : la fin de la voie raccourcie (aux 3/5 environ), ou une prise
+ * à sauter, ni la première ni la dernière.
+ */
+export function variantHold(route: Route, variant: RouteVariant, rng: Rng): number | undefined {
+  const n = orderedMarks(route.marks).length;
+  if (variant === "jusqu-a") return Math.max(2, Math.ceil(n * 0.6));
+  if (variant === "saute-numero") return 2 + Math.floor(rng() * Math.max(1, n - 2));
+  return undefined;
+}
+
+/** Libellé d'une variante, avec sa prise s'il y en a une (« Jusqu'à la prise n° 4 »). */
+export function variantText(variant: RouteVariant | undefined, hold?: number): { label: string; description: string } | undefined {
+  const info = routeVariantInfo(variant);
+  if (!info) return undefined;
+  if (variant === "jusqu-a" && hold) return { label: `Jusqu'à la prise n° ${hold}`, description: `Tenir la prise n° ${hold} des deux mains suffit.` };
+  if (variant === "saute-numero" && hold) return { label: `Sans la prise n° ${hold}`, description: `La prise n° ${hold} est interdite : il faut la sauter.` };
+  return { label: info.label, description: info.description };
 }
 
 export function routeBlock(
@@ -111,6 +152,7 @@ export function routeBlock(
   piece: Piece | null,
   relaxations: string[] = [],
   variant?: RouteVariant,
+  variantHoldN?: number,
 ): Block {
   return {
     holds: [],
@@ -125,6 +167,7 @@ export function routeBlock(
       grade: route.grade,
       styles: [...route.styles],
       ...(variant ? { variant } : {}),
+      ...(variantHoldN ? { variantHold: variantHoldN } : {}),
     },
   };
 }
@@ -172,7 +215,9 @@ export function pickRoute(wall: Wall, options: RouteOptions): Block | null {
   const variants = ROUTE_VARIANTS.filter((v) => options.variants?.includes(v.id));
   const pairs = candidates.flatMap((c) => [
     { ...c, variant: undefined as RouteVariant | undefined },
-    ...variants.map((v) => ({ ...c, variant: v.id, rating: options.variantRatingOf?.(c.route, v.id) ?? c.rating + v.bonus })),
+    ...variants
+      .filter((v) => variantFits(c.route, v))
+      .map((v) => ({ ...c, variant: v.id, rating: options.variantRatingOf?.(c.route, v.id) ?? c.rating + v.bonus })),
   ]);
   let pool = pairs;
   if (maxRating !== undefined) {
@@ -192,7 +237,7 @@ export function pickRoute(wall: Wall, options: RouteOptions): Block | null {
   if (piece && !matches(best.route)) relaxations.push("pas de voie au style de la pièce : la plus proche en cote");
   usage?.set(best.route.id, (usage.get(best.route.id) ?? 0) + 1);
   if (best.variant) usage?.set(usageKey(best), (usage.get(usageKey(best)) ?? 0) + 1);
-  return routeBlock(best.route, best.rating, piece, relaxations, best.variant);
+  return routeBlock(best.route, best.rating, piece, relaxations, best.variant, best.variant ? variantHold(best.route, best.variant, rng) : undefined);
 }
 
 export interface RouteSessionOptions {

@@ -775,13 +775,14 @@
         <div class="row wrap">
           {#each ROUTE_VARIANTS as v (v.id)}
             <button aria-pressed={routeVariants.includes(v.id)} onclick={() => toggleVariant(v.id)} title={v.description}>
-              {v.label} ({v.bonus > 0 ? "+" : "−"}{Math.abs(v.bonus)})
+              {v.label} ({v.bonus > 0 ? "+" : "−"}{Math.abs(v.bonus)}){v.for === "ordre" ? " · voies numérotées" : ""}
             </button>
           {/each}
         </div>
         <p class="hint">
           Pour varier une même voie : quand la cote visée s'éloigne de celle de la voie, une variante permise la rend plus
           facile ou plus dure (environ 100 points par cran de cotation). Chaque variante a sa propre cote, apprise en jouant.
+          Les variantes « voies numérotées » visent une prise précise d'une voie dont l'ordre est donné (au moins 4 prises).
           {routeVariants.length === 0 ? "Aucune variante : les voies sont toujours grimpées telles quelles." : ""}
         </p>
       </div>

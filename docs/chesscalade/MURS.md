@@ -81,9 +81,19 @@ pan. Pistes pour en faire un **agrès** du jeu :
 - **suspension imposée** (ex. 7 s sur la réglette de 20 mm) comme pénalité ou comme recharge ;
 - un type de bloc « poutre » pour la pièce **tour** (puissance, statique).
 
+### Organisation de l'app
+
+- **Grimper** : utiliser un mur (séance, carnet, minuteur, choisir une voie ou un bloc) ;
+- **Partie** : Chesscalade ;
+- **Murs** : les décrire. La liste des murs, la création (mur à voies, pan à grille, pan express),
+  l'import et l'export Brlok. Un pan s'ouvre dans son éditeur de grille ; un mur à voies sur **sa page**
+  (secteurs, carte du secteur avec ses voies, liste des voies), d'où chaque voie s'ouvre dans **l'éditeur de
+  voie**, à part : 1. les prises sur la photo (outils), 2. la fiche (couleur, cotation, nom, styles), et une
+  barre « Annuler / Créer » toujours visible. Rien n'est enregistré avant « Créer » ou « Enregistrer ».
+
 ### Étape 3 — Mur à voies (salle) (fait, v1)
 
-Dans l'onglet **Pan → Nouveau mur à voies (salle)**, puis **Gérer les voies** :
+Dans l'onglet **Murs → Mur à voies (salle)** :
 
 - **photo du secteur** (facultative) : réduite et enregistrée avec le mur ; les prises de **couleur vive**
   sont repérées automatiquement (rouge, orange, jaune, vert, bleu, violet, rose ; les grands aplats peints
@@ -111,6 +121,10 @@ Outils sur la photo (v2) :
   retire et les suivants remontent. « Numéroter de bas en haut » fait tout d'un coup (départs d'abord, top
   en dernier), à corriger ensuite. Les prises sans numéro restent libres. Une voie numérotée s'affiche avec
   ses numéros reliés par un tracé (« Enchaînement imposé ») ;
+- **Variantes liées à l'ordre** (voie d'au moins 4 prises numérotées, REGLES.md §13.4) : « Jusqu'à la prise
+  n° k » (−150, la voie s'arrête aux 3/5 environ), « Sans la prise n° k » (+200, une prise du milieu
+  interdite, à la place de « saute une prise » au choix) et « Sans doubler » (+150, une main par prise). La
+  prise visée est montrée sur la voie : fin cerclée de vert et suite estompée, ou prise barrée de rouge ;
 - **Agrandir** : photo deux fois plus grande, à faire défiler, pour viser juste sur téléphone ;
 - sous la photo, une barre courte (nombre de prises, couleur, cotation, **Créer la voie**) évite de
   descendre jusqu'au formulaire.

@@ -1,6 +1,6 @@
 <script lang="ts">
   import { FOOT_RULES } from "../core/feet";
-  import { routeVariantInfo } from "../core/gym";
+  import { variantText } from "../core/gym";
   import type { Block } from "../core/generator";
   import { PIECES } from "../core/pieces";
   import type { Wall } from "../core/wall";
@@ -59,13 +59,13 @@
       cote {block.estimatedRating}{block.route ? "" : ` · ${block.holds.length} prises`}
     </p>
     {#if block.route}
-      <RouteView {wall} route={wall.routes.find((r) => r.id === block.route!.id) ?? null} />
+      <RouteView {wall} route={wall.routes.find((r) => r.id === block.route!.id) ?? null} variant={block.route.variant} variantHold={block.route.variantHold} />
     {:else}
       <PanView {wall} sequence={block.holds.map((h) => h.id)} />
       <p class="sequence">{block.holds.map((h) => h.id).join(" → ")}</p>
     {/if}
     {#if block.route?.variant}
-      {@const v = routeVariantInfo(block.route.variant)}
+      {@const v = variantText(block.route.variant, block.route.variantHold)}
       <p class="feet"><strong>Variante : {v?.label}</strong> — {v?.description}</p>
     {/if}
     {#if block.feet}

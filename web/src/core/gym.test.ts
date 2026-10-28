@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { makeChallengeBlock } from "./challenge";
-import { gradeToRating, pickRoute, routeLabel } from "./gym";
+import { gradeToRating, pickRoute, ROUTE_VARIANTS, routeLabel, variantText } from "./gym";
 import { createPlayer, emptyRatingsState, recordBlockAttempt, routeKey } from "./players";
 import { seededRng } from "./random";
 import { createEmptyWall, type Route, type Wall } from "./wall";
@@ -151,5 +151,31 @@ describe("variantes d'une voie (§13.4)", () => {
     expect(state.blocks[routeKey(wall.id, "v0")]).toBeUndefined();
     expect(state.attempts[0].routeVariant).toBe("deux-fois");
     expect(state.attempts[0].holds[0]).toContain("Deux fois");
+  });
+});
+
+describe("variantes d'une voie numérotée", () => {
+  const numbered = [0.9, 0.75, 0.6, 0.45, 0.3].map((y, i) => ({ x: 0.5, y, n: i + 1 }));
+  const every = ROUTE_VARIANTS.map((v) => v.id);
+
+  it("une voie numérotée peut s'arrêter plus tôt, à la prise indiquée", () => {
+    const wall = gym([{ grade: "6a", marks: numbered }]); // 1400
+    const b = pickRoute(wall, { piece: null, targetRating: 1250, variants: every, rng: seededRng(3) })!;
+    expect(b.route?.variant).toBe("jusqu-a");
+    expect(b.route?.variantHold).toBe(3);
+    expect(variantText(b.route?.variant, b.route?.variantHold)?.label).toBe("Jusqu'à la prise n° 3");
+  });
+
+  it("« sans une prise » vise une prise du milieu ; « saute une prise » au choix reste pour les voies libres", () => {
+    const ordered = gym([{ grade: "6a", marks: numbered }]);
+    const seen = new Set<number>();
+    for (let i = 0; i < 20; i++) {
+      const b = pickRoute(ordered, { piece: null, targetRating: 1600, variants: ["saute-numero", "saute-prise"], rng: seededRng(i) })!;
+      expect(b.route?.variant).toBe("saute-numero");
+      seen.add(b.route!.variantHold!);
+    }
+    expect([...seen].every((n) => n >= 2 && n <= 4)).toBe(true);
+    const free = gym([{ grade: "6a" }]);
+    expect(pickRoute(free, { piece: null, targetRating: 1600, variants: ["saute-numero", "saute-prise", "jusqu-a"], rng: seededRng(1) })!.route?.variant).toBe("saute-prise");
   });
 });

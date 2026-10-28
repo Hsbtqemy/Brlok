@@ -5,10 +5,14 @@
   interface Props {
     marks: readonly RouteMark[];
     color: string;
+    /** Voie raccourcie : les prises au-delà de ce rang sont estompées. */
+    upTo?: number;
+    /** Prise interdite (rang) : barrée, et le tracé la contourne. */
+    skip?: number;
   }
 
-  let { marks, color }: Props = $props();
-  const path = $derived(orderedMarks(marks));
+  let { marks, color, upTo, skip }: Props = $props();
+  const path = $derived(orderedMarks(marks).filter((m) => (upTo === undefined || m.n! <= upTo) && m.n !== skip));
 </script>
 
 {#if path.length > 1}
@@ -19,7 +23,14 @@
 {/if}
 {#each marks as m, i (i)}
   {@const label = markLabel(m)}
-  <span class="mark" class:labelled={label !== ""} class:numbered={m.n !== undefined} style:left={`${m.x * 100}%`} style:top={`${m.y * 100}%`} style:border-color={color}
+  <span
+    class="mark"
+    class:labelled={label !== ""}
+    class:numbered={m.n !== undefined}
+    class:beyond={upTo !== undefined && m.n !== undefined && m.n > upTo}
+    class:skipped={skip !== undefined && m.n === skip}
+    class:finish={upTo !== undefined && m.n === upTo}
+    style:left={`${m.x * 100}%`} style:top={`${m.y * 100}%`} style:border-color={color}
     >{label}</span
   >
 {/each}
@@ -73,5 +84,20 @@
   }
   .mark.numbered {
     background: rgba(0, 0, 0, 0.7);
+  }
+  .mark.beyond {
+    opacity: 0.3;
+  }
+  .mark.finish {
+    box-shadow:
+      0 0 0 3px #fff,
+      0 0 0 6px #2e7d32;
+  }
+  .mark.skipped {
+    background: #c62828;
+    text-decoration: line-through;
+    box-shadow:
+      0 0 0 3px #fff,
+      0 0 0 6px #c62828;
   }
 </style>

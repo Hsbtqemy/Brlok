@@ -605,6 +605,9 @@ que soit la cote visée. Une **variante** rend la voie plus facile ou plus dure 
 | Aller-retour (monter puis redescendre jusqu'au départ) | +150 |
 | Saute une prise (une prise de main au choix est interdite) | +200 |
 | Deux fois (enchaîner deux fois sans poser les pieds au sol) | +250 |
+| *Voie numérotée (≥ 4 prises dans l'ordre)* : jusqu'à la prise n° k (aux 3/5 environ) | −150 |
+| *Voie numérotée* : sans la prise n° k (une prise du milieu, à la place de « saute une prise ») | +200 |
+| *Voie numérotée* : sans doubler (une seule main par prise) | +150 |
 
 - Les variantes permises se cochent au lancement de la partie (toutes par défaut, réglage retenu) ; la voie
   telle quelle reste toujours possible.

@@ -23,7 +23,7 @@ export interface Block {
   /** « Un mouvement sans pied » : index (à partir de 1) de la prise atteinte pieds décollés. */
   noFootMove?: number;
   /** Mur à voies : la voie choisie (le bloc n'a alors pas de prises détaillées). */
-  route?: { id: string; label: string; color: string; colorHex?: string; grade: string; styles: string[]; variant?: RouteVariant };
+  route?: { id: string; label: string; color: string; colorHex?: string; grade: string; styles: string[]; variant?: RouteVariant; variantHold?: number };
 }
 
 export interface ClassicOptions {
