@@ -15,6 +15,7 @@
   import { engineSettings, pickEngineMove } from "../core/engine";
   import { FOOT_RULES, type FootRule } from "../core/feet";
   import { ROUTE_VARIANTS, routeHex, routeLabel, type RouteVariant } from "../core/gym";
+  import { sectorOf } from "../core/wall";
   import { loadRouteVariants, saveRouteVariants } from "./storage";
   import { PIECES } from "../core/pieces";
   import { seededRng } from "../core/random";
@@ -610,6 +611,20 @@
         {#if routes.length === 0}
           <p class="warn">Aucune voie en place : ajoute-les dans Pan → Gérer les voies.</p>
         {:else}
+          {#if (app.wall.sectors?.length ?? 0) > 1}
+            {@const w = app.wall}
+            <div class="row">
+              {#each w.sectors ?? [] as sec (sec.id)}
+                {@const ids = routes.filter((r) => sectorOf(w, r)?.id === sec.id).map((r) => r.id)}
+                <button
+                  class="small"
+                  disabled={ids.length === 0}
+                  aria-pressed={gameRoutes.length > 0 && gameRoutes.length === ids.length && ids.every((id) => gameRoutes.includes(id))}
+                  onclick={() => (gameRoutes = ids.length === routes.length ? [] : ids)}>{sec.name} ({ids.length})</button
+                >
+              {/each}
+            </div>
+          {/if}
           <div class="route-chips">
             {#each routes as r (r.id)}
               <button class="route-chip" aria-pressed={gameRoutes.length === 0 || gameRoutes.includes(r.id)} onclick={() => toggleGameRoute(r.id, routes.map((x) => x.id))}>
@@ -1115,6 +1130,11 @@
   .start-bar .primary {
     min-height: 52px;
     font-size: 1.05rem;
+  }
+  .small {
+    min-height: 36px;
+    padding: 0 12px;
+    font-size: 0.85rem;
   }
   .route-chips {
     display: flex;

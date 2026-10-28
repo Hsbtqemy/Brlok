@@ -46,6 +46,8 @@ export interface Route {
   archived?: boolean;
   /** Prises de la voie sur la photo du secteur (coordonnées de 0 à 1) ; départ(s) et top signalés. */
   marks?: RouteMark[];
+  /** Secteur (photo) de la voie ; absent : le premier secteur du mur. */
+  sectorId?: string;
   createdAt?: string;
 }
 
@@ -68,8 +70,52 @@ export interface Wall {
   reach: number;
   /** Enchaînements marqués impossibles à la main (paires d'ids, ordre indifférent). */
   forbiddenLinks: [string, string][];
-  /** Mur à voies : photo du secteur (image réduite, data URL). */
+  /** Mur à voies : secteurs, chacun avec sa photo. */
+  sectors?: Sector[];
+  /** Ancien format (une seule photo) : repris comme premier secteur par `migrateWall`. */
   photo?: string;
+}
+
+/** Secteur d'un mur à voies : une photo (image réduite, data URL) et un nom. */
+export interface Sector {
+  id: string;
+  name: string;
+  photo?: string;
+}
+
+/** Ancien format à une photo → un secteur. Sans effet sur un mur déjà à jour. */
+export function migrateWall(wall: Wall): Wall {
+  if (!wall.photo || wall.sectors?.length) return wall;
+  const { photo, ...rest } = wall;
+  return { ...rest, sectors: [{ id: "s1", name: "Secteur 1", photo }] };
+}
+
+/** Secteur d'une voie (le premier si la voie n'en désigne pas, ou un secteur supprimé). */
+export function sectorOf(wall: Wall, route: Route): Sector | undefined {
+  const sectors = migrateWall(wall).sectors ?? [];
+  return sectors.find((s) => s.id === route.sectorId) ?? sectors[0];
+}
+
+/** Photo d'une voie (celle de son secteur). */
+export function routePhoto(wall: Wall, route: Route): string | undefined {
+  return sectorOf(wall, route)?.photo;
+}
+
+/** Photos à ranger à part (stockage) : le mur sans ses photos, et les photos avec leur clé. */
+export function splitPhotos(wall: Wall): { wall: Wall; photos: { sectorId: string; data: string }[] } {
+  const w = migrateWall(wall);
+  if (!w.sectors?.some((s) => s.photo)) return { wall: w, photos: [] };
+  return {
+    wall: { ...w, sectors: w.sectors.map(({ photo: _photo, ...s }) => s) },
+    photos: w.sectors.filter((s) => s.photo).map((s) => ({ sectorId: s.id, data: s.photo! })),
+  };
+}
+
+/** Remet les photos rangées à part dans leurs secteurs. */
+export function joinPhotos(wall: Wall, photoOf: (sectorId: string) => string | undefined): Wall {
+  const w = migrateWall(wall);
+  if (!w.sectors?.length) return w;
+  return { ...w, sectors: w.sectors.map((s) => ({ ...s, photo: s.photo ?? photoOf(s.id) })) };
 }
 
 export function clampLevel(level: number): number {

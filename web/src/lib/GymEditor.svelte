@@ -1,7 +1,7 @@
 <script lang="ts">
   import { countByColor, detectBlobs, findSimilar, inZone, nearestColorName, sampleColor, seedTolerance, type Blob, type Rgb } from "../core/colorDetect";
   import { GRADES, ROUTE_COLORS, routeHex, routeLabel, STYLES } from "../core/gym";
-  import type { Route, RouteMark, Wall } from "../core/wall";
+  import { sectorOf, type Route, type RouteMark, type Sector, type Wall } from "../core/wall";
   import { app } from "./appState.svelte";
 
   interface Props {
@@ -48,6 +48,56 @@
   let showArchived = $state(false);
 
   const routes = $derived((wall?.routes ?? []).filter((r) => showArchived || !r.archived));
+
+  // Secteurs : une photo chacun ; les voies sont rangées par secteur.
+  const sectors = $derived(wall?.sectors ?? []);
+  let sectorId = $state<string | null>(null);
+  const sector = $derived<Sector | undefined>(sectors.find((x) => x.id === sectorId) ?? sectors[0]);
+  const photo = $derived(sector?.photo);
+  let confirmSectorDelete = $state(false);
+  const routesBySector = $derived(
+    sectors.length > 1
+      ? sectors.map((sec) => ({ sector: sec, routes: routes.filter((r) => wall && sectorOf(wall, r)?.id === sec.id) }))
+      : [{ sector: sectors[0], routes }],
+  );
+
+  /** Changer de secteur : la photo, ses taches et les outils repartent de zéro. */
+  function openSector(id: string) {
+    if (id === sector?.id) return;
+    sectorId = id;
+    blobs = [];
+    pixels = null;
+    zone = null;
+    sampled = null;
+    confirmSectorDelete = false;
+    if (!editingId) marks = [];
+    void redetect();
+  }
+
+  function renameSector(name: string) {
+    if (!wall || !sector || !name.trim()) return;
+    save({ ...wall, sectors: sectors.map((x) => (x.id === sector.id ? { ...x, name: name.trim() } : x)) });
+  }
+
+  function deleteSector() {
+    if (!wall || !sector) return;
+    const count = wall.routes.filter((r) => sectorOf(wall, r)?.id === sector.id).length;
+    if (count > 0) {
+      message = `Ce secteur a ${count} voie(s) : supprime-les ou démonte-les d'abord (l'historique d'une voie démontée est gardé).`;
+      return;
+    }
+    if (!confirmSectorDelete) {
+      confirmSectorDelete = true;
+      return;
+    }
+    const rest = sectors.filter((x) => x.id !== sector.id);
+    save({ ...wall, sectors: rest });
+    sectorId = rest[0]?.id ?? null;
+    confirmSectorDelete = false;
+    blobs = [];
+    pixels = null;
+    void redetect();
+  }
   const colors = $derived(countByColor(blobs));
 
   function save(next: Wall) {
@@ -72,8 +122,11 @@
     return canvas;
   }
 
-  async function onPhoto(event: Event) {
-    const file = (event.currentTarget as HTMLInputElement).files?.[0];
+  /** Photo : `nouveau` crée un secteur, sinon remplace la photo du secteur ouvert. */
+  async function onPhoto(event: Event, nouveau: boolean) {
+    const input = event.currentTarget as HTMLInputElement;
+    const file = input.files?.[0];
+    input.value = "";
     if (!file || !wall) return;
     busy = true;
     message = "";
@@ -82,7 +135,17 @@
       // Photo réduite et compressée : elle est enregistrée avec le mur (taille limitée).
       let photo = scaled(img, PHOTO_MAX).toDataURL("image/jpeg", 0.72);
       if (photo.length > 180_000) photo = scaled(img, 700).toDataURL("image/jpeg", 0.6);
-      save({ ...wall, photo });
+      if (nouveau || !sector) {
+        const id = `s-${Date.now().toString(36)}`;
+        // Les voies sans secteur désigné appartiennent au premier : on l'écrit avant d'en ajouter un autre.
+        const first = sectors[0]?.id;
+        const routesFixed = first ? wall.routes.map((r) => (r.sectorId ? r : { ...r, sectorId: first })) : wall.routes;
+        save({ ...wall, routes: routesFixed, sectors: [...sectors, { id, name: `Secteur ${sectors.length + 1}`, photo }] });
+        sectorId = id;
+        if (!editingId) marks = [];
+      } else {
+        save({ ...wall, sectors: sectors.map((x) => (x.id === sector.id ? { ...x, photo } : x)) });
+      }
       zone = null;
       sampled = null;
       detect(img);
@@ -104,9 +167,9 @@
   }
 
   async function redetect() {
-    if (!wall?.photo) return;
+    if (!photo) return;
     const img = new Image();
-    img.src = wall.photo;
+    img.src = photo;
     await img.decode();
     detect(img);
   }
@@ -120,9 +183,9 @@
   }
 
   async function ensurePixels() {
-    if (pixels || !wall?.photo) return;
+    if (pixels || !photo) return;
     const img = new Image();
-    img.src = wall.photo;
+    img.src = photo;
     await img.decode();
     const canvas = scaled(img, DETECT_MAX);
     pixels = { data: canvas.getContext("2d")!.getImageData(0, 0, canvas.width, canvas.height).data, width: canvas.width, height: canvas.height };
@@ -234,6 +297,7 @@
     grade = r.grade;
     styles = [...r.styles];
     name = r.name;
+    if (wall) openSector(sectorOf(wall, r)?.id ?? "");
     marks = [...(r.marks ?? [])];
     sampled = null;
   }
@@ -248,6 +312,7 @@
       grade,
       styles: [...styles],
       marks: [...marks],
+      ...(sector ? { sectorId: sector.id } : {}),
       createdAt: editingId ? wall.routes.find((r) => r.id === editingId)?.createdAt : new Date().toISOString(),
     };
     const exists = wall.routes.some((r) => r.id === route.id);
@@ -281,14 +346,41 @@
     </div>
     {#if wall}
       <label class="field">
-        Nom de la salle ou du secteur
+        Nom de la salle
         <input type="text" id="gym-name" value={wall.name} onchange={(e) => save({ ...wall, name: (e.currentTarget as HTMLInputElement).value.trim() || wall.name })} />
       </label>
-      <label class="file">
-        <input type="file" accept="image/*" onchange={onPhoto} />
-        <span>{busy ? "Analyse…" : wall.photo ? "Changer la photo du secteur" : "Ajouter une photo du secteur"}</span>
-      </label>
-      {#if wall.photo}
+      <div class="field">
+        Secteurs
+        <div class="sectors">
+          {#each sectors as sec (sec.id)}
+            <button class="sector-chip" aria-pressed={sec.id === sector?.id} onclick={() => openSector(sec.id)}>
+              {#if sec.photo}<img src={sec.photo} alt="" />{/if}
+              <span>{sec.name}</span>
+              <small>{wall.routes.filter((r) => !r.archived && sectorOf(wall, r)?.id === sec.id).length} voie(s)</small>
+            </button>
+          {/each}
+          <label class="file sector-add">
+            <input type="file" accept="image/*" onchange={(e) => onPhoto(e, true)} />
+            <span>{busy ? "Analyse…" : sectors.length ? "+ Secteur" : "Ajouter une photo"}</span>
+          </label>
+        </div>
+      </div>
+      {#if sector}
+        <div class="row sector-edit">
+          <input
+            type="text"
+            aria-label="Nom du secteur"
+            value={sector.name}
+            onchange={(e) => renameSector((e.currentTarget as HTMLInputElement).value)}
+          />
+          <label class="file small">
+            <input type="file" accept="image/*" onchange={(e) => onPhoto(e, false)} />
+            <span>Changer la photo</span>
+          </label>
+          <button class="danger small" onclick={deleteSector}>{confirmSectorDelete ? "Supprimer le secteur ?" : "Supprimer"}</button>
+        </div>
+      {/if}
+      {#if photo}
         <div class="tools">
           {#each TOOLS as t (t.id)}
             <button aria-pressed={tool === t.id} onclick={() => (tool = t.id)}>{t.label}</button>
@@ -321,7 +413,7 @@
             onpointerup={onPointerUp}
             onpointercancel={onPointerUp}
           >
-            <img src={wall.photo} alt={`Photo du secteur ${wall.name}`} draggable="false" />
+            <img src={photo} alt={`Photo du secteur ${sector?.name}`} draggable="false" />
             {#if tool !== "pipette" || !sampled}
               {#each blobs as b, i (i)}
                 <span
@@ -412,7 +504,7 @@
         {/each}
       </div>
     </div>
-    {#if wall?.photo}
+    {#if photo}
       <p class="hint">
         {marks.length} prise(s) marquée(s) sur la photo{marks.some((m) => m.role === "depart") ? `, ${marks.filter((m) => m.role === "depart").length} départ(s)` : ""}{marks.some((m) => m.role === "top") ? ", top placé" : ""}.
         {#if marks.length && !marks.some((m) => m.role)}Outil « Départ / top » pour signaler le départ et la sortie.{/if}
@@ -425,8 +517,15 @@
 
     <h2>Voies ({wall?.routes.filter((r) => !r.archived).length ?? 0} en place)</h2>
     <label class="check"><input type="checkbox" bind:checked={showArchived} /> Afficher les voies démontées</label>
+    {#each routesBySector as group (group.sector?.id ?? "-")}
+    {#if routesBySector.length > 1}
+      <h3 class="group">
+        <button class="link" onclick={() => group.sector && openSector(group.sector.id)}>{group.sector?.name}</button>
+        <small>{group.routes.length} voie(s)</small>
+      </h3>
+    {/if}
     <ul class="routes">
-      {#each routes as r (r.id)}
+      {#each group.routes as r (r.id)}
         <li class:archived={r.archived}>
           <span class="dot big" style:background={routeHex(r)}></span>
           <div class="info">
@@ -443,6 +542,7 @@
         <li class="hint">Aucune voie pour l'instant.</li>
       {/each}
     </ul>
+    {/each}
     <p class="hint">Démonter garde la voie et son historique ; elle n'est simplement plus proposée.</p>
   </section>
 </div>
@@ -532,6 +632,60 @@
   }
   .quick select {
     min-height: 40px;
+  }
+  .sectors {
+    display: flex;
+    gap: 8px;
+    overflow-x: auto;
+    padding-bottom: 4px;
+  }
+  .sector-chip {
+    flex: none;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 2px;
+    width: 116px;
+    padding: 6px;
+    border-radius: 10px;
+    text-align: left;
+    font-size: 0.85rem;
+  }
+  .sector-chip img {
+    width: 100%;
+    height: 64px;
+    object-fit: cover;
+    border-radius: 6px;
+  }
+  .sector-chip small {
+    color: var(--muted);
+  }
+  .sector-add {
+    flex: none;
+    align-self: stretch;
+    white-space: nowrap;
+  }
+  .sector-edit {
+    align-items: center;
+  }
+  .sector-edit input[type="text"] {
+    flex: 1;
+    min-width: 140px;
+  }
+  .small {
+    min-height: 40px;
+    font-size: 0.85rem;
+  }
+  .group {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    margin: 8px 0 0;
+    font-size: 1rem;
+  }
+  .group small {
+    color: var(--muted);
+    font-weight: 400;
   }
   .photo-scroll {
     overflow: auto;

@@ -146,8 +146,15 @@ Dans le jeu, sur un mur à voies, les blocs sont **choisis** et non générés :
   (pieds libres, un mouvement sans pied, aller-retour, saute une prise, deux fois) suivent la cote visée
   (REGLES.md §13.4) ; on choisit celles qui sont permises.
 
-Limites : une seule photo par mur (un secteur) et pas de redressement (inutile ici : on ne mesure pas de
-distances). Quand une couleur regroupe plusieurs voies, la zone puis « Ajouter / retirer » font le tri.
+**Plusieurs secteurs par mur** : chaque secteur a son nom et sa photo (« + Secteur » ajoute une photo) ;
+une voie appartient au secteur ouvert quand on la crée, et s'affiche ensuite sur la photo de son secteur.
+La liste des voies est rangée par secteur ; au lancement d'une partie, un bouton par secteur retient toutes
+ses voies d'un coup. Un mur à l'ancien format (une seule photo) devient « Secteur 1 », sans rien perdre.
+Les photos sont rangées à part (une par document, ou une clé par photo dans le navigateur) : retoucher une
+voie ne renvoie pas les photos.
+
+Limites : pas de redressement (inutile ici : on ne mesure pas de distances). Quand une couleur regroupe
+plusieurs voies, la zone puis « Ajouter / retirer » font le tri.
 
 ### Étape 4 — Détection assistée (plus tard)
 

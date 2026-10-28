@@ -1,7 +1,7 @@
 /** Persistance locale (navigateur). Toute lecture/écriture peut échouer : on retombe sur les valeurs par défaut. */
 import { emptyRatingsState, type RatingsState } from "../core/players";
 import { ROUTE_VARIANTS, type RouteVariant } from "../core/gym";
-import type { Wall } from "../core/wall";
+import { joinPhotos, splitPhotos, type Wall } from "../core/wall";
 
 const WALLS_KEY = "brlok-web:walls";
 const ACTIVE_KEY = "brlok-web:active-wall";
@@ -27,8 +27,35 @@ function write(key: string, value: unknown): void {
   }
 }
 
-export const loadWalls = (): Wall[] => read(WALLS_KEY, []);
-export const saveWalls = (walls: Wall[]): void => write(WALLS_KEY, walls);
+// Les photos des secteurs sont rangées chacune sous sa clé : le mur s'enregistre à chaque retouche,
+// les photos seulement quand elles changent.
+const PHOTO_PREFIX = "brlok-web:photo:";
+const photoKey = (wallId: string, sectorId: string) => `${PHOTO_PREFIX}${wallId}:${sectorId}`;
+
+export const loadWalls = (): Wall[] =>
+  read<Wall[]>(WALLS_KEY, []).map((w) => joinPhotos(w, (sectorId) => read<string | undefined>(photoKey(w.id, sectorId), undefined)));
+
+export function saveWalls(walls: Wall[]): void {
+  const keep = new Set<string>();
+  const stripped = walls.map((w) => {
+    const { wall, photos } = splitPhotos(w);
+    for (const p of photos) {
+      const key = photoKey(w.id, p.sectorId);
+      keep.add(key);
+      if (read<string | undefined>(key, undefined) !== p.data) write(key, p.data);
+    }
+    return wall;
+  });
+  write(WALLS_KEY, stripped);
+  try {
+    for (let i = localStorage.length - 1; i >= 0; i--) {
+      const key = localStorage.key(i);
+      if (key?.startsWith(PHOTO_PREFIX) && !keep.has(key)) localStorage.removeItem(key);
+    }
+  } catch {
+    // stockage indisponible
+  }
+}
 export const loadActiveWallId = (): string | null => read(ACTIVE_KEY, null);
 export const saveActiveWallId = (id: string): void => write(ACTIVE_KEY, id);
 export const loadRatings = (): RatingsState => ({ ...emptyRatingsState(), ...read(RATINGS_KEY, {}) });

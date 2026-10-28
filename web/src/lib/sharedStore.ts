@@ -6,7 +6,8 @@
  * Organisation des documents :
  *   players/<id>                 un joueur
  *   blocks/<clé>                 cote d'un bloc
- *   walls/<id>                   un pan
+ *   walls/<id>                   un pan (sans les photos de ses secteurs)
+ *   photos/<mur>~<secteur>       photo d'un secteur de mur à voies (écrite seulement quand elle change)
  *   journal/attempts-AAAA-MM     tentatives du mois (regroupées : pas un document par tentative)
  *   journal/games                parties
  *   journal/best-times           meilleurs temps au chrono
@@ -15,7 +16,7 @@
  */
 import type { Rating } from "../core/glicko2";
 import type { AttemptRecord, GameRecord, Player, RatingsState } from "../core/players";
-import type { Wall } from "../core/wall";
+import { joinPhotos, splitPhotos, type Wall } from "../core/wall";
 
 type Body = Record<string, unknown>;
 interface DocSnap {
@@ -43,7 +44,7 @@ interface Db {
 
 export type SyncStatus = "local" | "connexion" | "partage" | "erreur";
 
-const COLLECTIONS = ["players", "blocks", "walls", "journal", "live"] as const;
+const COLLECTIONS = ["players", "blocks", "walls", "photos", "journal", "live"] as const;
 type CollectionName = (typeof COLLECTIONS)[number];
 
 const MONTH_LIMIT = 1000;
@@ -60,6 +61,7 @@ function month(iso: string): string {
 }
 
 const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
+const photoId = (wallId: string, sectorId: string) => `${wallId}~${sectorId}`;
 const attemptId = (a: AttemptRecord) => `${a.at}|${a.playerId}|${a.holds.join("-")}`;
 
 interface Handlers {
@@ -79,6 +81,8 @@ export class SharedStore {
   private players = new Map<string, Player>();
   private blocks = new Map<string, Rating>();
   private walls = new Map<string, Wall>();
+  /** Photos des secteurs, par `<mur>~<secteur>`. */
+  private photos = new Map<string, string>();
   private months = new Map<string, AttemptRecord[]>();
   private games: GameRecord[] = [];
   private liveGame: Body | null = null;
@@ -124,6 +128,9 @@ export class SharedStore {
       case "walls":
         this.walls = new Map(docs.map((d) => [d.id, d.body as unknown as Wall]));
         break;
+      case "photos":
+        this.photos = new Map(docs.map((d) => [photoId(String(d.body.wallId), String(d.body.sectorId)), String(d.body.data ?? "")]));
+        break;
       case "journal":
         this.months = new Map(
           docs.filter((d) => d.id.startsWith("attempts-")).map((d) => [d.id.slice("attempts-".length), (d.body.items as AttemptRecord[]) ?? []]),
@@ -140,7 +147,7 @@ export class SharedStore {
     if (!snap.metadata.fromCache) this.loaded.add(name);
 
     if (this.ready) {
-      this.emit(name);
+      this.emit(name === "photos" ? "walls" : name);
     } else if (this.loaded.size === COLLECTIONS.length) {
       void this.start(local);
     }
@@ -178,7 +185,8 @@ export class SharedStore {
       return;
     }
     if (name === "walls") {
-      this.handlers.onWalls([...this.walls.values()].sort((a, b) => a.name.localeCompare(b.name)));
+      const walls = [...this.walls.values()].map((w) => joinPhotos(w, (sectorId) => this.photos.get(photoId(w.id, sectorId))));
+      this.handlers.onWalls(walls.sort((a, b) => a.name.localeCompare(b.name)));
       return;
     }
     const attempts = [...this.months.values()].flat().sort((a, b) => b.at.localeCompare(a.at));
@@ -256,13 +264,28 @@ export class SharedStore {
 
   async syncWalls(prev: Wall[], next: Wall[]): Promise<void> {
     if (!this.db) return;
-    const before = new Map(prev.map((w) => [w.id, w]));
+    const before = new Map(prev.map((w) => [w.id, splitPhotos(w).wall]));
     const writes: Promise<void>[] = [];
+    const keep = new Set<string>();
     for (const w of next) {
-      if (!same(before.get(w.id), w)) writes.push(this.write(`walls/${safeId(w.id)}`, w as unknown as Body));
+      const { wall, photos } = splitPhotos(w);
+      if (!same(before.get(w.id), wall)) writes.push(this.write(`walls/${safeId(w.id)}`, wall as unknown as Body));
       before.delete(w.id);
+      for (const p of photos) {
+        const id = photoId(w.id, p.sectorId);
+        keep.add(id);
+        if (this.photos.get(id) !== p.data) {
+          this.photos.set(id, p.data);
+          writes.push(this.write(`photos/${safeId(id)}`, { wallId: w.id, sectorId: p.sectorId, data: p.data }));
+        }
+      }
     }
     for (const id of before.keys()) writes.push(this.write(`walls/${safeId(id)}`, null));
+    for (const id of [...this.photos.keys()]) {
+      if (keep.has(id)) continue;
+      this.photos.delete(id);
+      writes.push(this.write(`photos/${safeId(id)}`, null));
+    }
     await Promise.all(writes);
   }
 }

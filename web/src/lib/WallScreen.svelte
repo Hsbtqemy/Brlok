@@ -314,8 +314,13 @@
     {#if app.wall && isGym}
       {#if currentRoute}
         <RouteView wall={app.wall} route={currentRoute} />
-      {:else if app.wall.photo}
-        <img class="sector" src={app.wall.photo} alt={`Photo du secteur ${app.wall.name}`} />
+      {:else if app.wall.sectors?.[0]?.photo}
+        {#each app.wall.sectors.filter((x) => x.photo) as sec (sec.id)}
+          <figure class="sector-fig">
+            <img class="sector" src={sec.photo} alt={`Photo du secteur ${sec.name}`} />
+            {#if app.wall.sectors.length > 1}<figcaption>{sec.name}</figcaption>{/if}
+          </figure>
+        {/each}
         <p class="hint">Choisis une voie à droite.</p>
       {:else}
         <p class="empty">{app.wall.routes.length ? "Choisis une voie à droite." : "Aucune voie : ajoute-les avec « Gérer les voies »."}</p>
@@ -714,6 +719,14 @@
     border-radius: 50%;
     border: 1px solid var(--border);
     flex: none;
+  }
+  .sector-fig {
+    margin: 0 0 10px;
+  }
+  .sector-fig figcaption {
+    font-size: 0.85rem;
+    color: var(--muted);
+    margin-top: 4px;
   }
   .sector {
     display: block;

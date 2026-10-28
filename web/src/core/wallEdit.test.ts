@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createEmptyWall } from "./wall";
+import { createEmptyWall, joinPhotos, migrateWall, routePhoto, sectorOf, splitPhotos } from "./wall";
 import { duplicateWall, linksOf, newWall, resizeWall, setHold, toggleForbiddenLink, toggleTag } from "./wallEdit";
 
 describe("édition du pan", () => {
@@ -55,5 +55,35 @@ describe("pan express", () => {
     expect(painted.holds.find((h) => h.id === "A1")?.level).toBe(4);
     for (let i = 0; i < 3; i++) painted = cycleLevel(painted, { row: 0, col: 0 });
     expect(painted.holds.find((h) => h.id === "A1")?.level).toBe(1);
+  });
+});
+
+describe("secteurs d'un mur à voies", () => {
+  const base = { ...createEmptyWall("salle", "Salle", 0, 0), kind: "voies" as const };
+
+  it("l'ancienne photo unique devient le premier secteur, et les voies le suivent", () => {
+    const old = { ...base, photo: "data:A", routes: [{ id: "v1", name: "", color: "vert", grade: "6a", styles: [] }] };
+    const w = migrateWall(old);
+    expect(w.photo).toBeUndefined();
+    expect(w.sectors).toEqual([{ id: "s1", name: "Secteur 1", photo: "data:A" }]);
+    expect(routePhoto(old, old.routes[0])).toBe("data:A");
+    expect(migrateWall(w)).toBe(w);
+  });
+
+  it("les photos se rangent à part et se remettent en place", () => {
+    const w = { ...base, sectors: [{ id: "s1", name: "Bloc", photo: "data:A" }, { id: "s2", name: "Dévers", photo: "data:B" }] };
+    const { wall, photos } = splitPhotos(w);
+    expect(wall.sectors).toEqual([{ id: "s1", name: "Bloc" }, { id: "s2", name: "Dévers" }]);
+    expect(photos).toEqual([{ sectorId: "s1", data: "data:A" }, { sectorId: "s2", data: "data:B" }]);
+    const store = new Map(photos.map((p) => [p.sectorId, p.data]));
+    expect(joinPhotos(wall, (id) => store.get(id))).toEqual(w);
+  });
+
+  it("une voie va avec son secteur, ou le premier par défaut", () => {
+    const w = { ...base, sectors: [{ id: "s1", name: "Bloc" }, { id: "s2", name: "Dévers" }] };
+    const r = { id: "v", name: "", color: "vert", grade: "6a", styles: [] };
+    expect(sectorOf(w, r)?.id).toBe("s1");
+    expect(sectorOf(w, { ...r, sectorId: "s2" })?.id).toBe("s2");
+    expect(sectorOf(w, { ...r, sectorId: "supprimé" })?.id).toBe("s1");
   });
 });

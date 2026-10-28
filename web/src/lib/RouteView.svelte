@@ -1,6 +1,6 @@
 <script lang="ts">
   import { routeHex, routeLabel } from "../core/gym";
-  import type { Route, Wall } from "../core/wall";
+  import { routePhoto, sectorOf, type Route, type Wall } from "../core/wall";
 
   interface Props {
     wall: Wall;
@@ -11,6 +11,8 @@
 
   let { wall, route, maxHeight }: Props = $props();
   let ratio = $state(1.33);
+  const photo = $derived(route ? routePhoto(wall, route) : undefined);
+  const sectorName = $derived(route && (wall.sectors?.length ?? 0) > 1 ? sectorOf(wall, route)?.name : undefined);
 </script>
 
 {#if route}
@@ -19,14 +21,14 @@
       <span class="swatch" style:background={routeHex(route)}></span>
       <div>
         <strong>{routeLabel(route)}</strong>
-        {#if route.styles.length}<span class="styles">{route.styles.join(" · ")}</span>{/if}
+        {#if route.styles.length || sectorName}<span class="styles">{[sectorName, ...route.styles].filter(Boolean).join(" · ")}</span>{/if}
       </div>
     </div>
-    {#if wall.photo}
+    {#if photo}
       <div class="photo" style={maxHeight ? `max-width: calc(${maxHeight} * ${ratio}); margin: 0 auto` : undefined}>
         <img
-          src={wall.photo}
-          alt={`Photo du secteur ${wall.name}`}
+          src={photo}
+          alt={`Photo du secteur ${sectorName ?? wall.name}`}
           onload={(e) => {
             const img = e.currentTarget as HTMLImageElement;
             if (img.naturalHeight) ratio = img.naturalWidth / img.naturalHeight;

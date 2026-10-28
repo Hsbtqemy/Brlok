@@ -112,6 +112,40 @@ describe("stockage partagé", () => {
     expect(seen.ratings?.attempts[0].context).toBe("partie");
   });
 
+  it("range les photos des secteurs à part et ne les renvoie que si elles changent", async () => {
+    const fake = fakeDb();
+    const writes: string[] = [];
+    const set = fake.db.doc;
+    fake.db.doc = (path: string) => {
+      const d = set(path);
+      return { ...d, set: async (data: Record<string, unknown>) => (writes.push(path), d.set(data)) };
+    };
+    const { store, seen } = setup(fake.db);
+    const gym: Wall = { ...wall, id: "salle", name: "Salle", kind: "voies", photo: "data:image/jpeg;base64,AAA" };
+    await store.connect({ ratings: () => emptyRatingsState(), walls: () => [gym] });
+    await tick();
+    expect(fake.docs.get("walls/salle")?.photo).toBeUndefined();
+    expect(fake.docs.get("walls/salle")?.sectors).toEqual([{ id: "s1", name: "Secteur 1" }]);
+    expect(fake.docs.get("photos/salle~s1")?.data).toBe("data:image/jpeg;base64,AAA");
+    expect(seen.walls?.[0].sectors?.[0].photo).toBe("data:image/jpeg;base64,AAA");
+
+    const current = seen.walls!;
+    const withRoute = current.map((w) => ({ ...w, routes: [{ id: "v1", name: "", color: "vert", grade: "6a", styles: [] }] }));
+    writes.length = 0;
+    await store.syncWalls(current, withRoute);
+    expect(writes).toEqual(["walls/salle"]);
+
+    const twoSectors = withRoute.map((w) => ({ ...w, sectors: [...w.sectors!, { id: "s2", name: "Dévers", photo: "data:BBB" }] }));
+    writes.length = 0;
+    await store.syncWalls(withRoute, twoSectors);
+    expect(writes.sort()).toEqual(["photos/salle~s2", "walls/salle"]);
+    await tick();
+    expect(seen.walls?.[0].sectors?.map((s) => s.photo)).toEqual(["data:image/jpeg;base64,AAA", "data:BBB"]);
+
+    await store.syncWalls(twoSectors, withRoute.map((w) => ({ ...w, sectors: w.sectors!.slice(0, 1) })));
+    expect(fake.docs.has("photos/salle~s2")).toBe(false);
+  });
+
   it("reste en local hors page claude.ai", async () => {
     (globalThis as unknown as { window: unknown }).window = {};
     const seen: SyncStatus[] = [];
