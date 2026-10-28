@@ -49,7 +49,7 @@
     input.value = "";
     if (!file || !wall) return;
     busy = true;
-    message = "";
+    message = `Photo reçue (${(file.size / 1_000_000).toFixed(1)} Mo) : préparation…`;
     try {
       const photo = await photoFromFile(file);
       if (nouveau || !sector) {
@@ -150,6 +150,7 @@
           </div>
         </div>
       </div>
+      {#if message}<p class="message" role="status">{message}</p>{/if}
       {#if sector}
         <div class="row sector-edit">
           <input type="text" aria-label="Nom du secteur" value={sector.name} onchange={(e) => renameSector((e.currentTarget as HTMLInputElement).value)} />
@@ -179,7 +180,6 @@
       {:else}
         <p class="hint">Sans photo, les voies se décrivent par leur couleur, leur cotation et leur style. Avec une photo par secteur, on place aussi leurs prises.</p>
       {/if}
-      {#if message}<p class="message">{message}</p>{/if}
     </section>
 
     <section class="panel">

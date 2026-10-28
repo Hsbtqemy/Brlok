@@ -41,7 +41,23 @@
     installPrompt = null;
   }
   /** Murs : éditeur du mur actif ouvert (depuis Grimper, « Modifier »). */
-  let wallOpen = $state(false);
+  // Retenu d'un chargement à l'autre : sur Android, la page peut être rechargée pendant que l'appareil
+  // photo est ouvert ; on revient alors sur le mur en cours plutôt que sur la liste.
+  let wallOpen = $state(readWallOpen());
+  function readWallOpen(): boolean {
+    try {
+      return localStorage.getItem("brlok-web:wall-open") === "1";
+    } catch {
+      return false;
+    }
+  }
+  $effect(() => {
+    try {
+      localStorage.setItem("brlok-web:wall-open", wallOpen ? "1" : "0");
+    } catch {
+      // sans persistance
+    }
+  });
   function go(id: ScreenId) {
     screen = id;
     try {
