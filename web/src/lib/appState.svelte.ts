@@ -1,7 +1,6 @@
 /**
- * État partagé de l'application (pans, joueurs, cotes).
- * Toujours gardé dans le navigateur ; en plus, enregistré avec la page quand le stockage partagé
- * est disponible (voir sharedStore.ts), auquel cas c'est lui qui fait foi.
+ * État de l'application (murs, joueurs, cotes, bibliothèque), gardé dans le stockage du navigateur.
+ * D'un appareil à l'autre : la sauvegarde complète (Joueurs → Données de l'app).
  */
 import { withBeam } from "../core/beam";
 import { makeChallengeBlock, type ChallengeOptions } from "../core/challenge";
@@ -12,7 +11,6 @@ import { bestTimeKey, recordBlockAttempt, recordGame, recordGameVsEngine, record
 import type { Route, Wall } from "../core/wall";
 import type { SavedGame } from "../core/game";
 import type { SavedRounds } from "../core/rounds";
-import { SharedStore, type SyncStatus } from "./sharedStore";
 import {
   loadActivePlayerId,
   loadActiveWallId,
@@ -33,8 +31,6 @@ class AppState {
   activeWallId = $state<string | null>(loadActiveWallId());
   ratings = $state<RatingsState>(loadRatings());
   activePlayerId = $state<string | null>(loadActivePlayerId());
-  syncStatus = $state<SyncStatus>("local");
-  syncDetail = $state("");
   /** Partie en cours sauvegardée, avec qui joue quoi (identifiants des joueurs). */
   liveGame = $state.raw<LiveGame | null>(loadLiveGame<LiveGame>());
   /** Favoris, modèles, historique et séance en cours (Brlok classique). */
@@ -47,44 +43,15 @@ class AppState {
   playWall = $derived(this.wall ? withBeam(this.wall) : undefined);
   activePlayer = $derived(this.ratings.players.find((p) => p.id === this.activePlayerId) ?? this.ratings.players[0]);
 
-  private readonly store = new SharedStore({
-    onRatings: (state) => {
-      this.ratings = state;
-      saveRatings(state);
-    },
-    onWalls: (walls) => {
-      this.walls = walls;
-      saveWalls(walls);
-    },
-    onStatus: (status, detail = "") => {
-      this.syncStatus = status;
-      this.syncDetail = detail;
-    },
-    onLiveGame: (game) => {
-      this.liveGame = game as LiveGame | null;
-      saveLiveGame(game);
-    },
-    onLibrary: (library) => {
-      this.library = library;
-      this.libraryStorageFull = !saveLibrary(library);
-    },
-  });
-
-  constructor() {
-    void this.store.connect({ ratings: () => this.snapshotRatings(), walls: () => $state.snapshot(this.walls) as Wall[], library: () => this.library });
-  }
-
   private snapshotRatings(): RatingsState {
     return $state.snapshot(this.ratings) as RatingsState;
   }
 
   setWalls(walls: Wall[], activeId?: string) {
-    const prev = $state.snapshot(this.walls) as Wall[];
     this.walls = walls;
     if (activeId) this.activeWallId = activeId;
     saveWalls($state.snapshot(this.walls) as Wall[]);
     if (this.wall) saveActiveWallId(this.wall.id);
-    void this.store.syncWalls(prev, $state.snapshot(this.walls) as Wall[]);
   }
 
   selectWall(id: string) {
@@ -99,27 +66,21 @@ class AppState {
   }
 
   setRatings(state: RatingsState) {
-    const prev = this.snapshotRatings();
     this.ratings = state;
-    const next = this.snapshotRatings();
-    saveRatings(next);
-    void this.store.syncRatings(prev, next);
+    saveRatings(this.snapshotRatings());
   }
 
   /** Sauvegarde la partie en cours (null quand elle est terminée ou abandonnée). */
   saveGame(game: LiveGame | null) {
     this.liveGame = game;
     saveLiveGame(game);
-    void this.store.saveLiveGame(game as unknown as Record<string, unknown> | null);
   }
 
   /** Remplace la bibliothèque (valeur neuve, jamais modifiée sur place). */
   setLibrary(next: Library) {
-    const prev = this.library;
-    if (next === prev) return;
+    if (next === this.library) return;
     this.library = next;
     this.libraryStorageFull = !saveLibrary(next);
-    void this.store.syncLibrary(prev, next);
   }
 
   updateLibrary(change: (library: Library) => Library) {
