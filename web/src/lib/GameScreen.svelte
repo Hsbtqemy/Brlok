@@ -16,6 +16,7 @@
   import { FOOT_RULES, type FootRule } from "../core/feet";
   import { ROUTE_VARIANTS, routeHex, routeLabel, type RouteVariant } from "../core/gym";
   import { sectorOf } from "../core/wall";
+  import { expressWall } from "../core/wallEdit";
   import { FAMILIES, cadenceText, intensityLines, recapLines } from "../core/setupText";
   import { loadRouteVariants, saveRouteVariants } from "./storage";
   import { PIECES } from "../core/pieces";
@@ -64,6 +65,9 @@
     engineElo: number;
     /** Une partie a déjà été lancée avec ces réglages (« Rejouer comme la dernière fois »). */
     lastStarted: boolean;
+    wallSource: "saved" | "express";
+    expressCols: number;
+    expressRows: number;
   }>;
   const prefs: SetupPrefs = (() => {
     try {
@@ -112,6 +116,33 @@
   /** Force du moteur : par défaut la cote Chesscalade du joueur (elle monte quand il gagne, §9.1). */
   let engineElo = $state(prefs.engineElo ?? Math.round(app.activePlayer?.ratings.chesscalade.rating ?? 1500));
   let lastStarted = $state(prefs.lastStarted ?? false);
+  /** Où : un mur enregistré, ou un pan rapide (une prise par case, niveau moyen) créé pour la partie. */
+  let wallSource = $state<"saved" | "express">(prefs.wallSource ?? (app.walls.length ? "saved" : "express"));
+  let expressCols = $state(prefs.expressCols ?? 6);
+  let expressRows = $state(prefs.expressRows ?? 7);
+  const expressName = $derived(`Pan rapide ${expressCols}×${expressRows}`);
+
+  /**
+   * Pan rapide de la partie : celui de cette taille s'il existe déjà (on ne remplit pas Murs d'un pan par
+   * partie), sinon un nouveau. Il devient le mur actif ; on peut l'affiner ensuite dans Murs.
+   */
+  function ensureExpressWall() {
+    const cols = Math.max(2, Math.min(26, Math.round(expressCols)));
+    const rows = Math.max(2, Math.min(30, Math.round(expressRows)));
+    const name = `Pan rapide ${cols}×${rows}`;
+    const existing = app.walls.find((w) => w.kind !== "voies" && w.name === name && w.cols === cols && w.rows === rows);
+    if (existing) {
+      app.selectWall(existing.id);
+      return;
+    }
+    const wall = expressWall(name, rows, cols);
+    app.setWalls([...app.walls, wall], wall.id);
+  }
+
+  function nextStep() {
+    if (step === "mur" && wallSource === "express") ensureExpressWall();
+    stepIndex = Math.min(steps.length - 1, stepIndex + 1);
+  }
   let humanColor = $state<Color>("w");
 
   // --- Partie ---
@@ -136,7 +167,26 @@
 
   // Réglages retenus d'une partie à l'autre (sur cet appareil).
   $effect(() => {
-    const setup = { format, difficulty, deviation, feetRule, density, rhythmChoice, mode, family, duelFormat, soloColor, soloId, whiteId, blackId, engineElo, lastStarted };
+    const setup = {
+      format,
+      difficulty,
+      deviation,
+      feetRule,
+      density,
+      rhythmChoice,
+      mode,
+      family,
+      duelFormat,
+      soloColor,
+      soloId,
+      whiteId,
+      blackId,
+      engineElo,
+      lastStarted,
+      wallSource,
+      expressCols,
+      expressRows,
+    };
     try {
       localStorage.setItem(SETUP_KEY, JSON.stringify(setup));
     } catch {
@@ -191,7 +241,13 @@
   const step = $derived(steps[Math.min(stepIndex, steps.length - 1)]);
   const activeRoutes = $derived(app.wall?.kind === "voies" ? app.wall.routes.filter((r) => !r.archived) : []);
   const stepBlocked = $derived(
-    step === "mur" ? (!app.wall ? "Aucun mur : crée-en un dans l'onglet Murs." : app.wall.kind === "voies" && activeRoutes.length === 0 ? "Aucune voie en place sur ce mur." : "") : "",
+    step !== "mur" || wallSource === "express"
+      ? ""
+      : !app.wall
+        ? "Aucun mur enregistré : choisis « Pan rapide », ou crée un mur dans l'onglet Murs."
+        : app.wall.kind === "voies" && activeRoutes.length === 0
+          ? "Aucune voie en place sur ce mur."
+          : "",
   );
   const recap = $derived(
     recapLines({
@@ -202,8 +258,8 @@
       family,
       format,
       duel: duelFormat,
-      wallName: app.wall?.name ?? null,
-      onRoutes: app.wall?.kind === "voies",
+      wallName: wallSource === "express" ? expressName : (app.wall?.name ?? null),
+      onRoutes: wallSource !== "express" && app.wall?.kind === "voies",
       routesCount: gameRoutes.length || activeRoutes.length,
       variantsCount: routeVariants.length,
       difficulty,
@@ -214,7 +270,7 @@
     }),
   );
   const presetLines = (p: (typeof PRESETS)[number]) =>
-    intensityLines({ difficulty: p.difficulty, density: p.density, rhythm, feet: "auto", solo: mode === "solo", onRoutes: app.wall?.kind === "voies" });
+    intensityLines({ difficulty: p.difficulty, density: p.density, rhythm, feet: "auto", solo: mode === "solo", onRoutes: wallSource !== "express" && app.wall?.kind === "voies" });
   const soloPlayer = $derived(app.ratings.players.find((p) => p.id === soloId));
 
   // Sur un mur à voies, « Ajoute une prise » n'a pas de sens : on bascule sur « Même bloc ».
@@ -223,6 +279,8 @@
   });
 
   function start() {
+    if (wallSource === "express") ensureExpressWall();
+    if (!app.wall) return;
     lastStarted = true;
     stepIndex = 0;
     if (family === "A" || family === "B") {
@@ -603,7 +661,7 @@
 
     {#if step === "joueurs"}
       {#if lastStarted}
-        <button class="replay" onclick={start} disabled={!app.wall}>
+        <button class="replay" onclick={start} disabled={wallSource !== "express" && !app.wall}>
           <strong>Rejouer comme la dernière fois</strong>
           <small>{setupSummary}</small>
         </button>
@@ -735,6 +793,29 @@
       {/if}
 
     {:else if step === "mur"}
+      <div class="cards">
+        <button class="card" aria-pressed={wallSource === "saved"} disabled={app.walls.length === 0} onclick={() => (wallSource = "saved")}>
+          <span class="card-icon">▦</span>
+          <strong>Un mur enregistré</strong>
+          <small>{app.walls.length ? "Ton pan ou une salle décrite dans Murs : vraies prises, vraies voies." : "Aucun pour l'instant : crée-en un dans l'onglet Murs."}</small>
+        </button>
+        <button class="card" aria-pressed={wallSource === "express"} onclick={() => (wallSource = "express")}>
+          <span class="card-icon">⚡</span>
+          <strong>Pan rapide</strong>
+          <small>Une prise par case, toutes de niveau moyen : pour jouer tout de suite sur un pan qu'on n'a pas décrit.</small>
+        </button>
+      </div>
+      {#if wallSource === "express"}
+        <div class="row express">
+          <label class="field">Colonnes <input type="number" min="2" max="26" bind:value={expressCols} /></label>
+          <label class="field">Rangées <input type="number" min="2" max="30" bind:value={expressRows} /></label>
+        </div>
+        <p class="hint">
+          Compte les cases de ton pan (ou une prise par case qu'on imagine). La difficulté vient des enchaînements, et les cotes des
+          blocs s'ajustent en jouant. « {expressName} » est gardé dans Murs, réutilisé à la prochaine partie de même taille, et peut s'affiner
+          (peinture rapide des niveaux).
+        </p>
+      {:else}
       <label class="field">
         Pan ou mur de la partie
         <select id="game-wall" value={app.wall?.id} onchange={(e) => { app.selectWall((e.currentTarget as HTMLSelectElement).value); gameRoutes = []; }}>
@@ -794,6 +875,7 @@
       </div>
       {:else if app.wall}
         <p class="hint">Pan {app.wall.cols} × {app.wall.rows}, {app.wall.holds.length} prises : les blocs sont générés pendant la partie, à la cote visée et selon le caractère de la pièce.</p>
+      {/if}
       {/if}
 
     {:else if step === "intensite"}
@@ -880,9 +962,9 @@
       <div class="nav">
         <button disabled={stepIndex === 0} onclick={() => (stepIndex = Math.max(0, stepIndex - 1))}>Retour</button>
         {#if step === "recap"}
-          <button class="primary" onclick={start} disabled={!app.wall}>Commencer la partie</button>
+          <button class="primary" onclick={start} disabled={wallSource !== "express" && !app.wall}>Commencer la partie</button>
         {:else}
-          <button class="primary" disabled={!!stepBlocked} onclick={() => (stepIndex = Math.min(steps.length - 1, stepIndex + 1))}>Suivant</button>
+          <button class="primary" disabled={!!stepBlocked} onclick={nextStep}>Suivant</button>
         {/if}
       </div>
     </div>
@@ -1215,6 +1297,9 @@
   }
   .start-bar .nav .primary {
     flex: 2;
+  }
+  .express input[type="number"] {
+    width: 90px;
   }
   .wizard-head {
     display: flex;
