@@ -4,6 +4,7 @@
   import PlayersScreen from "./lib/PlayersScreen.svelte";
   import WallScreen from "./lib/WallScreen.svelte";
   import WallsScreen from "./lib/WallsScreen.svelte";
+  import { canCheckUpdates, updateAvailable } from "./lib/updateCheck";
 
   const SCREENS = [
     // Icônes (24 × 24, trait) : prise, cavalier, grille de mur, joueur.
@@ -24,6 +25,27 @@
   }
 
   let screen = $state<ScreenId>(initialScreen());
+
+  // Nouvelle version en ligne : vérifiée au retour dans l'app et toutes les 30 min (voir updateCheck.ts).
+  let updateReady = $state(false);
+  let updateDismissed = $state(false);
+  $effect(() => {
+    if (!canCheckUpdates()) return;
+    const check = async () => {
+      if (!updateReady && (await updateAvailable())) updateReady = true;
+    };
+    const onVisible = () => {
+      if (document.visibilityState === "visible") void check();
+    };
+    const first = setTimeout(check, 5000);
+    const every = setInterval(check, 30 * 60_000);
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      clearTimeout(first);
+      clearInterval(every);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
+  });
 
   /** État des données : en entier sur grand écran, en un mot sur téléphone. */
   const SYNC_TEXT = {
@@ -154,6 +176,13 @@
   {/if}
 </header>
 
+{#if updateReady && !updateDismissed}
+  <div class="update" role="status">
+    <span>Nouvelle version disponible</span>
+    <button class="primary" onclick={() => location.reload()}>Mettre à jour</button>
+    <button class="later" aria-label="Plus tard" onclick={() => (updateDismissed = true)}>✕</button>
+  </div>
+{/if}
 <main>
   {#if screen === "pan"}
     <WallScreen
@@ -193,6 +222,31 @@
   nav {
     display: flex;
     gap: 6px;
+  }
+  .update {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin: 0 max(16px, env(safe-area-inset-right, 0px)) 12px max(16px, env(safe-area-inset-left, 0px));
+    padding: 8px 8px 8px 14px;
+    border-radius: 12px;
+    border: 1px solid var(--accent);
+    background: color-mix(in srgb, var(--accent) 10%, var(--surface));
+    font-size: 0.95rem;
+  }
+  .update span {
+    flex: 1;
+    font-weight: 600;
+  }
+  .update button {
+    min-height: 40px;
+  }
+  .update .later {
+    width: 40px;
+    padding: 0;
+    border: none;
+    background: none;
+    color: var(--muted);
   }
   .theme {
     width: 36px;

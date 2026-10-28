@@ -32,7 +32,11 @@ Prérequis, une fois : *Settings → Pages → Source : GitHub Actions*.
   l'application* ; sur iPhone (Safari), *Partager → Sur l'écran d'accueil* ; sur ordinateur, l'icône
   d'installation de la barre d'adresse.
 - **Hors ligne** : le service worker (`public/sw.js`) garde la page, les scripts et le moteur d'échecs ;
-  l'app s'ouvre sans réseau. Les mises à jour arrivent à l'ouverture suivante avec réseau.
+  l'app s'ouvre sans réseau.
+- **Mises à jour** : sur iPad et iPhone, une app de l'écran d'accueil reprend là où elle était au lieu de se
+  recharger. L'app compare donc sa version à celle en ligne (au retour dans l'app et toutes les 30 min) et
+  affiche « Nouvelle version disponible · Mettre à jour » ; la partie en cours est gardée. Vérification à la
+  demande : Joueurs → Données de l'app → Version.
 - **Données** : dans le stockage du navigateur de chaque appareil (pas de partage, contrairement à la page
   claude.ai). Pour passer de l'une à l'autre, ou d'un appareil à l'autre : *Joueurs → Données de l'app →
   Enregistrer une sauvegarde*, puis *Remettre une sauvegarde* de l'autre côté. Synchronisation entre
