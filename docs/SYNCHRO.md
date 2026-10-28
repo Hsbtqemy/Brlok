@@ -5,14 +5,15 @@
 
 ## Aujourd'hui
 
-- **Page claude.ai** : synchronisée par le stockage de la page (capacité `db`).
-- **App installée (PWA)** : chaque appareil garde ses données ; une **sauvegarde** (Joueurs → Données de
-  l'app) les transporte d'un appareil à l'autre, à la main.
+Chaque appareil garde ses données (stockage du navigateur) ; une **sauvegarde** (Joueurs → Données de
+l'app) les transporte d'un appareil à l'autre, à la main.
 
-Tout le partage passe par un seul module, `web/src/lib/sharedStore.ts`, organisé en collections de
-documents (`players/<id>`, `blocks/<clé>`, `walls/<id>`, `photos/<mur>~<secteur>`, `journal/…`,
-`live/current`) avec un abonnement aux changements. Un autre serveur peut prendre sa place sans toucher
-au reste de l'app.
+Toutes les écritures passent par `web/src/lib/appState.svelte.ts` (murs, cotes et journal, partie en
+cours, bibliothèque) : c'est là que se branchera la synchro. L'ancienne page claude.ai avait un module de
+partage (`sharedStore.ts`, retiré ; il reste dans l'historique git, avant le commit « Retrait de l'ancienne
+page claude.ai »), organisé en collections de documents (`players/<id>`, `blocks/<clé>`, `walls/<id>`,
+`photos/<mur>~<secteur>`, `journal/attempts-AAAA-MM`, `live/current`, `library/…`) avec un abonnement
+aux changements : la même organisation convient à PocketBase.
 
 ## Proposition : PocketBase sur le VPS
 
@@ -28,8 +29,8 @@ au reste de l'app.
 | HTTPS | derrière Caddy (certificat automatique) |
 
 Installation type : un sous-domaine (`brlok.mondomaine.fr`), Caddy en proxy, PocketBase en service
-systemd. Côté app : un réglage « Serveur de synchro » (adresse + connexion), puis le même
-`SharedStore` branché sur PocketBase au lieu de la page claude.ai.
+systemd. Côté app : un réglage « Serveur de synchro » (adresse + connexion), et un module de
+synchro (sur le modèle de l'ancien `sharedStore.ts`) branché sur PocketBase.
 
 ### Hors ligne
 

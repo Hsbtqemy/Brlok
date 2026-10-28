@@ -47,14 +47,6 @@
     };
   });
 
-  /** État des données : en entier sur grand écran, en un mot sur téléphone. */
-  const SYNC_TEXT = {
-    partage: { long: "Données partagées", short: "Partagé" },
-    connexion: { long: "Connexion…", short: "…" },
-    erreur: { long: "Synchronisation en échec", short: "Échec synchro" },
-    local: { long: "Données sur cet appareil", short: "Local" },
-  } as const;
-  const sync = $derived(SYNC_TEXT[app.syncStatus]);
 
   // Thème : automatique (celui de l'appareil), jour ou nuit, retenu sur cet appareil.
   type Theme = "auto" | "light" | "dark";
@@ -163,9 +155,6 @@
   <button class="theme" onclick={nextTheme} title={themeInfo.label} aria-label={themeInfo.label}>
     <svg class="theme-icon" viewBox="0 0 24 24" aria-hidden="true"><path d={themeInfo.icon} /></svg>
   </button>
-  <span class="sync" class:shared={app.syncStatus === "partage"} class:error={app.syncStatus === "erreur"} title={app.syncDetail || sync.long}>
-    <span class="long">{sync.long}</span><span class="short">{sync.short}</span>
-  </span>
   {#if app.ratings.players.length > 0}
     <label class="player">
       Joueur
@@ -276,24 +265,6 @@
     border-color: var(--accent);
     color: var(--accent);
   }
-  .sync .short {
-    display: none;
-  }
-  .sync {
-    font-size: 0.8rem;
-    color: var(--muted);
-    padding: 4px 10px;
-    border-radius: 999px;
-    border: 1px solid var(--border);
-  }
-  .sync.shared {
-    color: #2e7d32;
-    border-color: #2e7d32;
-  }
-  .sync.error {
-    color: #c62828;
-    border-color: #c62828;
-  }
   .player {
     display: flex;
     align-items: center;
@@ -308,16 +279,6 @@
     }
     h1 {
       font-size: 1.15rem;
-    }
-    .sync {
-      font-size: 0.7rem;
-      padding: 2px 8px;
-    }
-    .sync .long {
-      display: none;
-    }
-    .sync .short {
-      display: inline;
     }
   }
   .icon {

@@ -1,8 +1,8 @@
 /**
  * Sauvegarde complète (un fichier JSON) : murs avec leurs photos, joueurs, cotes, journal, partie en cours,
  * favoris, modèles et historique des séances.
- * Sert à passer d'un appareil ou d'un hébergement à l'autre (page claude.ai → app installée), et de copie
- * de secours tant qu'il n'y a pas de synchronisation entre appareils.
+ * Sert à passer d'un appareil à l'autre, et de copie de secours tant qu'il n'y a pas de synchronisation
+ * entre appareils.
  */
 import { emptyLibrary, normalizeLibrary, type Library } from "./library";
 import { emptyRatingsState, type RatingsState } from "./players";

@@ -64,8 +64,8 @@
 
 <h2>Données de l'app</h2>
 <p class="hint">
-  Une sauvegarde contient tout : murs et photos, joueurs, cotes, journal, partie en cours, favoris, modèles et historique des séances. Pour passer d'un appareil à l'autre, ou
-  de la page claude.ai à l'app installée : enregistre-la ici, puis remets-la là-bas.
+  Une sauvegarde contient tout : murs et photos, joueurs, cotes, journal, partie en cours, favoris, modèles et historique des séances. Pour passer d'un appareil à l'autre :
+  enregistre-la ici, puis remets-la là-bas.
 </p>
 <div class="row">
   <button class="primary" disabled={busy} onclick={exportAll}>Enregistrer une sauvegarde</button>
@@ -80,7 +80,7 @@
       Sauvegarde du {pending.exportedAt ? new Date(pending.exportedAt).toLocaleString("fr-FR", { dateStyle: "short", timeStyle: "short" }) : "?"} :
       {describeBackup(pending)}.
     </p>
-    <p class="warn">Elle remplace toutes les données actuelles de cet appareil{app.syncStatus === "partage" ? " (et celles partagées avec la page)" : ""}.</p>
+    <p class="warn">Elle remplace toutes les données actuelles de cet appareil.</p>
     <div class="row">
       <button class="danger" onclick={restore}>Remplacer les données</button>
       <button onclick={() => (pending = null)}>Annuler</button>

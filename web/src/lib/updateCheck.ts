@@ -22,8 +22,8 @@ export async function latestBuild(): Promise<string | null> {
   }
 }
 
-/** Vérification possible : app construite et servie (pas en développement, ni dans la page unique claude.ai). */
-export const canCheckUpdates = () => import.meta.env.PROD && import.meta.env.MODE !== "single" && currentBuild() !== null;
+/** Vérification possible : app construite et servie (pas en développement). */
+export const canCheckUpdates = () => import.meta.env.PROD && currentBuild() !== null;
 
 export async function updateAvailable(): Promise<boolean> {
   const current = currentBuild();

@@ -15,12 +15,10 @@ npm run dev       # http://localhost:5173
 npm test          # tests du cœur (src/core)
 npm run check     # vérification TypeScript / Svelte
 npm run build     # version statique dans dist/
-npm run build:single   # une seule page HTML autonome dans dist-single/ (tablette, page partagée)
-node scripts/artifact-page.mjs <sortie.html>   # adapte dist-single pour une page claude.ai
 ```
 
-Sur une tablette, sans serveur : ouvrir la page autonome, ou lancer `npm run dev -- --host` sur un
-ordinateur du même réseau et ouvrir l'adresse affichée.
+Sur une tablette : l'app installée (ci-dessous), ou `npm run dev -- --host` sur un ordinateur du même
+réseau, puis l'adresse affichée.
 
 ## App installée (PWA)
 
@@ -37,8 +35,7 @@ Prérequis, une fois : *Settings → Pages → Source : GitHub Actions*.
   recharger. L'app compare donc sa version à celle en ligne (au retour dans l'app et toutes les 30 min) et
   affiche « Nouvelle version disponible · Mettre à jour » ; la partie en cours est gardée. Vérification à la
   demande : Joueurs → Données de l'app → Version.
-- **Données** : dans le stockage du navigateur de chaque appareil (pas de partage, contrairement à la page
-  claude.ai). Pour passer de l'une à l'autre, ou d'un appareil à l'autre : *Joueurs → Données de l'app →
+- **Données** : dans le stockage du navigateur de chaque appareil. Pour passer d'un appareil à l'autre : *Joueurs → Données de l'app →
   Enregistrer une sauvegarde*, puis *Remettre une sauvegarde* de l'autre côté. Synchronisation entre
   appareils par un serveur personnel : voir [`docs/SYNCHRO.md`](../docs/SYNCHRO.md).
 - **Photos de secteur** : « 📷 Photo » ouvre directement l'appareil photo (arrière), « Image… » la galerie.
@@ -69,7 +66,6 @@ Prérequis, une fois : *Settings → Pages → Source : GitHub Actions*.
 - [x] Partie Chesscalade en duo, famille D « intrication » : pendule verticale, recharges, coups en suspens,
       verdicts V0–V6, déviation courte/libre, parade, bloc du mat, fatigue, garde-fous §6
 - [x] Placement (5 blocs adaptatifs pour fixer la cote de grimpe de départ)
-- [x] Stockage partagé quand l'app tourne comme page claude.ai (capacité `db`)
 - [x] Solo contre Stockfish (force 400–2800), blocs de défense, contre-attaque
 - [x] Partie en cours sauvegardée à chaque action, reprise après rechargement ou sur un autre appareil
 - [x] Familles A et B : rounds d'échecs et de mur, duels « Ajoute une prise », « Même bloc », « Bloc imposé »,
