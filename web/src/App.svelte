@@ -25,6 +25,51 @@
 
   let screen = $state<ScreenId>(initialScreen());
 
+  /** État des données : en entier sur grand écran, en un mot sur téléphone. */
+  const SYNC_TEXT = {
+    partage: { long: "Données partagées", short: "Partagé" },
+    connexion: { long: "Connexion…", short: "…" },
+    erreur: { long: "Synchronisation en échec", short: "Échec synchro" },
+    local: { long: "Données sur cet appareil", short: "Local" },
+  } as const;
+  const sync = $derived(SYNC_TEXT[app.syncStatus]);
+
+  // Thème : automatique (celui de l'appareil), jour ou nuit, retenu sur cet appareil.
+  type Theme = "auto" | "light" | "dark";
+  // Icônes (24 × 24, trait) : demi-cercle (automatique), soleil (jour), lune (nuit).
+  const THEMES: { id: Theme; icon: string; label: string }[] = [
+    { id: "auto", icon: "M12 3a9 9 0 1 0 0 18a9 9 0 1 0 0-18Z M12 3v18", label: "Thème : automatique (celui de l'appareil)" },
+    {
+      id: "light",
+      icon: "M12 8a4 4 0 1 0 0 8a4 4 0 1 0 0-8Z M12 2v2 M12 20v2 M4.9 4.9l1.4 1.4 M17.7 17.7l1.4 1.4 M2 12h2 M20 12h2 M4.9 19.1l1.4-1.4 M17.7 6.3l1.4-1.4",
+      label: "Thème : jour",
+    },
+    { id: "dark", icon: "M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5Z", label: "Thème : nuit" },
+  ];
+  let theme = $state<Theme>(readTheme());
+  function readTheme(): Theme {
+    try {
+      const saved = localStorage.getItem("brlok-web:theme");
+      return saved === "light" || saved === "dark" ? saved : "auto";
+    } catch {
+      return "auto";
+    }
+  }
+  const themeInfo = $derived(THEMES.find((t) => t.id === theme)!);
+  function nextTheme() {
+    theme = THEMES[(THEMES.findIndex((t) => t.id === theme) + 1) % THEMES.length].id;
+  }
+  $effect(() => {
+    const root = document.documentElement;
+    if (theme === "auto") delete root.dataset.theme;
+    else root.dataset.theme = theme;
+    try {
+      localStorage.setItem("brlok-web:theme", theme);
+    } catch {
+      // sans persistance
+    }
+  });
+
   // Barre de navigation en bas : sur téléphone, et sur tablette tactile (iPad), à portée de pouce.
   const BOTTOM_NAV = "(max-width: 600px), (pointer: coarse) and (max-width: 1400px)";
   $effect(() => {
@@ -93,14 +138,11 @@
     {/each}
   </nav>
   {#if installPrompt}<button class="install" onclick={install}>Installer l'app</button>{/if}
-  <span class="sync" class:shared={app.syncStatus === "partage"} class:error={app.syncStatus === "erreur"} title={app.syncDetail}>
-    {app.syncStatus === "partage"
-      ? "Données partagées"
-      : app.syncStatus === "connexion"
-        ? "Connexion…"
-        : app.syncStatus === "erreur"
-          ? "Synchronisation en échec"
-          : "Données sur cet appareil"}
+  <button class="theme" onclick={nextTheme} title={themeInfo.label} aria-label={themeInfo.label}>
+    <svg class="theme-icon" viewBox="0 0 24 24" aria-hidden="true"><path d={themeInfo.icon} /></svg>
+  </button>
+  <span class="sync" class:shared={app.syncStatus === "partage"} class:error={app.syncStatus === "erreur"} title={app.syncDetail || sync.long}>
+    <span class="long">{sync.long}</span><span class="short">{sync.short}</span>
   </span>
   {#if app.ratings.players.length > 0}
     <label class="player">
@@ -152,12 +194,36 @@
     display: flex;
     gap: 6px;
   }
+  .theme {
+    width: 36px;
+    min-height: 36px;
+    padding: 0;
+    display: inline-grid;
+    place-items: center;
+    border-radius: 50%;
+  }
+  .theme-icon {
+    width: 20px;
+    height: 20px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.8;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+  /* Navigation en bas : le bouton de thème va à droite de l'en-tête, avant l'état des données. */
+  :global(body.bottom-nav) .theme {
+    margin-left: auto;
+  }
   .install {
     min-height: 32px;
     padding: 0 12px;
     font-size: 0.85rem;
     border-color: var(--accent);
     color: var(--accent);
+  }
+  .sync .short {
+    display: none;
   }
   .sync {
     font-size: 0.8rem;
@@ -192,6 +258,12 @@
     .sync {
       font-size: 0.7rem;
       padding: 2px 8px;
+    }
+    .sync .long {
+      display: none;
+    }
+    .sync .short {
+      display: inline;
     }
   }
   .icon {
