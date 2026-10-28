@@ -23,7 +23,10 @@ self.addEventListener("activate", (event) => {
 
 self.addEventListener("fetch", (event) => {
   const request = event.request;
-  if (request.method !== "GET" || new URL(request.url).origin !== self.location.origin) return;
+  const url = new URL(request.url);
+  if (request.method !== "GET" || url.origin !== self.location.origin) return;
+  // Recherche de mise à jour (?maj=…) : toujours le réseau, rien n'est gardé.
+  if (url.searchParams.has("maj")) return;
 
   if (request.mode === "navigate") {
     event.respondWith(

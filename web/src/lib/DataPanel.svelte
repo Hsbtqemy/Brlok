@@ -4,11 +4,21 @@
   import type { Wall } from "../core/wall";
   import { app, type LiveGame } from "./appState.svelte";
   import { saveFile } from "./fileSave";
+  import { canCheckUpdates, currentBuild, updateAvailable } from "./updateCheck";
 
   /** Sauvegarde complète : l'exporter, la remettre (sur un autre appareil, ou dans l'app installée). */
   let message = $state("");
   let pending = $state<Backup | null>(null);
   let busy = $state(false);
+  const build = canCheckUpdates() ? currentBuild()?.replace(/^index-|\.js$/g, "") : null;
+  let updateMessage = $state("");
+  let updateFound = $state(false);
+
+  async function checkUpdate() {
+    updateMessage = "Recherche…";
+    updateFound = await updateAvailable();
+    updateMessage = updateFound ? "Une nouvelle version est en ligne." : navigator.onLine ? "L'app est à jour." : "Hors ligne : impossible de vérifier.";
+  }
 
   async function exportAll() {
     busy = true;
@@ -76,6 +86,19 @@
   </div>
 {/if}
 {#if message}<p class="message">{message}</p>{/if}
+
+{#if build}
+  <h2>Version</h2>
+  <p class="hint">Version installée : {build}. L'app vérifie seule à chaque retour ; ici, à la demande.</p>
+  <div class="row">
+    {#if updateFound}
+      <button class="primary" onclick={() => location.reload()}>Mettre à jour maintenant</button>
+    {:else}
+      <button onclick={checkUpdate}>Rechercher une mise à jour</button>
+    {/if}
+  </div>
+  {#if updateMessage}<p class="message">{updateMessage}</p>{/if}
+{/if}
 
 <style>
   .file {
