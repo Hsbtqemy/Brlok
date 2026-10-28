@@ -1,6 +1,6 @@
 # Brlok web · Chesscalade
 
-Version web de Brlok, qui accueille le mode **Chesscalade** (règles : [`docs/chesscalade/REGLES.md`](../docs/chesscalade/REGLES.md)).
+Version web de Brlok, qui accueille le mode **Chesscalade** (mode d'emploi : [`docs/GUIDE.md`](../docs/GUIDE.md) ; règles : [`docs/chesscalade/REGLES.md`](../docs/chesscalade/REGLES.md)).
 Elle **coexiste** avec Brlok desktop (Python/PySide6, dossier `brlok/`) : même format de catalogue JSON,
 import et export dans les deux sens. Cible à terme : application Tauri.
 
