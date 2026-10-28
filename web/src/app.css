@@ -1,0 +1,176 @@
+:root {
+  --bg: #f6f5f2;
+  --surface: #ffffff;
+  --text: #1d1d1f;
+  --muted: #6b6b70;
+  --border: #c9c7c1;
+  --inactive: #e0e0e0;
+  --accent: #1565c0;
+  --warn: #9a5b00;
+  color-scheme: light;
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #161618;
+    --surface: #222226;
+    --text: #ececef;
+    --muted: #a0a0a8;
+    --border: #44444b;
+    --inactive: #33333a;
+    --accent: #5b9cf0;
+    --warn: #f0b45b;
+    color-scheme: dark;
+  }
+}
+
+/* Thème sombre choisi explicitement (même valeurs). */
+:root[data-theme="dark"] {
+  --bg: #161618;
+  --surface: #222226;
+  --text: #ececef;
+  --muted: #a0a0a8;
+  --border: #44444b;
+  --inactive: #33333a;
+  --accent: #5b9cf0;
+  --warn: #f0b45b;
+  color-scheme: dark;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+}
+
+button,
+select,
+input {
+  font: inherit;
+  color: inherit;
+}
+
+button {
+  min-height: 44px;
+  padding: 0 16px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  cursor: pointer;
+}
+
+button.primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+  font-weight: 600;
+}
+
+button[aria-pressed="true"] {
+  border-color: var(--accent);
+  box-shadow: inset 0 0 0 2px var(--accent);
+}
+
+select,
+input[type="number"] {
+  min-height: 40px;
+  padding: 0 10px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+}
+
+/* Briques partagées entre les écrans */
+.panel {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+}
+
+.panel h2 {
+  margin: 0;
+  font-size: 1.1rem;
+}
+
+.row {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 0.9rem;
+}
+
+.check {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  font-size: 0.9rem;
+}
+
+.hint {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.warn {
+  margin: 0;
+  color: var(--warn);
+}
+
+button.success,
+button.fall {
+  min-height: 56px;
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: #fff;
+  border: none;
+}
+
+button.success {
+  background: #2e7d32;
+}
+
+button.fall {
+  background: #c62828;
+}
+
+input[type="text"] {
+  min-height: 40px;
+  padding: 0 10px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+}
+
+/* Barre de navigation du bas (téléphone) : les barres collantes des écrans se posent au-dessus. */
+:root {
+  --nav-h: 0px;
+  --bar-safe-bottom: env(safe-area-inset-bottom, 0px);
+}
+@media (max-width: 600px) {
+  :root {
+    --nav-h: calc(60px + env(safe-area-inset-bottom, 0px));
+    --bar-safe-bottom: 0px;
+  }
+  /* Pendant un bloc, la barre s'efface : tout l'écran pour le bloc. */
+  body.climbing {
+    --nav-h: 0px;
+    --bar-safe-bottom: env(safe-area-inset-bottom, 0px);
+  }
+}

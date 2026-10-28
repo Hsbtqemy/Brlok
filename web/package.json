@@ -1,0 +1,28 @@
+{
+  "name": "brlok-web",
+  "version": "0.1.0",
+  "description": "Brlok web + mode Chesscalade",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "test": "vitest run",
+    "check": "svelte-check --tsconfig ./tsconfig.json",
+    "build:single": "vite build --mode single"
+  },
+  "devDependencies": {
+    "@sveltejs/vite-plugin-svelte": "^6.2.4",
+    "@tsconfig/svelte": "^5.0.8",
+    "svelte": "^5.57.3",
+    "svelte-check": "^4.7.7",
+    "typescript": "^5.9.3",
+    "vite": "^7.3.7",
+    "vite-plugin-singlefile": "^2.3.4",
+    "vitest": "^3.2.7"
+  },
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "chess.js": "^1.4.0"
+  }
+}

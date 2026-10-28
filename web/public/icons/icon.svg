@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <rect width="512" height="512" rx="112" fill="#1565c0"/>
+  <!-- prises du pan, en grille -->
+  <g fill="#ffffff" opacity="0.28">
+    <circle cx="112" cy="112" r="22"/><circle cx="256" cy="96" r="18"/><circle cx="400" cy="120" r="24"/>
+    <circle cx="96" cy="256" r="18"/><circle cx="416" cy="268" r="20"/>
+    <circle cx="120" cy="404" r="24"/><circle cx="400" cy="400" r="18"/>
+  </g>
+  <!-- cavalier -->
+  <path fill="#ffffff" d="M176 404h176v-36H176z M196 368c0-58 22-96 66-130-30 4-58 18-80 8-14-26 12-64 44-92l14-34 16 30c56 12 96 62 96 140 0 32-8 56-12 78z"/>
+  <circle cx="262" cy="168" r="10" fill="#1565c0"/>
+</svg>
