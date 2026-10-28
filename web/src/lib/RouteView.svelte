@@ -33,7 +33,9 @@
           }}
         />
         {#each route.marks ?? [] as m, i (i)}
-          <span class="mark" style:left={`${m.x * 100}%`} style:top={`${m.y * 100}%`} style:border-color={routeHex(route)}></span>
+          <span class="mark" class:role={m.role} style:left={`${m.x * 100}%`} style:top={`${m.y * 100}%`} style:border-color={routeHex(route)}
+            >{m.role === "depart" ? "D" : m.role === "top" ? "T" : ""}</span
+          >
         {/each}
       </div>
       {#if !route.marks?.length}<p class="hint">Les prises de cette voie ne sont pas placées sur la photo.</p>{/if}
@@ -93,5 +95,16 @@
       0 0 0 2px #fff,
       0 0 6px rgba(0, 0, 0, 0.6);
     pointer-events: none;
+    display: grid;
+    place-items: center;
+    font-weight: 800;
+    color: #fff;
+    text-shadow: 0 0 3px #000;
+  }
+  .mark.role {
+    width: 34px;
+    height: 34px;
+    margin: -17px 0 0 -17px;
+    background: rgba(0, 0, 0, 0.45);
   }
 </style>

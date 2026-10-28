@@ -23,6 +23,13 @@ export interface Hold {
   active: boolean;
 }
 
+/** Prise d'une voie sur la photo. */
+export interface RouteMark {
+  x: number;
+  y: number;
+  role?: "depart" | "top";
+}
+
 /** Voie d'un mur de salle (mode salle, MURS.md étape 3). */
 export interface Route {
   id: string;
@@ -37,8 +44,8 @@ export interface Route {
   styles: string[];
   /** Voie démontée : gardée pour l'historique, plus proposée. */
   archived?: boolean;
-  /** Prises de la voie sur la photo du secteur (coordonnées de 0 à 1). */
-  marks?: { x: number; y: number }[];
+  /** Prises de la voie sur la photo du secteur (coordonnées de 0 à 1) ; départ(s) et top signalés. */
+  marks?: RouteMark[];
   createdAt?: string;
 }
 

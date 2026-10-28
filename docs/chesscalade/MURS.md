@@ -94,6 +94,27 @@ Dans l'onglet **Pan → Nouveau mur à voies (salle)**, puis **Gérer les voies*
   diagonale, compact, long, réglettes, plats, compression, technique) ;
 - **démonter** une voie la garde avec son historique mais ne la propose plus ; on peut la remettre.
 
+Outils sur la photo (v2) :
+
+- **Pipette** : toucher une prise marque toutes les prises de **sa teinte**, blanc, noir et gris compris, et
+  donne son nom à la couleur de la voie. La tolérance se règle d'elle-même sur la prise touchée : elle se
+  resserre tant que la tache déborde sur le mur (une prise blanche sur un mur clair), puis se corrige au
+  curseur, en direct. Le doigt peut tomber au bord de la prise : on garde les pixels qui se distinguent du
+  fond autour du point touché ;
+- **Zone** : encadrer la voie d'un glisser ; seules les prises dans le cadre sont gardées, et la pipette
+  ne cherche plus qu'à l'intérieur (pour une couleur qui regroupe plusieurs voies, ou pour écarter le plafond,
+  les lampes…) ;
+- **Ajouter / retirer** : retouches prise par prise ;
+- **Départ / top** : toucher une prise marquée la signale comme départ (D), puis top (T) ; affichés partout
+  où la voie apparaît (blocs, minuteur grand écran) ;
+- **Agrandir** : photo deux fois plus grande, à faire défiler, pour viser juste sur téléphone ;
+- sous la photo, une barre courte (nombre de prises, couleur, cotation, **Créer la voie**) évite de
+  descendre jusqu'au formulaire.
+
+Limites constatées sur une photo de salle : une prise blanche sous un éclairage chaud est presque de la
+couleur du bois ; la pipette la retrouve, mais ramène aussi des taches claires (lampes, gaines) : la zone
+les écarte d'un geste.
+
 Dans le jeu, sur un mur à voies, les blocs sont **choisis** et non générés :
 
 - la voie en place dont la cote est **la plus proche de la cote visée** ; cote de départ = cotation
@@ -125,9 +146,8 @@ Dans le jeu, sur un mur à voies, les blocs sont **choisis** et non générés :
   (pieds libres, un mouvement sans pied, aller-retour, saute une prise, deux fois) suivent la cote visée
   (REGLES.md §13.4) ; on choisit celles qui sont permises.
 
-Limites de la v1 : une seule photo par mur (un secteur), pas de redressement (inutile ici : on ne mesure pas
-de distances), et dans les salles où une couleur regroupe plusieurs voies, il faut retirer à la main les
-prises qui n'en font pas partie.
+Limites : une seule photo par mur (un secteur) et pas de redressement (inutile ici : on ne mesure pas de
+distances). Quand une couleur regroupe plusieurs voies, la zone puis « Ajouter / retirer » font le tri.
 
 ### Étape 4 — Détection assistée (plus tard)
 

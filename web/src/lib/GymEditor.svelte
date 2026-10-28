@@ -1,7 +1,7 @@
 <script lang="ts">
-  import { countByColor, detectBlobs, type Blob } from "../core/colorDetect";
+  import { countByColor, detectBlobs, findSimilar, inZone, nearestColorName, sampleColor, seedTolerance, type Blob, type Rgb } from "../core/colorDetect";
   import { GRADES, ROUTE_COLORS, routeHex, routeLabel, STYLES } from "../core/gym";
-  import type { Route, Wall } from "../core/wall";
+  import type { Route, RouteMark, Wall } from "../core/wall";
   import { app } from "./appState.svelte";
 
   interface Props {
@@ -25,7 +25,25 @@
   let grade = $state("6a");
   let styles = $state<string[]>([]);
   let name = $state("");
-  let marks = $state<{ x: number; y: number }[]>([]);
+  let marks = $state<RouteMark[]>([]);
+
+  // Outils sur la photo
+  type Tool = "pipette" | "ajuster" | "depart" | "zone";
+  const TOOLS: { id: Tool; label: string; hint: string }[] = [
+    { id: "pipette", label: "Pipette", hint: "Touche une prise : toutes les prises de sa couleur sont marquées (blanc, noir et gris compris)." },
+    { id: "ajuster", label: "Ajouter / retirer", hint: "Touche la photo pour ajouter une prise, ou une prise marquée pour la retirer." },
+    { id: "depart", label: "Départ / top", hint: "Touche une prise marquée : départ, puis top, puis prise ordinaire." },
+    { id: "zone", label: "Zone", hint: "Fais glisser pour encadrer la voie : seules les prises dans le cadre sont gardées, et la pipette s'y limite." },
+  ];
+  let tool = $state<Tool>("pipette");
+  let tolerance = $state(18);
+  let zoom = $state(false);
+  let zone = $state<{ x0: number; y0: number; x1: number; y1: number } | null>(null);
+  let dragging = $state(false);
+  /** Dernière teinte prélevée (pour rejouer la pipette quand la tolérance change). */
+  let sampled = $state<Rgb | null>(null);
+  /** Pixels de la photo à la résolution d'analyse (chargés à la demande). */
+  let pixels: { data: Uint8ClampedArray; width: number; height: number } | null = null;
   let confirmDelete = $state<string | null>(null);
   let showArchived = $state(false);
 
@@ -65,6 +83,8 @@
       let photo = scaled(img, PHOTO_MAX).toDataURL("image/jpeg", 0.72);
       if (photo.length > 180_000) photo = scaled(img, 700).toDataURL("image/jpeg", 0.6);
       save({ ...wall, photo });
+      zone = null;
+      sampled = null;
       detect(img);
     } catch (e) {
       message = e instanceof Error ? e.message : String(e);
@@ -76,6 +96,7 @@
   function detect(img: HTMLImageElement) {
     const canvas = scaled(img, DETECT_MAX);
     const data = canvas.getContext("2d")!.getImageData(0, 0, canvas.width, canvas.height);
+    pixels = { data: data.data, width: canvas.width, height: canvas.height };
     blobs = detectBlobs(data.data, canvas.width, canvas.height, Math.max(12, Math.round((canvas.width * canvas.height) / 6000)));
     message = blobs.length
       ? `${blobs.length} prises de couleur repérées. Touche une couleur pour créer une voie.`
@@ -90,20 +111,79 @@
     detect(img);
   }
 
+  const inCurrentZone = <T extends { x: number; y: number }>(points: T[]) => (zone ? inZone(points, zone) : points);
+
   function pickColor(c: { color: string; hex: string }) {
     color = c.color;
     colorHex = c.hex;
-    marks = blobs.filter((b) => b.color === c.color).map((b) => ({ x: b.x, y: b.y }));
-    editingId = null;
+    marks = inCurrentZone(blobs.filter((b) => b.color === c.color)).map((b) => ({ x: b.x, y: b.y }));
   }
 
-  /** Toucher la photo : retire la prise la plus proche si elle est marquée, sinon en ajoute une. */
-  function onPhotoClick(event: MouseEvent) {
-    const el = event.currentTarget as HTMLElement;
-    const rect = el.getBoundingClientRect();
-    const x = (event.clientX - rect.left) / rect.width;
-    const y = (event.clientY - rect.top) / rect.height;
-    const near = marks.findIndex((m) => Math.hypot((m.x - x) * rect.width, (m.y - y) * rect.height) < 20);
+  async function ensurePixels() {
+    if (pixels || !wall?.photo) return;
+    const img = new Image();
+    img.src = wall.photo;
+    await img.decode();
+    const canvas = scaled(img, DETECT_MAX);
+    pixels = { data: canvas.getContext("2d")!.getImageData(0, 0, canvas.width, canvas.height).data, width: canvas.width, height: canvas.height };
+  }
+
+  /** Pipette : la teinte prélevée devient la couleur de la voie, et toutes ses prises sont marquées. */
+  function applySample(rgb: Rgb) {
+    if (!pixels) return;
+    const { data, width, height } = pixels;
+    const found = inCurrentZone(findSimilar(data, width, height, rgb, tolerance, Math.max(6, Math.round((width * height) / 9000))));
+    sampled = rgb;
+    color = nearestColorName(rgb);
+    colorHex = `#${rgb.map((c) => c.toString(16).padStart(2, "0")).join("")}`;
+    // Les départs et le top déjà placés sont gardés s'ils tombent sur une prise retrouvée.
+    const roleAt = (b: Blob) => marks.find((m) => m.role && Math.abs(m.x - b.x) <= b.w / 2 + 0.01 && Math.abs(m.y - b.y) <= b.h / 2 + 0.01)?.role;
+    marks = found.map((b) => ({ x: b.x, y: b.y, ...(roleAt(b) ? { role: roleAt(b) } : {}) }));
+    message = found.length
+      ? `${found.length} prise(s) ${color} marquée(s). Ajuste la tolérance, ou retire les intruses avec « Ajouter / retirer ».`
+      : "Aucune prise retrouvée de cette teinte : augmente la tolérance, ou place les prises à la main.";
+  }
+
+  function retune() {
+    if (sampled) applySample(sampled);
+  }
+
+  function pointAt(event: PointerEvent | MouseEvent) {
+    const rect = (event.currentTarget as HTMLElement).getBoundingClientRect();
+    return { x: (event.clientX - rect.left) / rect.width, y: (event.clientY - rect.top) / rect.height, rect };
+  }
+
+  function nearestMark(x: number, y: number, rect: DOMRect): number {
+    let best = -1, bestD = 22;
+    marks.forEach((m, i) => {
+      const d = Math.hypot((m.x - x) * rect.width, (m.y - y) * rect.height);
+      if (d < bestD) (best = i), (bestD = d);
+    });
+    return best;
+  }
+
+  async function onPhotoClick(event: MouseEvent) {
+    if (tool === "zone") return;
+    const { x, y, rect } = pointAt(event);
+    if (tool === "pipette") {
+      await ensurePixels();
+      if (!pixels) return;
+      const rgb = sampleColor(pixels.data, pixels.width, pixels.height, x, y);
+      // Tolérance réglée sur la prise touchée : assez serrée pour la détacher du mur.
+      tolerance = Math.min(24, seedTolerance(pixels.data, pixels.width, pixels.height, x, y, rgb, 24) ?? 8);
+      applySample(rgb);
+      return;
+    }
+    const near = nearestMark(x, y, rect);
+    if (tool === "depart") {
+      if (near < 0) return;
+      const next = !marks[near].role ? "depart" : marks[near].role === "depart" ? "top" : undefined;
+      // Un seul top par voie.
+      marks = marks.map((m, i) =>
+        i === near ? { x: m.x, y: m.y, ...(next ? { role: next } : {}) } : next === "top" && m.role === "top" ? { x: m.x, y: m.y } : m,
+      );
+      return;
+    }
     if (near >= 0) {
       marks = marks.filter((_, i) => i !== near);
       return;
@@ -112,12 +192,39 @@
     marks = [...marks, blob ? { x: blob.x, y: blob.y } : { x, y }];
   }
 
+  function onPointerDown(event: PointerEvent) {
+    if (tool !== "zone") return;
+    const { x, y } = pointAt(event);
+    (event.currentTarget as HTMLElement).setPointerCapture(event.pointerId);
+    zone = { x0: x, y0: y, x1: x, y1: y };
+    dragging = true;
+  }
+
+  function onPointerMove(event: PointerEvent) {
+    if (!dragging || !zone) return;
+    const { x, y } = pointAt(event);
+    zone = { ...zone, x1: Math.min(1, Math.max(0, x)), y1: Math.min(1, Math.max(0, y)) };
+  }
+
+  function onPointerUp() {
+    if (!dragging || !zone) return;
+    dragging = false;
+    if (Math.abs(zone.x1 - zone.x0) < 0.02 || Math.abs(zone.y1 - zone.y0) < 0.02) {
+      zone = null;
+      return;
+    }
+    marks = inZone(marks, zone);
+    message = `Zone posée : ${marks.length} prise(s) gardée(s). La pipette ne cherche plus que dans le cadre.`;
+  }
+
   function resetForm() {
     editingId = null;
     name = "";
     styles = [];
     marks = [];
     colorHex = undefined;
+    sampled = null;
+    zone = null;
   }
 
   function editRoute(r: Route) {
@@ -128,6 +235,7 @@
     styles = [...r.styles];
     name = r.name;
     marks = [...(r.marks ?? [])];
+    sampled = null;
   }
 
   function submitRoute() {
@@ -181,25 +289,78 @@
         <span>{busy ? "Analyse…" : wall.photo ? "Changer la photo du secteur" : "Ajouter une photo du secteur"}</span>
       </label>
       {#if wall.photo}
-        <p class="hint">Touche la photo pour ajouter une prise à la voie en cours, ou retirer une prise déjà marquée.</p>
-        <!-- svelte-ignore a11y_click_events_have_key_events -->
-        <!-- svelte-ignore a11y_no_static_element_interactions -->
-        <div class="photo" onclick={onPhotoClick}>
-          <img src={wall.photo} alt={`Photo du secteur ${wall.name}`} />
-          {#each blobs as b, i (i)}
-            <span
-              class="blob"
-              style:left={`${(b.x - b.w / 2) * 100}%`}
-              style:top={`${(b.y - b.h / 2) * 100}%`}
-              style:width={`${b.w * 100}%`}
-              style:height={`${b.h * 100}%`}
-              style:border-color={b.hex}
-            ></span>
+        <div class="tools">
+          {#each TOOLS as t (t.id)}
+            <button aria-pressed={tool === t.id} onclick={() => (tool = t.id)}>{t.label}</button>
           {/each}
-          {#each marks as m, i (i)}
-            <span class="mark" style:left={`${m.x * 100}%`} style:top={`${m.y * 100}%`} style:border-color={colorHex ?? "#fff"}></span>
-          {/each}
+          <button class="zoom" aria-pressed={zoom} onclick={() => (zoom = !zoom)}>{zoom ? "Réduire" : "Agrandir"}</button>
         </div>
+        <p class="hint">{TOOLS.find((t) => t.id === tool)?.hint}</p>
+        {#if tool === "pipette" || sampled}
+          <label class="field tolerance">
+            <span class="tol-head">
+              {#if sampled}<span class="dot" style:background={`rgb(${sampled.join(",")})`} title="Teinte prélevée"></span>{/if}
+              Tolérance de teinte : {tolerance}
+              <small>{sampled ? "moins = plus strict, plus = plus de prises" : "touche une prise d'abord"}</small>
+            </span>
+            <input type="range" min="4" max="40" step="1" bind:value={tolerance} oninput={retune} disabled={!sampled} />
+          </label>
+        {/if}
+        {#if zone && !dragging}
+          <p class="hint">Zone active. <button class="link" onclick={() => (zone = null)}>Toute la photo</button></p>
+        {/if}
+        <div class="photo-scroll" class:zoomed={zoom}>
+          <!-- svelte-ignore a11y_click_events_have_key_events -->
+          <!-- svelte-ignore a11y_no_static_element_interactions -->
+          <div
+            class="photo"
+            class:zoning={tool === "zone"}
+            onclick={onPhotoClick}
+            onpointerdown={onPointerDown}
+            onpointermove={onPointerMove}
+            onpointerup={onPointerUp}
+            onpointercancel={onPointerUp}
+          >
+            <img src={wall.photo} alt={`Photo du secteur ${wall.name}`} draggable="false" />
+            {#if tool !== "pipette" || !sampled}
+              {#each blobs as b, i (i)}
+                <span
+                  class="blob"
+                  style:left={`${(b.x - b.w / 2) * 100}%`}
+                  style:top={`${(b.y - b.h / 2) * 100}%`}
+                  style:width={`${b.w * 100}%`}
+                  style:height={`${b.h * 100}%`}
+                  style:border-color={b.hex}
+                ></span>
+              {/each}
+            {/if}
+            {#if zone}
+              <span
+                class="zone"
+                style:left={`${Math.min(zone.x0, zone.x1) * 100}%`}
+                style:top={`${Math.min(zone.y0, zone.y1) * 100}%`}
+                style:width={`${Math.abs(zone.x1 - zone.x0) * 100}%`}
+                style:height={`${Math.abs(zone.y1 - zone.y0) * 100}%`}
+              ></span>
+            {/if}
+            {#each marks as m, i (i)}
+              <span class="mark" class:role={m.role} style:left={`${m.x * 100}%`} style:top={`${m.y * 100}%`} style:border-color={colorHex ?? "#fff"}
+                >{m.role === "depart" ? "D" : m.role === "top" ? "T" : ""}</span
+              >
+            {/each}
+          </div>
+        </div>
+        {#if marks.length}
+          <div class="quick">
+            <span class="dot" style:background={colorHex ?? ROUTE_COLORS.find((c) => c.name === color)?.hex}></span>
+            <span class="quick-info">{marks.length} prise(s) · {color}{marks.some((m) => m.role === "top") ? " · top" : ""}</span>
+            <select aria-label="Cotation" bind:value={grade}>
+              <option value="?">cotation ?</option>
+              {#each GRADES as g (g.grade)}<option value={g.grade}>{g.grade}</option>{/each}
+            </select>
+            <button class="primary" onclick={submitRoute}>{editingId ? "Enregistrer" : "Créer la voie"}</button>
+          </div>
+        {/if}
         {#if colors.length}
           <div class="chips">
             {#each colors as c (c.color)}
@@ -251,7 +412,12 @@
         {/each}
       </div>
     </div>
-    {#if wall?.photo}<p class="hint">{marks.length} prise(s) marquée(s) sur la photo.</p>{/if}
+    {#if wall?.photo}
+      <p class="hint">
+        {marks.length} prise(s) marquée(s) sur la photo{marks.some((m) => m.role === "depart") ? `, ${marks.filter((m) => m.role === "depart").length} départ(s)` : ""}{marks.some((m) => m.role === "top") ? ", top placé" : ""}.
+        {#if marks.length && !marks.some((m) => m.role)}Outil « Départ / top » pour signaler le départ et la sortie.{/if}
+      </p>
+    {/if}
     <div class="row">
       <button class="primary" onclick={submitRoute}>{editingId ? "Enregistrer la voie" : "Créer la voie"}</button>
       {#if editingId || marks.length}<button onclick={resetForm}>Annuler</button>{/if}
@@ -317,10 +483,80 @@
     opacity: 0;
     cursor: pointer;
   }
+  .tools {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+  .tools button {
+    min-height: 38px;
+    padding: 0 12px;
+    font-size: 0.9rem;
+  }
+  .tools .zoom {
+    margin-left: auto;
+  }
+  .tolerance input {
+    width: 100%;
+  }
+  .tol-head {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+  .tol-head small {
+    color: var(--muted);
+  }
+  .link {
+    min-height: 0;
+    padding: 0 4px;
+    border: none;
+    background: none;
+    color: var(--accent);
+    text-decoration: underline;
+  }
+  .quick {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    padding: 8px 10px;
+    border-radius: 10px;
+    border: 1px solid var(--border);
+  }
+  .quick-info {
+    flex: 1;
+    min-width: 120px;
+    font-size: 0.9rem;
+  }
+  .quick select {
+    min-height: 40px;
+  }
+  .photo-scroll {
+    overflow: auto;
+    max-width: 100%;
+    border-radius: 10px;
+  }
+  .photo-scroll.zoomed {
+    max-height: 75vh;
+  }
+  .photo-scroll.zoomed .photo {
+    width: 220%;
+  }
   .photo {
     position: relative;
     cursor: crosshair;
-    max-width: 100%;
+    width: 100%;
+  }
+  .photo.zoning {
+    touch-action: none;
+  }
+  .zone {
+    position: absolute;
+    border: 2px dashed #fff;
+    box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.35);
+    pointer-events: none;
   }
   .photo img {
     display: block;
@@ -346,6 +582,19 @@
       0 0 0 2px #fff,
       0 0 6px rgba(0, 0, 0, 0.6);
     pointer-events: none;
+    display: grid;
+    place-items: center;
+    font-size: 0.7rem;
+    font-weight: 800;
+    color: #fff;
+    text-shadow: 0 0 3px #000;
+  }
+  .mark.role {
+    width: 30px;
+    height: 30px;
+    margin: -15px 0 0 -15px;
+    font-size: 0.85rem;
+    background: rgba(0, 0, 0, 0.45);
   }
   .chips {
     display: flex;
