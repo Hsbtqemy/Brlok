@@ -4,6 +4,7 @@
  * pour pouvoir tester sans interface ni horloge réelle.
  */
 import { Chess, type Color, type Move, type PieceSymbol, type Square } from "chess.js";
+import { HANG_PREP_S } from "./beam";
 import type { FootRule } from "./feet";
 import type { Block } from "./generator";
 import type { Piece } from "./pieces";
@@ -19,7 +20,19 @@ export const SERIES_SIZE = 3;
 /** Densité de blocs (§5.5) : combien de coups demandent de grimper. */
 export type Density = "legere" | "normale" | "intense";
 export type Trigger = "capture" | "echec" | "promotion" | "roque" | "mat";
-export type BlockKind = "defi" | "parade" | "recharge" | "defense" | "contre-attaque" | "cloche";
+export type BlockKind = "defi" | "parade" | "recharge" | "defense" | "contre-attaque" | "cloche" | "penalite";
+
+/** La poutre dans la partie (POUTRE.md §4). */
+export interface BeamSetup {
+  /** « seule » : tous les défis à la poutre ; « melee » : ceux de la tour ; « aucun » : seulement recharge ou pénalité. */
+  mode: "aucun" | "seule" | "melee";
+  /** Durée des suspensions (s). */
+  seconds: number;
+  /** La recharge est une suspension. */
+  recharge: boolean;
+  /** Une pénalité de temps d'une chute se rachète par une suspension. */
+  penalty: boolean;
+}
 export type Verdict = 0 | 1 | 2 | 3 | 4 | 5 | 6;
 
 export interface PlayerSetup {
@@ -44,6 +57,8 @@ export interface GameConfig {
   density?: Density;
   /** Rythme (§5.6) ; « immediat » par défaut. */
   rhythm?: Rhythm;
+  /** La poutre (POUTRE.md §4) ; absente : pas de poutre. */
+  beam?: BeamSetup;
 }
 
 export interface BlockRequest {
@@ -54,6 +69,11 @@ export interface BlockRequest {
   length: number;
   cruxLast: boolean;
   feet?: FootRule;
+  /** Pièce réellement jouée, quand le caractère du bloc en diffère (promotion : la traversée de la tour). */
+  moved?: Piece;
+  /** À la poutre : une suspension de `hangS` secondes au lieu d'un bloc (la fabrique la choisit). */
+  beam?: boolean;
+  hangS?: number;
 }
 
 export type BlockFactory = (request: BlockRequest) => Block | null;
@@ -70,6 +90,8 @@ export interface PendingBlock {
   hard?: boolean;
   /** Rythme par séries : place du bloc dans la série en cours. */
   series?: { index: number; total: number };
+  /** Suspension de rachat : la pénalité (ms) qu'elle efface si elle est tenue. */
+  debtMs?: number;
   startedAt: number;
 }
 
@@ -176,6 +198,13 @@ export function verdictText(verdict: Verdict, move: Move, penaltyS: number, exha
 const COUNTER_BONUS = { difficile: 300, diabolique: 400 } as const;
 const COUNTER_MAJOR_BONUS = 100;
 const COUNTER_PENALTY_MS = 30_000;
+/** Suspension de rachat d'une pénalité : un peu plus facile que la cote du joueur (POUTRE.md §4). */
+const DEBT_HANG_BONUS = -100;
+
+/** « tu perds 20 s », ou la pénalité mise de côté pour la poutre. */
+function lossText(ms: number, later: boolean): string {
+  return later ? `${ms / 1000} s de pénalité, à racheter à la poutre` : `tu perds ${ms / 1000} s`;
+}
 /**
  * Densité de blocs (§5.5).
  * - recaptureFree : reprendre aussitôt sur la case de la prise adverse ne déclenche rien (un échange = un bloc) ;
@@ -291,6 +320,7 @@ export interface SavedGame {
   lastBlockPly?: Record<Color, number>;
   queue?: Record<Color, BlockRequest[]>;
   seriesRest?: BlockRequest[];
+  beamDebt?: Record<Color, number>;
 }
 
 const SAVED_LOG_LIMIT = 60;
@@ -364,6 +394,8 @@ export class ChesscaladeGame {
   /** Rythme par séries : blocs mis de côté pour chaque joueur, et suite de la série en cours. */
   queue: Record<Color, BlockRequest[]> = { w: [], b: [] };
   private seriesRest: BlockRequest[] = [];
+  /** Pénalités à racheter à la poutre (ms), en attente d'un moment pour la suspension. */
+  beamDebt: Record<Color, number> = { w: 0, b: 0 };
   private lastTickAt: number | null = null;
 
   constructor(
@@ -408,6 +440,7 @@ export class ChesscaladeGame {
       lastBlockPly: { ...this.lastBlockPly },
       queue: jsonClone(this.queue),
       seriesRest: jsonClone(this.seriesRest),
+      beamDebt: { ...this.beamDebt },
     };
   }
 
@@ -451,6 +484,7 @@ export class ChesscaladeGame {
     game.lastBlockPly = { ...(saved.lastBlockPly ?? { w: -100, b: -100 }) };
     game.queue = jsonClone(saved.queue ?? { w: [], b: [] });
     game.seriesRest = jsonClone(saved.seriesRest ?? []);
+    game.beamDebt = { ...(saved.beamDebt ?? { w: 0, b: 0 }) };
     return game;
   }
 
@@ -592,8 +626,8 @@ export class ChesscaladeGame {
       this.note(climber, `Bloc ${series.index}/${series.total} réussi : +${this.reward(climber, kind, now)} s.`, "bon");
     } else {
       const penaltyMs = DIFFICULTY[this.config.difficulty].penaltyMs;
-      this.penalize(climber, penaltyMs, now);
-      this.note(climber, `Bloc ${series.index}/${series.total} raté : tu perds ${penaltyMs / 1000} s.`, "mauvais");
+      const later = this.fallPenalty(climber, penaltyMs, now);
+      this.note(climber, `Bloc ${series.index}/${series.total} raté : ${lossText(penaltyMs, later)}.`, "mauvais");
     }
     const [next, ...rest] = this.seriesRest;
     if (next) {
@@ -634,12 +668,14 @@ export class ChesscaladeGame {
       return { climber, kind: request.kind, block: pending.block, success: false };
     }
 
-    this.blocksClimbed[climber]++;
+    // Fatigue : une suspension de rachat ne compte pas comme un bloc grimpé.
+    if (request.kind !== "penalite") this.blocksClimbed[climber]++;
     this.pending = null;
     this.phase = "move";
     const outcome: BlockOutcome = { climber, kind: request.kind, block: pending.block, success };
     if (pending.series) {
       this.resolveSeriesBlock(pending, success, now);
+      this.startDebtHang(now);
       this.checkFlag(now);
       return outcome;
     }
@@ -663,8 +699,8 @@ export class ChesscaladeGame {
           this.kingOnly = climber;
           this.note(climber, "Parade ratée : il faut parer avec le roi si c'est possible.", "mauvais");
         } else {
-          this.penalize(climber, DIFFICULTY[this.config.difficulty].penaltyMs, now);
-          this.note(climber, `Parade ratée : tu perds ${DIFFICULTY[this.config.difficulty].penaltyMs / 1000} s.`, "mauvais");
+          const ms = DIFFICULTY[this.config.difficulty].penaltyMs;
+          this.note(climber, `Parade ratée : ${lossText(ms, this.fallPenalty(climber, ms, now))}.`, "mauvais");
         }
         this.clock.run(climber, now);
         break;
@@ -675,8 +711,8 @@ export class ChesscaladeGame {
         if (success) {
           this.note(climber, `Bloc de la cloche réussi : +${this.reward(climber, "autre", now)} s.`, "bon");
         } else {
-          this.penalize(climber, DIFFICULTY[this.config.difficulty].penaltyMs, now);
-          this.note(climber, `Bloc de la cloche raté : tu perds ${DIFFICULTY[this.config.difficulty].penaltyMs / 1000} s.`, "mauvais");
+          const ms = DIFFICULTY[this.config.difficulty].penaltyMs;
+          this.note(climber, `Bloc de la cloche raté : ${lossText(ms, this.fallPenalty(climber, ms, now))}.`, "mauvais");
         }
         this.nextBellClimber(now);
         break;
@@ -684,11 +720,22 @@ export class ChesscaladeGame {
         if (success) {
           this.note(climber, `Défense réussie : pas de pénalité, et +${this.reward(climber, "autre", now)} s.`, "bon");
         } else {
-          this.penalize(climber, DIFFICULTY[this.config.difficulty].penaltyMs, now);
-          this.note(climber, `Défense ratée : tu perds ${DIFFICULTY[this.config.difficulty].penaltyMs / 1000} s.`, "mauvais");
+          const ms = DIFFICULTY[this.config.difficulty].penaltyMs;
+          this.note(climber, `Défense ratée : ${lossText(ms, this.fallPenalty(climber, ms, now))}.`, "mauvais");
         }
         this.clock.run(climber, now);
         break;
+      case "penalite": {
+        const ms = pending.debtMs ?? 0;
+        if (success) {
+          this.note(climber, `Suspension tenue : la pénalité de ${ms / 1000} s est rachetée.`, "bon");
+        } else {
+          this.penalize(climber, ms, now);
+          this.note(climber, `Suspension lâchée : tu perds ${ms / 1000} s.`, "mauvais");
+        }
+        this.clock.run(this.turn, now);
+        break;
+      }
       case "contre-attaque": {
         const move = pending.move!;
         if (success) {
@@ -705,6 +752,7 @@ export class ChesscaladeGame {
         break;
       }
     }
+    this.startDebtHang(now);
     this.checkFlag(now);
     return outcome;
   }
@@ -719,6 +767,7 @@ export class ChesscaladeGame {
     this.phase = "move";
     this.note(deviation.player, `Coup dévié : ${move.san}.`);
     this.applyMove(move, now);
+    this.startDebtHang(now);
   }
 
   resign(color: Color, now: number): void {
@@ -812,6 +861,7 @@ export class ChesscaladeGame {
       climber: color,
       kind: "defi",
       piece,
+      moved: PIECE_OF[move.piece],
       targetRating: this.baseTarget(color) + bonus,
       length,
       cruxLast: triggers.includes("capture"),
@@ -825,15 +875,34 @@ export class ChesscaladeGame {
     return rule === "auto" ? AUTO_FEET[this.config.difficulty] : rule;
   }
 
-  private startBlock(init: { request: BlockRequest; triggers: Trigger[]; move?: Move; hard?: boolean; series?: { index: number; total: number } }, now: number): void {
-    const request = { ...init.request, feet: this.footRule(init.request.kind) };
+  /** Ce défi se fait-il à la poutre (POUTRE.md §4) ? */
+  private atBeam(request: BlockRequest): boolean {
+    const b = this.config.beam;
+    if (!b) return false;
+    if (request.kind === "penalite") return true;
+    if (request.kind === "recharge" && b.recharge) return true;
+    if (b.mode === "seule") return true;
+    // Mêlée : les défis d'une tour jouée (pas la « traversée » d'une promotion, qui a le caractère de la tour).
+    return b.mode === "melee" && (request.moved ?? request.piece) === "tour";
+  }
+
+  private startBlock(
+    init: { request: BlockRequest; triggers: Trigger[]; move?: Move; hard?: boolean; series?: { index: number; total: number }; debtMs?: number },
+    now: number,
+  ): void {
+    const beam = this.atBeam(init.request);
+    const request: BlockRequest = beam
+      ? { ...init.request, beam: true, hangS: this.config.beam!.seconds, feet: undefined }
+      : { ...init.request, feet: this.footRule(init.request.kind) };
     init = { ...init, request };
     const d = DIFFICULTY[this.config.difficulty];
     const baseLimit = request.kind === "parade" ? PARADE_LIMIT_MS : FORMAT[this.config.format].blockLimitMs;
+    const limit = Math.round(baseLimit * d.limitFactor);
     this.pending = {
       ...init,
       block: this.makeBlock(request),
-      timeLimitMs: Math.round(baseLimit * d.limitFactor),
+      // Une suspension a sa durée : la limite laisse le temps de se placer et de la tenir.
+      timeLimitMs: beam ? Math.max(limit, (request.hangS! + HANG_PREP_S + 15) * 1000) : limit,
       attemptsLeft: request.kind === "defi" ? d.attempts : 1,
       startedAt: now,
     };
@@ -857,8 +926,12 @@ export class ChesscaladeGame {
       if (pending.triggers.includes("mat") && verdict < 3) verdict = 3; // §6 règle 5
     }
     this.lastVerdict = { color, verdict, move: move.san };
+    // Pénalité du V1 rachetable à la poutre : le message le dit (au lieu de « tu perds »).
+    const deferred = verdict === 1 && !!this.config.beam?.penalty;
     if (success) {
       this.note(color, `Bloc réussi : ${move.san} est joué, et +${this.reward(color, "defi", now)} s.`, "bon");
+    } else if (deferred) {
+      this.note(color, `Chute : ${move.san} est joué ; ${lossText(d.penaltyMs, true)}.`, "mauvais");
     } else {
       this.note(color, `Chute : ${verdictText(verdict, move, d.penaltyMs / 1000, d.exhaustTurns)}.`, "mauvais");
     }
@@ -869,7 +942,7 @@ export class ChesscaladeGame {
         this.applyMove(move, now);
         return;
       case 1:
-        this.penalize(color, d.penaltyMs, now);
+        this.fallPenalty(color, d.penaltyMs, now);
         this.applyMove(move, now);
         return;
       case 2:
@@ -1043,6 +1116,35 @@ export class ChesscaladeGame {
 
   private penalize(color: Color, ms: number, now: number): void {
     this.clock.add(color, -ms, now);
+  }
+
+  /** Pénalité d'une chute : tout de suite, ou à racheter à la poutre ; vrai si elle attend la poutre. */
+  private fallPenalty(color: Color, ms: number, now: number): boolean {
+    if (this.config.beam?.penalty) {
+      this.beamDebt[color] += ms;
+      return true;
+    }
+    this.penalize(color, ms, now);
+    return false;
+  }
+
+  /** Dès que la partie le permet, une suspension pour racheter les pénalités en attente (une seule pour le total). */
+  private startDebtHang(now: number): void {
+    if (this.phase !== "move" || this.result) return;
+    const color = ([this.turn, other(this.turn)] as Color[]).find((c) => this.beamDebt[c] > 0);
+    if (!color) return;
+    const debtMs = this.beamDebt[color];
+    this.beamDebt[color] = 0;
+    this.note(color, `À la poutre pour racheter ${debtMs / 1000} s de pénalité.`);
+    const request: BlockRequest = {
+      climber: color,
+      kind: "penalite",
+      piece: null,
+      targetRating: this.baseTarget(color) + DEBT_HANG_BONUS,
+      length: FORMAT[this.config.format].length,
+      cruxLast: false,
+    };
+    this.startBlock({ request, triggers: [], debtMs }, now);
   }
 
   private finish(result: GameResult, now: number): void {

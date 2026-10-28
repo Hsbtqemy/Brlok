@@ -74,7 +74,8 @@ automatique, jour ou nuit.
 | **Mur à voies (salle)** | un mur vide, auquel on ajoute des secteurs (photos) puis des voies | en salle |
 | **Pan à grille (vide)** | une grille 6 × 7 sans prises, à remplir dans l'éditeur | pour décrire un pan prise par prise |
 | **Pan express** | une grille de la taille voulue, **une prise par case**, toutes de niveau 3 | pour jouer tout de suite sur un pan qu'on n'a pas décrit |
-| **Catalogue Brlok…** | les pans d'un fichier `catalog_collection.json` de Brlok desktop | pour reprendre ses pans existants |
+| **Poutre seule** | une poutre sans pan | pour les suspensions, ou une partie « poutre seule » |
+| **Catalogue Brlok…** | les pans d'un fichier `catalog_collection.json` de Brlok desktop, avec leur poutre (la « grille pieds ») | pour reprendre ses pans existants |
 | **Charger l'exemple** | le catalogue d'exemple du dépôt | pour essayer |
 
 Deux raccourcis existent aussi en dehors de l'onglet Murs :
@@ -135,7 +136,27 @@ liste des voies rangée par secteur.
 
 **Démonter** une voie la retire du jeu mais garde son historique ; on peut la remettre plus tard.
 
-### 3.5 Les variantes d'une voie
+### 3.5 La poutre
+
+Un pan ou un mur à voies peut avoir sa **poutre** d'entraînement : une petite grille de prises (4 × 6 pour
+celle du pan maison), décrite en bas de la page du mur. Les règles complètes sont dans
+[chesscalade/POUTRE.md](chesscalade/POUTRE.md).
+
+- **Ajouter une poutre** (vide), ou **reprendre la poutre du pan maison**. Un catalogue de Brlok desktop
+  apporte la sienne.
+- Toucher une case pour poser ou modifier une prise :
+  - une **étiquette**, comme dans Brlok desktop : « 25 » (mm), « [35°] », « bi30 » ;
+  - un **niveau** de 1 à 6 ;
+  - un **type** (bac, réglette, plat, bi-doigt, mono, pince) ;
+  - « utilisable » ou non.
+- **Place de la poutre** (pan) :
+  - **intégrée au pan** : ses prises s'ajoutent au pan, juste au-dessus de la rangée du haut, et les blocs
+    peuvent passer par elles ;
+  - **agrès à part** : elle ne fait pas partie des blocs et sert aux suspensions et à la sortie des blocs.
+- La main gauche va sur les colonnes de gauche, la droite sur celles de droite. L'export vers Brlok
+  desktop remet la poutre dans sa grille pieds (4 × 6).
+
+### 3.6 Les variantes d'une voie
 
 Avec peu de voies, on retomberait sans cesse sur les mêmes. Une **variante** rend une voie plus facile ou
 plus dure, pour coller à la cote visée. Chaque paire voie + variante a sa propre cote.
@@ -187,6 +208,28 @@ cours numéroté.
 - **Carnet** : toutes les voies en place, triées par cotation, avec ton état (réussie, n essais, pas encore
   tentée) et des boutons **Réussi / Raté** sur chaque ligne. Le filtre « Pas encore réussies » montre ce
   qui reste à faire.
+
+### La poutre (onglet Poutre)
+
+L'onglet **Poutre** apparaît quand le mur a une poutre. La poutre s'affiche en grand, avec **G** (main
+gauche) et **D** (main droite) sur les prises à tenir.
+
+- On règle une **durée** (7, 10, 15 s…) et une **cote visée** (ou « ma cote »).
+- **Suspension** : « Choisir les prises » (l'app prend la paire la plus proche de la cote, une main de
+  chaque côté, de préférence les deux prises jumelles), ou « Choisir à la main » (toucher la prise de la
+  main gauche, puis celle de la main droite ; la même deux fois : les deux mains dessus).
+- « **Démarrer** » laisse 3 s pour se placer, puis le décompte part. Arrivé à zéro, c'est tenu. « **Lâché** »
+  si l'on lâche avant.
+- **Série** : n suspensions de la même durée, avec un **repos** entre deux. La suivante démarre seule à la
+  fin du repos, et « Passer » l'écourte.
+- Chaque suspension a sa **cote**, et compte pour ta cote de grimpe comme un bloc. Elle tient compte du
+  niveau des deux prises, de l'écart entre les mains et de la durée.
+
+En séance (Brlok classique) :
+
+- poutre **intégrée** : « Avec les prises de la poutre » laisse les blocs passer par elle ;
+- poutre **à part** : « **Sortie à la poutre** » fait finir chaque bloc suspendu à une paire de prises de
+  la poutre, pendant n secondes. La sortie ne change pas la cote du bloc.
 
 ### La séance en cours
 
@@ -267,7 +310,8 @@ L'onglet **Partie** déroule le lancement en **étapes**. Chaque choix est expli
 
    Pour les rounds, on choisit aussi le format du duel au mur.
 3. **Où ?** Un **mur enregistré** ou un **Pan rapide**. Pour une salle, choisis les **voies retenues**
-   (toutes par défaut ; un bouton par secteur) et les **variantes permises**.
+   (toutes par défaut ; un bouton par secteur) et les **variantes permises**. Si le mur a une **poutre**
+   (intrications seulement), règle sa place dans la partie (§6.5).
 4. **Quelle intensité ?** (intrications seulement)
    - **Niveau** : Facile, Modéré, Difficile, Diabolique ;
    - **Densité** de blocs : légère, normale, intense ;
@@ -404,6 +448,23 @@ Ce sont des rounds, avec deux différences :
 - le gagnant du duel choisit un **bonus** pour le round suivant : **+30 s** de pendule, ou un **joker**
   (le meilleur coup du moteur, une fois).
 
+### 6.5 À la poutre (intrications)
+
+Sur un mur qui a une poutre, l'étape « Où ? » propose :
+
+| Réglage | Effet |
+|---|---|
+| **Pas de défi** | les défis se grimpent au pan |
+| **Mêlée aux blocs** | les défis de la **tour** (puissance, statique) se font à la poutre, les autres pièces grimpent |
+| **Poutre seule** | tous les défis sont des suspensions : prises, échecs, défense, cloche (le pan ne sert pas) |
+| **Recharge à la poutre** | la recharge est une suspension (pendule en marche, comme une recharge) |
+| **Pénalités rachetées** | une pénalité de temps due à une chute attend la poutre : suspension tenue, elle est effacée ; lâchée, elle s'applique |
+
+- La **durée** des suspensions se règle au lancement. L'app choisit les prises selon la cote visée du
+  défi (pièce prise, niveau, fatigue).
+- Une suspension lâchée est une chute : mêmes verdicts qu'au pan.
+- Les rounds (familles A et B) restent au pan.
+
 ---
 
 ## 7. Pendant une partie
@@ -506,4 +567,5 @@ Les **blocs et les voies ont aussi une cote**, apprise au fil des réussites et 
 | **Pan express / Pan rapide** | pan où chaque case porte une prise de niveau 3, pour jouer tout de suite |
 | **Secteur** | une photo d'un mur à voies, et les voies qui y sont |
 | **Modèle de séance** | réglages d'une séance (et du minuteur) gardés sous un nom, à reprendre d'un geste |
+| **Suspension** | tenir une prise de la poutre par main pendant une durée donnée ; elle a sa cote, comme un bloc |
 | **Favori** | bloc ou voie gardé pour être regrimpé ; « Grimper tous les favoris » en fait une séance |

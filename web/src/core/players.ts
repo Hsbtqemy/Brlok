@@ -2,6 +2,7 @@
  * Joueurs, cotes (REGLES.md §8) et journal des tentatives.
  * Trois cotes par joueur ; les blocs ont aussi leur cote, partagée entre Brlok classique et Chesscalade.
  */
+import { hangText } from "./beam";
 import { variantText } from "./gym";
 import type { Block } from "./generator";
 import { newRating, recordAttempt, updateRating, type Rating } from "./glicko2";
@@ -99,8 +100,15 @@ export function routeKey(wallId: string, routeId: string, variant?: string): str
   return `${wallId}:voie:${routeId}${variant ? `~${variant}` : ""}`;
 }
 
+/** Clé d'une suspension : prises des deux mains et durée (une autre durée est une autre suspension). */
+export function hangKey(wallId: string, left: string, right: string, seconds: number): string {
+  return `${wallId}:poutre:${left}|${right}:${seconds}`;
+}
+
 const keyOf = (wallId: string, block: Block) =>
-  block.route
+  block.hang
+    ? hangKey(wallId, block.hang.left, block.hang.right, block.hang.seconds)
+    : block.route
     ? routeKey(wallId, block.route.id, block.route.variant)
     : blockKey(
         wallId,
@@ -111,7 +119,7 @@ const keyOf = (wallId: string, block: Block) =>
 
 /** Prises (ou voie) d'un bloc, pour le journal. */
 const labelOf = (block: Block) =>
-  block.route ? [block.route.variant ? `${block.route.label} · ${variantText(block.route.variant, block.route.variantHold)?.label}` : block.route.label] : block.holds.map((h) => h.id);
+  block.hang ? [`Poutre ${hangText(block)}`] : block.route ? [block.route.variant ? `${block.route.label} · ${variantText(block.route.variant, block.route.variantHold)?.label}` : block.route.label] : block.holds.map((h) => h.id);
 
 export function blockRating(state: RatingsState, wallId: string, block: Block): Rating {
   return state.blocks[keyOf(wallId, block)] ?? { rating: block.estimatedRating, rd: NEW_BLOCK_RD, volatility: 0.06 };

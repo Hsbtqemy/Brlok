@@ -2,7 +2,7 @@
  * Textes du lancement de partie : ce que chaque réglage change, en phrases, à partir des vraies valeurs du
  * moteur de jeu (pénalités, verdicts, durées). Rien ici ne décide d'une règle : on les décrit.
  */
-import { AUTO_FEET, DIFFICULTY, FORMAT, SERIES_SIZE, SOLO_INCREMENT_MS, VERDICT_LABELS, verdictForFall, type Density, type Difficulty, type Format, type Rhythm } from "./game";
+import { AUTO_FEET, type BeamSetup, DIFFICULTY, FORMAT, SERIES_SIZE, SOLO_INCREMENT_MS, VERDICT_LABELS, verdictForFall, type Density, type Difficulty, type Format, type Rhythm } from "./game";
 import { FOOT_RULES, type FootRule } from "./feet";
 import type { Family } from "./rounds";
 
@@ -93,6 +93,18 @@ export interface RecapInput {
   rhythm: Rhythm;
   feet: "auto" | FootRule;
   fatigue: { w: boolean; b: boolean };
+  /** La poutre (POUTRE.md §4), si la partie s'en sert. */
+  beam?: BeamSetup;
+}
+
+/** La poutre dans la partie, en une phrase. */
+export function beamText(beam: BeamSetup): string {
+  const parts = [
+    beam.mode === "seule" ? `tous les défis sont des suspensions de ${beam.seconds} s` : beam.mode === "melee" ? `les défis de la tour sont des suspensions de ${beam.seconds} s` : "",
+    beam.recharge ? `la recharge se fait à la poutre${beam.mode === "aucun" ? ` (${beam.seconds} s)` : ""}` : "",
+    beam.penalty ? `une pénalité de temps se rachète en tenant une suspension${beam.mode === "aucun" && !beam.recharge ? ` de ${beam.seconds} s` : ""}` : "",
+  ].filter(Boolean);
+  return `À la poutre : ${parts.join(" ; ")}.`;
 }
 
 const DUEL_TEXT = {
@@ -132,6 +144,7 @@ export function recapLines(r: RecapInput): string[] {
     lines.push("Chaque bloc se grimpe aussitôt, et son résultat décide du coup.");
   }
   lines.push(`Niveau ${DIFFICULTY_LABEL[r.difficulty]} : ${fallText(r.difficulty, r.rhythm)}${r.onRoutes ? "" : ` ; ${feetText(r.feet, r.difficulty)}`}.`);
+  if (r.beam) lines.push(beamText(r.beam));
   if (r.family === "C") lines.push(`Une cloche sonne toutes les ${r.format === "blitz" ? 4 : 8} min de jeu : chacun grimpe un bloc.`);
   if (r.fatigue.w || r.fatigue.b) lines.push("Option fatigue : la cote visée baisse de 15 à chaque bloc grimpé.");
   lines.push("Le mat demande toujours un bloc réussi.");

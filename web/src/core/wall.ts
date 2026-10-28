@@ -21,6 +21,20 @@ export interface Hold {
   tags: string[];
   position: Position;
   active: boolean;
+  /** Étiquette libre (prise de poutre : « 25 », « [35°] », « bi30 », comme dans Brlok desktop). */
+  label?: string;
+}
+
+/**
+ * Poutre d'entraînement rattachée à un mur (POUTRE.md) : une petite grille de prises (PA1…).
+ * Intégrée, ses prises comptent comme des prises du pan, au-dessus de la rangée du haut ; à part,
+ * elle sert aux suspensions et à la sortie des blocs.
+ */
+export interface Beam {
+  rows: number;
+  cols: number;
+  holds: Hold[];
+  placement: "integree" | "agres";
 }
 
 /** Prise d'une voie sur la photo. */
@@ -119,6 +133,8 @@ export interface Wall {
   sectors?: Sector[];
   /** Ancien format (une seule photo) : repris comme premier secteur par `migrateWall`. */
   photo?: string;
+  /** Poutre du mur (POUTRE.md). */
+  beam?: Beam;
 }
 
 /** Secteur d'un mur à voies : une photo (image réduite, data URL) et un nom. */

@@ -3,6 +3,7 @@
  * Toujours gardé dans le navigateur ; en plus, enregistré avec la page quand le stockage partagé
  * est disponible (voir sharedStore.ts), auquel cas c'est lui qui fait foi.
  */
+import { withBeam } from "../core/beam";
 import { makeChallengeBlock, type ChallengeOptions } from "../core/challenge";
 import { routeSession, type RouteSessionOptions } from "../core/gym";
 import type { Block } from "../core/generator";
@@ -42,6 +43,8 @@ class AppState {
   libraryStorageFull = $state(false);
 
   wall = $derived(this.walls.find((w) => w.id === this.activeWallId) ?? this.walls[0]);
+  /** Le mur tel qu'on le grimpe : avec sa poutre si elle est intégrée au pan (POUTRE.md). */
+  playWall = $derived(this.wall ? withBeam(this.wall) : undefined);
   activePlayer = $derived(this.ratings.players.find((p) => p.id === this.activePlayerId) ?? this.ratings.players[0]);
 
   private readonly store = new SharedStore({
@@ -133,7 +136,7 @@ class AppState {
     const wall = this.wall;
     if (!wall) return null;
     const blocks = this.ratings.blocks;
-    return makeChallengeBlock($state.snapshot(wall) as Wall, {
+    return makeChallengeBlock(withBeam($state.snapshot(wall) as Wall), {
       ...options,
       routeRating: (route: Route) => blocks[routeKey(wall.id, route.id)]?.rating,
       variantRating: (route, variant) => blocks[routeKey(wall.id, route.id, variant)]?.rating,

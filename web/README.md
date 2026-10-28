@@ -1,6 +1,6 @@
 # Brlok web · Chesscalade
 
-Version web de Brlok, qui accueille le mode **Chesscalade** (mode d'emploi : [`docs/GUIDE.md`](../docs/GUIDE.md) ; règles : [`docs/chesscalade/REGLES.md`](../docs/chesscalade/REGLES.md)).
+Version web de Brlok, qui accueille le mode **Chesscalade** (mode d'emploi : [`docs/GUIDE.md`](../docs/GUIDE.md) ; règles : [`docs/chesscalade/REGLES.md`](../docs/chesscalade/REGLES.md), poutre : [`POUTRE.md`](../docs/chesscalade/POUTRE.md)).
 Elle **coexiste** avec Brlok desktop (Python/PySide6, dossier `brlok/`) : même format de catalogue JSON,
 import et export dans les deux sens. Cible à terme : application Tauri.
 
@@ -93,5 +93,8 @@ Prérequis, une fois : *Settings → Pages → Source : GitHub Actions*.
 - [x] À deux sur un même écran : côte à côte, tour à tour, face à face (aussi en rounds)
 - [x] App installable (PWA) : hors ligne, barre de navigation en bas (téléphone, tablette), mise à jour
       proposée, thème automatique / jour / nuit, sauvegarde complète
+- [x] Poutre (POUTRE.md) : importée de la grille pieds de Brlok desktop, éditeur, intégrée au pan ou à part ;
+      suspensions avec leur cote (une ou en série), sortie des blocs à la poutre ; Chesscalade à la poutre
+      (poutre seule, défis de la tour, recharge, pénalités rachetées)
 - [ ] Synchronisation entre appareils par un serveur personnel (voir [`docs/SYNCHRO.md`](../docs/SYNCHRO.md))
 - [ ] Pan en photo (redressement aux 4 coins, positions réelles des prises)

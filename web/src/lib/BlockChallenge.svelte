@@ -5,6 +5,7 @@
   import { PIECES } from "../core/pieces";
   import type { Wall } from "../core/wall";
   import PanView from "./PanView.svelte";
+  import HangTimer from "./HangTimer.svelte";
   import RouteView from "./RouteView.svelte";
 
   interface Props {
@@ -26,7 +27,9 @@
     return () => clearInterval(id);
   });
 
-  const left = $derived(timeLimitMs === undefined ? undefined : Math.max(0, timeLimitMs - (now - startedAt)));
+  // Suspension : c'est son décompte qui décide ; la limite du bloc ne la coupe pas (on peut mettre du temps
+  // à rejoindre la poutre, et les deux résultats se croiseraient).
+  const left = $derived(timeLimitMs === undefined || block?.hang ? undefined : Math.max(0, timeLimitMs - (now - startedAt)));
   let timedOut = $state(false);
   $effect(() => {
     if (left === 0 && !timedOut) {
@@ -53,7 +56,12 @@
       <div class="timer" class:urgent={left < 10_000}>{Math.ceil(left / 1000)} s</div>
     {/if}
   </div>
-  {#if block && wall}
+  {#if block?.hang && wall?.beam}
+    <!-- Suspension (POUTRE.md §4) : le décompte décide (tenue jusqu'au bout, ou « Lâché »). Un nouvel essai la remet au départ. -->
+    {#key startedAt}
+      <HangTimer beam={wall.beam} {block} onResult={(success) => onResult(success)} startLabel="Démarrer la suspension" />
+    {/key}
+  {:else if block && wall}
     <p class="meta">
       {#if piece}<span class="symbol">{piece.symbol}</span> {piece.label} ·{/if}
       cote {block.estimatedRating}{block.route ? "" : ` · ${block.holds.length} prises`}
@@ -81,10 +89,12 @@
   {:else}
     <p class="warn">Aucun bloc généré (pas de pan chargé ?) : grimpe un bloc libre de niveau équivalent.</p>
   {/if}
-  <div class="actions">
-    <button class="success" onclick={() => onResult(true)}>Réussi</button>
-    <button class="fall" onclick={() => onResult(false)}>Chute</button>
-  </div>
+  {#if !(block?.hang && wall?.beam)}
+    <div class="actions">
+      <button class="success" onclick={() => onResult(true)}>Réussi</button>
+      <button class="fall" onclick={() => onResult(false)}>Chute</button>
+    </div>
+  {/if}
 </div>
 
 <style>

@@ -4,6 +4,7 @@
     ChesscaladeGame,
     SERIES_SIZE,
     VERDICT_LABELS,
+    type BeamSetup,
     type BlockRequest,
     type Color,
     type Density,
@@ -13,6 +14,7 @@
     type Rhythm,
   } from "../core/game";
   import { engineSettings, pickEngineMove } from "../core/engine";
+  import { clampSeconds, HANG_DEFAULT_S, pickHang } from "../core/beam";
   import { FOOT_RULES, type FootRule } from "../core/feet";
   import { ROUTE_VARIANTS, routeHex, routeLabel, type RouteVariant } from "../core/gym";
   import { sectorOf } from "../core/wall";
@@ -42,6 +44,7 @@
     defense: "Bloc de défense",
     "contre-attaque": "Contre-attaque",
     cloche: "Cloche",
+    penalite: "Rachat à la poutre",
   } as const;
   const TRIGGER_LABEL = { capture: "prise", echec: "échec", promotion: "promotion", roque: "roque", mat: "mat" } as const;
   const REASON_LABEL = { mat: "échec et mat", pat: "pat", nulle: "nulle", temps: "au temps", abandon: "abandon" } as const;
@@ -71,6 +74,10 @@
     layout: Layout;
     expressCols: number;
     expressRows: number;
+    beamMode: BeamSetup["mode"];
+    beamSeconds: number;
+    beamRecharge: boolean;
+    beamPenalty: boolean;
   }>;
   const prefs: SetupPrefs = (() => {
     try {
@@ -125,6 +132,18 @@
   let expressCols = $state(prefs.expressCols ?? 6);
   let expressRows = $state(prefs.expressRows ?? 7);
   const expressName = $derived(`Pan rapide ${expressCols}×${expressRows}`);
+
+  // Poutre (POUTRE.md §4) : intrications seulement, sur un mur qui a une poutre.
+  let beamMode = $state<BeamSetup["mode"]>(prefs.beamMode ?? "aucun");
+  let beamSeconds = $state(prefs.beamSeconds ?? HANG_DEFAULT_S);
+  let beamRecharge = $state(prefs.beamRecharge ?? false);
+  let beamPenalty = $state(prefs.beamPenalty ?? false);
+  const gameBeam = $derived(wallSource !== "express" && !rounded && app.wall?.beam?.holds.length ? app.wall.beam : undefined);
+  const beamSetup = $derived<BeamSetup | undefined>(
+    gameBeam && (beamMode !== "aucun" || beamRecharge || beamPenalty)
+      ? { mode: beamMode, seconds: clampSeconds(beamSeconds), recharge: beamRecharge, penalty: beamPenalty }
+      : undefined,
+  );
 
   /**
    * Pan rapide de la partie : celui de cette taille s'il existe déjà (on ne remplit pas Murs d'un pan par
@@ -191,6 +210,10 @@
       layout,
       expressCols,
       expressRows,
+      beamMode,
+      beamSeconds,
+      beamRecharge,
+      beamPenalty,
     };
     try {
       localStorage.setItem(SETUP_KEY, JSON.stringify(setup));
@@ -252,7 +275,11 @@
         ? "Aucun mur enregistré : choisis « Pan rapide », ou crée un mur dans l'onglet Murs."
         : app.wall.kind === "voies" && activeRoutes.length === 0
           ? "Aucune voie en place sur ce mur."
-          : "",
+          : app.wall.kind === "pan" && app.wall.holds.length === 0 && beamSetup?.mode !== "seule"
+            ? gameBeam
+              ? "Ce mur n'a que sa poutre : choisis « Poutre seule » ci-dessous."
+              : "Ce pan n'a pas de prises : décris-le dans l'onglet Murs, ou choisis « Pan rapide »."
+            : "",
   );
   const recap = $derived(
     recapLines({
@@ -272,6 +299,7 @@
       rhythm,
       feet: feetRule,
       fatigue,
+      beam: beamSetup,
     }),
   );
   const presetLines = (p: (typeof PRESETS)[number]) =>
@@ -324,7 +352,7 @@
       const players = humanColor === "w" ? { w: human, b: engine } : { w: engine, b: human };
       ids = humanColor === "w" ? { w: soloId, b: "" } : { w: "", b: soloId };
       game = new ChesscaladeGame(
-        { format, difficulty, deviation, players, engine: { color: engineColor, elo: engineElo }, bell: family === "C", feet: feetRule, density, rhythm },
+        { format, difficulty, deviation, players, engine: { color: engineColor, elo: engineElo }, bell: family === "C", feet: feetRule, density, rhythm, beam: beamSetup },
         makeBlock,
         Date.now(),
       );
@@ -335,7 +363,7 @@
         b: { name: nameOf(blackId), climbRating: climbRating(blackId), fatigue: fatigue.b },
       };
       ids = { w: whiteId, b: blackId };
-      game = new ChesscaladeGame({ format, difficulty, deviation, players, bell: family === "C", feet: feetRule, density, rhythm }, makeBlock, Date.now());
+      game = new ChesscaladeGame({ format, difficulty, deviation, players, bell: family === "C", feet: feetRule, density, rhythm, beam: beamSetup }, makeBlock, Date.now());
     }
     engineError = "";
     selected = null;
@@ -374,6 +402,11 @@
 
   function makeBlock(request: BlockRequest) {
     if (!app.wall) return null;
+    // À la poutre : une suspension de la durée de la partie, prises choisies selon la cote visée.
+    if (request.beam) {
+      const beam = app.wall.beam;
+      return beam?.holds.length ? pickHang(beam, { targetRating: request.targetRating, seconds: request.hangS ?? HANG_DEFAULT_S, usage, rng: seededRng(Date.now()) }) : null;
+    }
     return app.challenge({ ...request, usage, allowedRoutes: gameRoutes, routeVariants, rng: seededRng(Date.now()) });
   }
 
@@ -909,9 +942,40 @@
           {routeVariants.length === 0 ? "Aucune variante : les voies sont toujours grimpées telles quelles." : ""}
         </p>
       </div>
-      {:else if app.wall}
+      {:else if app.wall && app.wall.holds.length > 0}
         <p class="hint">Pan {app.wall.cols} × {app.wall.rows}, {app.wall.holds.length} prises : les blocs sont générés pendant la partie, à la cote visée et selon le caractère de la pièce.</p>
       {/if}
+      {/if}
+      {#if gameBeam}
+        <fieldset class="beam-setup">
+          <legend>Poutre</legend>
+          <div class="row" role="group" aria-label="Défis à la poutre">
+            <button aria-pressed={beamMode === "aucun"} onclick={() => (beamMode = "aucun")}>Pas de défi</button>
+            <button aria-pressed={beamMode === "melee"} onclick={() => (beamMode = "melee")} disabled={app.wall?.holds.length === 0}>Mêlée aux blocs</button>
+            <button aria-pressed={beamMode === "seule"} onclick={() => (beamMode = "seule")}>Poutre seule</button>
+          </div>
+          <p class="hint">
+            {beamMode === "seule"
+              ? "Tous les défis sont des suspensions : prises, échecs, défense, cloche. Le pan ne sert pas."
+              : beamMode === "melee"
+                ? "Les défis de la tour (puissance, statique) se font à la poutre ; les autres pièces grimpent au pan."
+                : "Les défis se grimpent au pan ; la poutre peut servir à la recharge ou au rachat des pénalités."}
+          </p>
+          <label class="check"><input type="checkbox" bind:checked={beamRecharge} /> Recharge à la poutre (une suspension, pendule en marche)</label>
+          <label class="check"><input type="checkbox" bind:checked={beamPenalty} /> Pénalités rachetées à la poutre (tenue : la pénalité de temps est effacée)</label>
+          {#if beamSetup}
+            <div class="field">
+              Durée des suspensions : <strong>{clampSeconds(beamSeconds)} s</strong>
+              <div class="row">
+                {#each [7, 10, 15, 20, 30] as s (s)}
+                  <button class="chip" aria-pressed={clampSeconds(beamSeconds) === s} onclick={() => (beamSeconds = s)}>{s} s</button>
+                {/each}
+                <input type="number" min="3" max="60" bind:value={beamSeconds} aria-label="Durée des suspensions en secondes" />
+              </div>
+              <span class="hint">Les prises suivent la cote visée de chaque défi (pièce prise, niveau, fatigue).</span>
+            </div>
+          {/if}
+        </fieldset>
       {/if}
 
     {:else if step === "intensite"}
@@ -1100,7 +1164,7 @@
       {:else if view.phase === "block" && view.pending}
         {@const p = view.pending}
         <BlockChallenge
-          wall={app.wall}
+          wall={app.playWall}
           block={p.block}
           title={`${KIND_LABEL[p.request.kind]} — ${game.config.players[p.request.climber].name}`}
           subtitle={[
