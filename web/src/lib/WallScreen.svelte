@@ -8,6 +8,10 @@
   import PanView from "./PanView.svelte";
   import IntervalTimer from "./IntervalTimer.svelte";
   import RouteView from "./RouteView.svelte";
+  import { activeRoutes, gradeToRating, ROUTE_VARIANTS, routeBlock, routeHex, routeLabel, routeLogs, variantText, type RouteVariant } from "../core/gym";
+  import type { Route } from "../core/wall";
+  import { loadRouteVariants, saveRouteVariants } from "./storage";
+
   interface Props {
     /** Ouvrir le mur actif dans l'onglet Murs. */
     onEdit: () => void;
@@ -15,8 +19,14 @@
 
   let { onEdit }: Props = $props();
 
-  import { activeRoutes, gradeToRating, routeBlock, routeHex, routeLabel, routeLogs } from "../core/gym";
-  import type { Route } from "../core/wall";
+  /** Variantes de voie permises : le même réglage que pour les parties. */
+  let routeVariants = $state<RouteVariant[]>(loadRouteVariants());
+  let withVariants = $state(true);
+
+  function toggleVariant(id: RouteVariant) {
+    routeVariants = routeVariants.includes(id) ? routeVariants.filter((v) => v !== id) : [...routeVariants, id];
+    saveRouteVariants(routeVariants);
+  }
 
   const isGym = $derived(app.wall?.kind === "voies");
   const currentRoute = $derived.by(() => {
@@ -99,7 +109,16 @@
 
   function generateChess() {
     if (!app.wall) return;
-    chessBlock = app.challenge({ piece, targetRating, length, cruxLast, feet, usage, rng: seededRng(Date.now()) });
+    chessBlock = app.challenge({
+      piece,
+      targetRating,
+      length,
+      cruxLast,
+      feet,
+      usage,
+      routeVariants: isGym && withVariants ? routeVariants : [],
+      rng: seededRng(Date.now()),
+    });
     generationFailed = chessBlock === null;
     lastDelta = null;
   }
@@ -156,7 +175,7 @@
   <section class="panel pan-panel">
     {#if app.wall && isGym}
       {#if currentRoute}
-        <RouteView wall={app.wall} route={currentRoute} />
+        <RouteView wall={app.wall} route={currentRoute} variant={currentBlock?.route?.variant} variantHold={currentBlock?.route?.variantHold} />
       {:else if app.wall.sectors?.[0]?.photo}
         {#each app.wall.sectors.filter((x) => x.photo) as sec (sec.id)}
           <figure class="sector-fig">
@@ -256,12 +275,32 @@
         </select>
       </label>
       {/if}
+      {#if isGym}
+        <label class="check"><input type="checkbox" bind:checked={withVariants} /> Avec variantes (pour varier une même voie)</label>
+        {#if withVariants}
+          <details class="variants">
+            <summary>Variantes permises ({routeVariants.length}/{ROUTE_VARIANTS.length})</summary>
+            <div class="row">
+              {#each ROUTE_VARIANTS as v (v.id)}
+                <button class="mini-chip" aria-pressed={routeVariants.includes(v.id)} onclick={() => toggleVariant(v.id)} title={v.description}>
+                  {v.label} ({v.bonus > 0 ? "+" : "−"}{Math.abs(v.bonus)}){v.for === "ordre" ? " · numérotées" : ""}
+                </button>
+              {/each}
+            </div>
+            <p class="hint">Le même réglage que pour les parties. Une variante n'est choisie que si elle rapproche nettement de la cote visée.</p>
+          </details>
+        {/if}
+      {/if}
       <button class="primary" disabled={!app.wall} onclick={generateChess}>{isGym ? "Choisir" : "Générer"}</button>
 
       {#if chessBlock}
         <div class="result">
           <p class="sequence">{chessBlock.route ? chessBlock.route.label : chessBlock.holds.map((h) => h.id).join(" → ")}</p>
           <p>Cote estimée : <strong>{chessBlock.estimatedRating}</strong></p>
+          {#if chessBlock.route?.variant}
+            {@const v = variantText(chessBlock.route.variant, chessBlock.route.variantHold)}
+            <p class="variant"><strong>Variante : {v?.label}</strong> — {v?.description}</p>
+          {/if}
           {#if chessBlock.feet}
             <p class="hint">
               {FOOT_RULES.find((r) => r.id === chessBlock!.feet)?.label}
@@ -508,6 +547,26 @@
     border-radius: 50%;
     border: 1px solid var(--border);
     flex: none;
+  }
+  .variants summary {
+    cursor: pointer;
+    font-size: 0.9rem;
+  }
+  .variants .row {
+    margin-top: 6px;
+  }
+  .mini-chip {
+    min-height: 34px;
+    padding: 0 10px;
+    font-size: 0.8rem;
+    border-radius: 999px;
+  }
+  .variant {
+    margin: 0;
+    padding: 8px 10px;
+    border-left: 4px solid #6a1b9a;
+    background: var(--bg);
+    border-radius: 6px;
   }
   .sector-fig {
     margin: 0 0 10px;

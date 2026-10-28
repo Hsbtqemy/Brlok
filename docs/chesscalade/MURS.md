@@ -154,7 +154,9 @@ Dans le jeu, sur un mur à voies, les blocs sont **choisis** et non générés :
 - **Carnet** : toutes les voies en place, triées par cotation, avec pour le joueur actif « réussie (n/m) »,
   « n essais » ou « pas encore tentée », et des boutons Réussi / Raté sur chaque ligne ; filtre « pas encore
   réussies ».
-- **Choisir une voie** sans pièce (« Aucune ») : simplement la voie la plus proche de la cote visée.
+- **Choisir une voie** sans pièce (« Aucune ») : simplement la voie la plus proche de la cote visée. Avec
+  variantes (case cochée par défaut ; mêmes variantes permises que pour les parties), une même voie se
+  décline selon la cote visée : affichée avec sa variante, et sa prise visée sur la photo.
 - **Minuteur** sur chaque bloc ou voie de la séance : travail/repos (40/20, 50/28…), pyramide, EMOM,
   chrono avec **meilleurs temps** par joueur ; mode grand écran (le pan ou la photo de la voie en grand,
   à côté du minuteur), signal sonore et visuel, enchaînement automatique des blocs de la séance. Le
