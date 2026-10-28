@@ -149,8 +149,10 @@ Dans le jeu, sur un mur à voies, les blocs sont **choisis** et non générés :
 **Brlok en salle, sans Chesscalade** (onglet Pan, sur un mur à voies) :
 
 - **Séance** : N voies autour d'une cote, avec les répartitions de Brlok (uniforme, progressive, pyramide,
-  régressive, crux, alternance ; un cran = 100 points de cote). Une voie n'est reprise que s'il y a moins de
-  voies que de blocs demandés.
+  régressive, crux, alternance ; un cran = 100 points de cote). Avec variantes (même réglage que « Choisir une
+  voie » et les parties), une voie déjà prise revient sous une autre variante plutôt que telle quelle : une
+  salle de quelques voies donne quand même une séance variée. Une voie n'est reprise à l'identique que si
+  toutes les paires voie + variante sont épuisées.
 - **Carnet** : toutes les voies en place, triées par cotation, avec pour le joueur actif « réussie (n/m) »,
   « n essais » ou « pas encore tentée », et des boutons Réussi / Raté sur chaque ligne ; filtre « pas encore
   réussies ».

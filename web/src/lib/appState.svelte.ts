@@ -122,9 +122,15 @@ class AppState {
   }
 
   /** Séance de voies sur le mur actif (Brlok classique en salle). */
-  routeSession(options: Omit<RouteSessionOptions, "ratingOf">): Block[] {
-    if (!this.wall) return [];
-    return routeSession($state.snapshot(this.wall) as Wall, { ...options, ratingOf: (r) => this.routeRating(r) });
+  routeSession(options: Omit<RouteSessionOptions, "ratingOf" | "variantRatingOf">): Block[] {
+    const wall = this.wall;
+    if (!wall) return [];
+    const blocks = this.ratings.blocks;
+    return routeSession($state.snapshot(wall) as Wall, {
+      ...options,
+      ratingOf: (r) => this.routeRating(r),
+      variantRatingOf: (route, variant) => blocks[routeKey(wall.id, route.id, variant)]?.rating,
+    });
   }
 
   /** Enregistre une tentative de bloc ; renvoie la variation de la cote de grimpe. */

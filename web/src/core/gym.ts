@@ -194,6 +194,21 @@ export function activeRoutes(wall: Wall, ratingOf?: (route: Route) => number | u
   return wall.routes.filter((r) => !r.archived).map((route) => ({ route, rating: ratingOf?.(route) ?? gradeToRating(route.grade) }));
 }
 
+/** Une voie telle quelle, ou avec une variante permise qui lui va, et la cote de chaque paire. */
+function routeVariantPairs(
+  candidates: { route: Route; rating: number }[],
+  allowed: readonly RouteVariant[] | undefined,
+  variantRatingOf: ((route: Route, variant: RouteVariant) => number | undefined) | undefined,
+): { route: Route; rating: number; variant?: RouteVariant }[] {
+  const variants = ROUTE_VARIANTS.filter((v) => allowed?.includes(v.id));
+  return candidates.flatMap((c) => [
+    { ...c, variant: undefined as RouteVariant | undefined },
+    ...variants
+      .filter((v) => variantFits(c.route, v))
+      .map((v) => ({ ...c, variant: v.id, rating: variantRatingOf?.(c.route, v.id) ?? c.rating + v.bonus })),
+  ]);
+}
+
 /** Pénalité d'une variante : la voie telle quelle est préférée quand l'écart est faible. */
 const VARIANT_COST = 60;
 
@@ -212,13 +227,7 @@ export function pickRoute(wall: Wall, options: RouteOptions): Block | null {
   const matches = (r: Route) => wanted.length === 0 || r.styles.some((s) => wanted.includes(s));
   // Chaque voie, telle quelle ou avec une variante permise ; une variante n'est retenue que si elle rapproche
   // nettement de la cote visée (VARIANT_COST), et l'usage fait tourner les variantes d'une même voie.
-  const variants = ROUTE_VARIANTS.filter((v) => options.variants?.includes(v.id));
-  const pairs = candidates.flatMap((c) => [
-    { ...c, variant: undefined as RouteVariant | undefined },
-    ...variants
-      .filter((v) => variantFits(c.route, v))
-      .map((v) => ({ ...c, variant: v.id, rating: options.variantRatingOf?.(c.route, v.id) ?? c.rating + v.bonus })),
-  ]);
+  const pairs = routeVariantPairs(candidates, options.variants, options.variantRatingOf);
   let pool = pairs;
   if (maxRating !== undefined) {
     const within = pairs.filter((c) => c.rating <= maxRating);
@@ -248,6 +257,9 @@ export interface RouteSessionOptions {
   /** Écart de cote entre deux crans de la répartition (pyramide, progressive…). */
   step?: number;
   ratingOf?: (route: Route) => number | undefined;
+  /** Variantes permises : une même voie peut revenir sous une autre variante (salle avec peu de voies). */
+  variants?: readonly RouteVariant[];
+  variantRatingOf?: (route: Route, variant: RouteVariant) => number | undefined;
   rng: Rng;
 }
 
@@ -261,13 +273,27 @@ export function routeSession(wall: Wall, options: RouteSessionOptions): Block[] 
   if (routes.length === 0 || count < 1) return [];
   // distributionLevels travaille en niveaux 1–6 : on la centre sur 3 et on la traduit en écarts de cote.
   const targets = distributionLevels(pattern, count, 3).map((level) => targetRating + (level - 3) * step);
-  const used = new Set<string>();
+  const pairs = routeVariantPairs(routes, options.variants, options.variantRatingOf);
+  const key = (c: { route: Route; variant?: RouteVariant }) => (c.variant ? `${c.route.id}~${c.variant}` : c.route.id);
+  const usedRoutes = new Set<string>();
+  const usedPairs = new Set<string>();
   return targets.map((target) => {
-    const free = routes.filter((c) => !used.has(c.route.id));
-    const pool = free.length > 0 ? free : routes;
-    const best = pool.reduce((a, b) => (Math.abs(b.rating - target) + rng() * 20 < Math.abs(a.rating - target) + rng() * 20 ? b : a));
-    used.add(best.route.id);
-    return routeBlock(best.route, best.rating, null, free.length === 0 ? ["moins de voies que de blocs : une voie revient"] : []);
+    // D'abord une voie pas encore grimpée ; sinon la même voie sous une autre variante ; sinon une répétition.
+    const fresh = pairs.filter((c) => !usedRoutes.has(c.route.id));
+    const otherVariant = pairs.filter((c) => !usedPairs.has(key(c)));
+    const pool = fresh.length > 0 ? fresh : otherVariant.length > 0 ? otherVariant : pairs;
+    const cost = (c: (typeof pairs)[number]) => Math.abs(c.rating - target) + (c.variant ? VARIANT_COST : 0) + rng() * 20;
+    const best = pool.reduce((a, b) => (cost(b) < cost(a) ? b : a));
+    usedRoutes.add(best.route.id);
+    usedPairs.add(key(best));
+    return routeBlock(
+      best.route,
+      best.rating,
+      null,
+      pool === pairs ? ["moins de voies que de blocs : une voie revient"] : [],
+      best.variant,
+      best.variant ? variantHold(best.route, best.variant, rng) : undefined,
+    );
   });
 }
 

@@ -85,7 +85,14 @@
   );
 
   function generateGymSession() {
-    classicSession = app.routeSession({ targetRating: gymTarget, count: gymCount, pattern: gymPattern, step: 100, rng: seededRng(Date.now()) });
+    classicSession = app.routeSession({
+      targetRating: gymTarget,
+      count: gymCount,
+      pattern: gymPattern,
+      step: 100,
+      variants: withVariants ? routeVariants : [],
+      rng: seededRng(Date.now()),
+    });
     classicSelected = 0;
     lastDelta = null;
   }
@@ -144,6 +151,23 @@
     recorded = currentKey;
   }
 </script>
+
+{#snippet variantsControl()}
+        <label class="check"><input type="checkbox" bind:checked={withVariants} /> Avec variantes (pour varier une même voie)</label>
+        {#if withVariants}
+          <details class="variants">
+            <summary>Variantes permises ({routeVariants.length}/{ROUTE_VARIANTS.length})</summary>
+            <div class="row">
+              {#each ROUTE_VARIANTS as v (v.id)}
+                <button class="mini-chip" aria-pressed={routeVariants.includes(v.id)} onclick={() => toggleVariant(v.id)} title={v.description}>
+                  {v.label} ({v.bonus > 0 ? "+" : "−"}{Math.abs(v.bonus)}){v.for === "ordre" ? " · numérotées" : ""}
+                </button>
+              {/each}
+            </div>
+            <p class="hint">Le même réglage que pour les parties. Une variante n'est choisie que si elle rapproche nettement de la cote visée.</p>
+          </details>
+        {/if}
+{/snippet}
 
 <div class="screen">
   <section class="panel wall-panel">
@@ -275,22 +299,7 @@
         </select>
       </label>
       {/if}
-      {#if isGym}
-        <label class="check"><input type="checkbox" bind:checked={withVariants} /> Avec variantes (pour varier une même voie)</label>
-        {#if withVariants}
-          <details class="variants">
-            <summary>Variantes permises ({routeVariants.length}/{ROUTE_VARIANTS.length})</summary>
-            <div class="row">
-              {#each ROUTE_VARIANTS as v (v.id)}
-                <button class="mini-chip" aria-pressed={routeVariants.includes(v.id)} onclick={() => toggleVariant(v.id)} title={v.description}>
-                  {v.label} ({v.bonus > 0 ? "+" : "−"}{Math.abs(v.bonus)}){v.for === "ordre" ? " · numérotées" : ""}
-                </button>
-              {/each}
-            </div>
-            <p class="hint">Le même réglage que pour les parties. Une variante n'est choisie que si elle rapproche nettement de la cote visée.</p>
-          </details>
-        {/if}
-      {/if}
+      {#if isGym}{@render variantsControl()}{/if}
       <button class="primary" disabled={!app.wall} onclick={generateChess}>{isGym ? "Choisir" : "Générer"}</button>
 
       {#if chessBlock}
@@ -332,6 +341,7 @@
         </select>
       </label>
       <label class="field">Voies <input type="number" min="1" max="20" bind:value={gymCount} /></label>
+      {@render variantsControl()}
       <button class="primary" disabled={!app.wall} onclick={generateGymSession}>Préparer la séance</button>
       {#if classicSession.length > 0}
         <ol class="session">
@@ -339,11 +349,16 @@
             <li>
               <button aria-pressed={classicSelected === i} onclick={() => { classicSelected = i; lastDelta = null; }}>
                 <span class="dot" style:background={b.route?.colorHex}></span>
-                {i + 1}. {b.route?.label} · {b.estimatedRating}
+                {i + 1}. {b.route?.label}{b.route?.variant ? ` · ${variantText(b.route.variant, b.route.variantHold)?.label}` : ""} · {b.estimatedRating}
               </button>
             </li>
           {/each}
         </ol>
+        {@const sel = classicSession[classicSelected]}
+        {#if sel?.route?.variant}
+          {@const v = variantText(sel.route.variant, sel.route.variantHold)}
+          <p class="variant"><strong>Voie {classicSelected + 1} · {v?.label}</strong> — {v?.description}</p>
+        {/if}
       {/if}
     {:else}
       <h2>Séance</h2>

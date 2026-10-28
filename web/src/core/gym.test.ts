@@ -179,3 +179,17 @@ describe("variantes d'une voie numérotée", () => {
     expect(pickRoute(free, { piece: null, targetRating: 1600, variants: ["saute-numero", "saute-prise", "jusqu-a"], rng: seededRng(1) })!.route?.variant).toBe("saute-prise");
   });
 });
+
+describe("séance avec variantes", () => {
+  it("une seule voie : la séance la décline en variantes au lieu de la répéter", async () => {
+    const { routeSession } = await import("./gym");
+    const numbered = [0.9, 0.75, 0.6, 0.45, 0.3].map((y, i) => ({ x: 0.5, y, n: i + 1 }));
+    const wall = gym([{ grade: "6a", marks: numbered }]); // 1400
+    const every = ROUTE_VARIANTS.map((v) => v.id);
+    const session = routeSession(wall, { targetRating: 1400, count: 5, pattern: "pyramide", step: 150, variants: every, rng: seededRng(2) });
+    const pairs = session.map((b) => b.route?.variant ?? "telle quelle");
+    expect(new Set(pairs).size).toBe(5);
+    expect(session.every((b) => b.relaxations.length === 0)).toBe(true);
+    expect(pairs[0]).toBe("jusqu-a"); // la pyramide commence bas
+  });
+});
