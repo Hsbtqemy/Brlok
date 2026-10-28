@@ -36,10 +36,15 @@
 
   // Thème : automatique (celui de l'appareil), jour ou nuit, retenu sur cet appareil.
   type Theme = "auto" | "light" | "dark";
+  // Icônes (24 × 24, trait) : demi-cercle (automatique), soleil (jour), lune (nuit).
   const THEMES: { id: Theme; icon: string; label: string }[] = [
-    { id: "auto", icon: "◐", label: "Thème : automatique (celui de l'appareil)" },
-    { id: "light", icon: "☀", label: "Thème : jour" },
-    { id: "dark", icon: "☾", label: "Thème : nuit" },
+    { id: "auto", icon: "M12 3a9 9 0 1 0 0 18a9 9 0 1 0 0-18Z M12 3v18", label: "Thème : automatique (celui de l'appareil)" },
+    {
+      id: "light",
+      icon: "M12 8a4 4 0 1 0 0 8a4 4 0 1 0 0-8Z M12 2v2 M12 20v2 M4.9 4.9l1.4 1.4 M17.7 17.7l1.4 1.4 M2 12h2 M20 12h2 M4.9 19.1l1.4-1.4 M17.7 6.3l1.4-1.4",
+      label: "Thème : jour",
+    },
+    { id: "dark", icon: "M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5Z", label: "Thème : nuit" },
   ];
   let theme = $state<Theme>(readTheme());
   function readTheme(): Theme {
@@ -134,7 +139,7 @@
   </nav>
   {#if installPrompt}<button class="install" onclick={install}>Installer l'app</button>{/if}
   <button class="theme" onclick={nextTheme} title={themeInfo.label} aria-label={themeInfo.label}>
-    <span aria-hidden="true">{themeInfo.icon}</span><span class="theme-name">{theme === "auto" ? "Auto" : theme === "light" ? "Jour" : "Nuit"}</span>
+    <svg class="theme-icon" viewBox="0 0 24 24" aria-hidden="true"><path d={themeInfo.icon} /></svg>
   </button>
   <span class="sync" class:shared={app.syncStatus === "partage"} class:error={app.syncStatus === "erreur"} title={app.syncDetail || sync.long}>
     <span class="long">{sync.long}</span><span class="short">{sync.short}</span>
@@ -190,20 +195,25 @@
     gap: 6px;
   }
   .theme {
-    min-height: 32px;
-    padding: 0 10px;
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    font-size: 0.85rem;
-    border-radius: 999px;
+    width: 36px;
+    min-height: 36px;
+    padding: 0;
+    display: inline-grid;
+    place-items: center;
+    border-radius: 50%;
+  }
+  .theme-icon {
+    width: 20px;
+    height: 20px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.8;
+    stroke-linecap: round;
+    stroke-linejoin: round;
   }
   /* Navigation en bas : le bouton de thème va à droite de l'en-tête, avant l'état des données. */
   :global(body.bottom-nav) .theme {
     margin-left: auto;
-  }
-  .theme span:first-child {
-    font-size: 1.05rem;
   }
   .install {
     min-height: 32px;
@@ -249,17 +259,11 @@
       font-size: 0.7rem;
       padding: 2px 8px;
     }
-    .theme-name {
-      display: none;
-    }
     .sync .long {
       display: none;
     }
     .sync .short {
       display: inline;
-    }
-    .theme {
-      padding: 0 8px;
     }
   }
   .icon {
