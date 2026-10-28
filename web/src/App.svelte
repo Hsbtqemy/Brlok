@@ -25,6 +25,46 @@
 
   let screen = $state<ScreenId>(initialScreen());
 
+  /** État des données : en entier sur grand écran, en un mot sur téléphone. */
+  const SYNC_TEXT = {
+    partage: { long: "Données partagées", short: "Partagé" },
+    connexion: { long: "Connexion…", short: "…" },
+    erreur: { long: "Synchronisation en échec", short: "Échec synchro" },
+    local: { long: "Données sur cet appareil", short: "Local" },
+  } as const;
+  const sync = $derived(SYNC_TEXT[app.syncStatus]);
+
+  // Thème : automatique (celui de l'appareil), jour ou nuit, retenu sur cet appareil.
+  type Theme = "auto" | "light" | "dark";
+  const THEMES: { id: Theme; icon: string; label: string }[] = [
+    { id: "auto", icon: "◐", label: "Thème : automatique (celui de l'appareil)" },
+    { id: "light", icon: "☀", label: "Thème : jour" },
+    { id: "dark", icon: "☾", label: "Thème : nuit" },
+  ];
+  let theme = $state<Theme>(readTheme());
+  function readTheme(): Theme {
+    try {
+      const saved = localStorage.getItem("brlok-web:theme");
+      return saved === "light" || saved === "dark" ? saved : "auto";
+    } catch {
+      return "auto";
+    }
+  }
+  const themeInfo = $derived(THEMES.find((t) => t.id === theme)!);
+  function nextTheme() {
+    theme = THEMES[(THEMES.findIndex((t) => t.id === theme) + 1) % THEMES.length].id;
+  }
+  $effect(() => {
+    const root = document.documentElement;
+    if (theme === "auto") delete root.dataset.theme;
+    else root.dataset.theme = theme;
+    try {
+      localStorage.setItem("brlok-web:theme", theme);
+    } catch {
+      // sans persistance
+    }
+  });
+
   // Barre de navigation en bas : sur téléphone, et sur tablette tactile (iPad), à portée de pouce.
   const BOTTOM_NAV = "(max-width: 600px), (pointer: coarse) and (max-width: 1400px)";
   $effect(() => {
@@ -93,14 +133,11 @@
     {/each}
   </nav>
   {#if installPrompt}<button class="install" onclick={install}>Installer l'app</button>{/if}
-  <span class="sync" class:shared={app.syncStatus === "partage"} class:error={app.syncStatus === "erreur"} title={app.syncDetail}>
-    {app.syncStatus === "partage"
-      ? "Données partagées"
-      : app.syncStatus === "connexion"
-        ? "Connexion…"
-        : app.syncStatus === "erreur"
-          ? "Synchronisation en échec"
-          : "Données sur cet appareil"}
+  <button class="theme" onclick={nextTheme} title={themeInfo.label} aria-label={themeInfo.label}>
+    <span aria-hidden="true">{themeInfo.icon}</span><span class="theme-name">{theme === "auto" ? "Auto" : theme === "light" ? "Jour" : "Nuit"}</span>
+  </button>
+  <span class="sync" class:shared={app.syncStatus === "partage"} class:error={app.syncStatus === "erreur"} title={app.syncDetail || sync.long}>
+    <span class="long">{sync.long}</span><span class="short">{sync.short}</span>
   </span>
   {#if app.ratings.players.length > 0}
     <label class="player">
@@ -152,12 +189,31 @@
     display: flex;
     gap: 6px;
   }
+  .theme {
+    min-height: 32px;
+    padding: 0 10px;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.85rem;
+    border-radius: 999px;
+  }
+  /* Navigation en bas : le bouton de thème va à droite de l'en-tête, avant l'état des données. */
+  :global(body.bottom-nav) .theme {
+    margin-left: auto;
+  }
+  .theme span:first-child {
+    font-size: 1.05rem;
+  }
   .install {
     min-height: 32px;
     padding: 0 12px;
     font-size: 0.85rem;
     border-color: var(--accent);
     color: var(--accent);
+  }
+  .sync .short {
+    display: none;
   }
   .sync {
     font-size: 0.8rem;
@@ -192,6 +248,18 @@
     .sync {
       font-size: 0.7rem;
       padding: 2px 8px;
+    }
+    .theme-name {
+      display: none;
+    }
+    .sync .long {
+      display: none;
+    }
+    .sync .short {
+      display: inline;
+    }
+    .theme {
+      padding: 0 8px;
     }
   }
   .icon {
