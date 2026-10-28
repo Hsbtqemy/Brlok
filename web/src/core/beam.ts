@@ -30,6 +30,9 @@ export function emptyBeam(rows = BEAM_ROWS, cols = BEAM_COLS): Beam {
   return { rows, cols, holds: [], placement: "agres" };
 }
 
+/** Types de prise de poutre connus. */
+export const BEAM_TYPE_NAMES = ["bac", "réglette", "plat", "bi-doigt", "mono", "pince"];
+
 /** Types de prise d'après l'étiquette de Brlok desktop : « [Bac] », « [35°] », « bi30 », « 25 » (mm). */
 export function specTags(spec: string): string[] {
   const s = spec.trim().toLowerCase();
@@ -39,6 +42,8 @@ export function specTags(spec: string): string[] {
   if (s.startsWith("bi")) return ["bi-doigt"];
   if (s.includes("mono")) return ["mono"];
   if (/^\d+(\s*mm)?$/.test(s)) return ["réglette"];
+  // Étiquette réduite au type (prise exportée sans étiquette) : « réglette », « plat », « pince »…
+  if (BEAM_TYPE_NAMES.includes(s)) return [s];
   return [];
 }
 

@@ -1,12 +1,12 @@
 <script lang="ts">
   import exampleCatalog from "../../../data/catalog_collection.json";
-  import { BEAM_COLS, BEAM_ROWS, beamFromDesktop, beamHoldId, emptyBeam, specTags } from "../core/beam";
+  import { BEAM_COLS, BEAM_ROWS, BEAM_TYPE_NAMES, beamFromDesktop, beamHoldId, emptyBeam, specTags } from "../core/beam";
   import { clampLevel, type Beam, type Hold, type Position } from "../core/wall";
   import { app } from "./appState.svelte";
   import BeamView from "./BeamView.svelte";
 
   /** La poutre du mur actif (POUTRE.md) : placement, taille, prises (étiquette, niveau, type). */
-  const BEAM_TYPES = ["bac", "réglette", "plat", "bi-doigt", "mono", "pince"] as const;
+  const BEAM_TYPES = BEAM_TYPE_NAMES;
 
   let selected = $state<Position | null>(null);
   let confirmRemove = $state(false);

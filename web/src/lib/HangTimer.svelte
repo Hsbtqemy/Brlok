@@ -49,6 +49,7 @@
 
   let tick: ReturnType<typeof setInterval> | null = null;
   function stop() {
+    lockToken++;
     if (tick !== null) clearInterval(tick);
     tick = null;
     void lock?.release().catch(() => {});
@@ -57,6 +58,7 @@
   onDestroy(stop);
 
   let lock: { release: () => Promise<void> } | null = null;
+  let lockToken = 0;
   let audio: AudioContext | null = null;
   function beep(times: number) {
     try {
@@ -90,7 +92,15 @@
       // sans son
     }
     const nav = navigator as Navigator & { wakeLock?: { request: (t: "screen") => Promise<{ release: () => Promise<void> }> } };
-    nav.wakeLock?.request("screen").then((l) => (lock = l)).catch(() => {});
+    // Le verrou arrive après coup : si la suspension est déjà finie (lâchée tout de suite), on le rend aussitôt.
+    const token = ++lockToken;
+    nav.wakeLock
+      ?.request("screen")
+      .then((l) => {
+        if (token === lockToken && tick !== null) lock = l;
+        else void l.release().catch(() => {});
+      })
+      .catch(() => {});
     outcome = null;
     startedAt = Date.now();
     now = startedAt;
@@ -125,8 +135,9 @@
 <div class="hang">
   <p class="what"><strong>{hangText(block)}</strong> · cote {block.estimatedRating}</p>
   {#if showBeam}<BeamView {beam} left={block.hang?.left} right={block.hang?.right} />{/if}
-  <div class="clock {stage}" role="timer" aria-live="polite">
-    <span class="phase">
+  <div class="clock {stage}" role="timer">
+    <!-- Seule la phase est annoncée (« Place-toi », « Tiens ! »…), pas chaque dixième de seconde. -->
+    <span class="phase" aria-live="polite">
       {stage === "pret" ? "Prêt" : stage === "placement" ? "Place-toi" : stage === "suspension" ? "Tiens !" : outcome?.success ? "Tenu !" : "Lâché"}
     </span>
     <span class="time">{stage === "fini" ? formatClock(outcome?.heldMs ?? 0) : formatClock(left)}</span>

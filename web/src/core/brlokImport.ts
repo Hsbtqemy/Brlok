@@ -146,8 +146,9 @@ export function exportBrlok(walls: readonly Wall[], activeId?: string): { data: 
   const beamCut: string[] = [];
   const catalogs = walls.map((wall) => {
     // La poutre repart dans la grille pieds (4 × 6 dans Brlok desktop, qui accepte les niveaux 1 à 6).
-    const beam = wall.beam?.holds.length ? beamToDesktop(wall.beam) : null;
-    if (beam?.cut) beamCut.push(`${wall.name} (${beam.cut} prise(s))`);
+    // Sans poutre, une grille vide : sinon Brlok desktop remet sa grille par défaut, qui reviendrait à l'import.
+    const beam = beamToDesktop(wall.beam ?? { rows: 0, cols: 0, holds: [], placement: "agres" });
+    if (beam.cut) beamCut.push(`${wall.name} (${beam.cut} prise(s))`);
     return {
       id: wall.id,
       name: wall.name,
@@ -157,7 +158,8 @@ export function exportBrlok(walls: readonly Wall[], activeId?: string): { data: 
           if (h.level > 5) clamped.push(`${wall.name} / ${h.id}`);
           return { id: h.id, level: Math.min(5, h.level), tags: [...h.tags], position: { ...h.position }, active: h.active };
         }),
-        ...(beam ? { foot_grid: beam.foot_grid, foot_levels: beam.foot_levels } : {}),
+        foot_grid: beam.foot_grid,
+        foot_levels: beam.foot_levels,
       },
     };
   });

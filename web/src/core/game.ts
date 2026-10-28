@@ -69,6 +69,8 @@ export interface BlockRequest {
   length: number;
   cruxLast: boolean;
   feet?: FootRule;
+  /** Pièce réellement jouée, quand le caractère du bloc en diffère (promotion : la traversée de la tour). */
+  moved?: Piece;
   /** À la poutre : une suspension de `hangS` secondes au lieu d'un bloc (la fabrique la choisit). */
   beam?: boolean;
   hangS?: number;
@@ -666,7 +668,8 @@ export class ChesscaladeGame {
       return { climber, kind: request.kind, block: pending.block, success: false };
     }
 
-    this.blocksClimbed[climber]++;
+    // Fatigue : une suspension de rachat ne compte pas comme un bloc grimpé.
+    if (request.kind !== "penalite") this.blocksClimbed[climber]++;
     this.pending = null;
     this.phase = "move";
     const outcome: BlockOutcome = { climber, kind: request.kind, block: pending.block, success };
@@ -858,6 +861,7 @@ export class ChesscaladeGame {
       climber: color,
       kind: "defi",
       piece,
+      moved: PIECE_OF[move.piece],
       targetRating: this.baseTarget(color) + bonus,
       length,
       cruxLast: triggers.includes("capture"),
@@ -878,7 +882,8 @@ export class ChesscaladeGame {
     if (request.kind === "penalite") return true;
     if (request.kind === "recharge" && b.recharge) return true;
     if (b.mode === "seule") return true;
-    return b.mode === "melee" && request.piece === "tour";
+    // Mêlée : les défis d'une tour jouée (pas la « traversée » d'une promotion, qui a le caractère de la tour).
+    return b.mode === "melee" && (request.moved ?? request.piece) === "tour";
   }
 
   private startBlock(
@@ -921,8 +926,12 @@ export class ChesscaladeGame {
       if (pending.triggers.includes("mat") && verdict < 3) verdict = 3; // §6 règle 5
     }
     this.lastVerdict = { color, verdict, move: move.san };
+    // Pénalité du V1 rachetable à la poutre : le message le dit (au lieu de « tu perds »).
+    const deferred = verdict === 1 && !!this.config.beam?.penalty;
     if (success) {
       this.note(color, `Bloc réussi : ${move.san} est joué, et +${this.reward(color, "defi", now)} s.`, "bon");
+    } else if (deferred) {
+      this.note(color, `Chute : ${move.san} est joué ; ${lossText(d.penaltyMs, true)}.`, "mauvais");
     } else {
       this.note(color, `Chute : ${verdictText(verdict, move, d.penaltyMs / 1000, d.exhaustTurns)}.`, "mauvais");
     }
@@ -933,7 +942,7 @@ export class ChesscaladeGame {
         this.applyMove(move, now);
         return;
       case 1:
-        if (this.fallPenalty(color, d.penaltyMs, now)) this.note(color, `Les ${d.penaltyMs / 1000} s de pénalité peuvent se racheter à la poutre.`);
+        this.fallPenalty(color, d.penaltyMs, now);
         this.applyMove(move, now);
         return;
       case 2:

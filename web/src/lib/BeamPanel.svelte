@@ -43,9 +43,16 @@
   let now = $state(Date.now());
   let autoNext = $state(false);
 
-  /** Suspension choisie à la main : les deux prises touchées sur la poutre. */
-  const manual = $derived(picking && left && right ? hangBlock(beam, { left, right, seconds }) : null);
-  const single = $derived(mode === "une" ? (manual ?? chosen) : null);
+  // Choix à la main : les deux prises touchées deviennent la suspension choisie, et le choix se termine
+  // (la poutre n'est plus touchable pendant la suspension).
+  $effect(() => {
+    if (!picking || !left || !right) return;
+    chosen = hangBlock(beam, { left, right, seconds });
+    picking = false;
+    last = null;
+    attempt++;
+  });
+  const single = $derived(mode === "une" ? chosen : null);
   const current = $derived(mode === "serie" ? (series[index] ?? null) : single);
 
   // La poutre en grand montre la suspension en cours (sauf pendant le choix à la main).
@@ -169,7 +176,7 @@
   </div>
   {#if picking}
     <p class="hint">
-      {!left ? "Touche sur la poutre la prise de la main gauche…" : !right ? "…puis celle de la main droite (la même : les deux mains dessus)." : "Prises choisies : touche encore la poutre pour recommencer."}
+      {!left ? "Touche sur la poutre la prise de la main gauche…" : "…puis celle de la main droite (la même : les deux mains dessus)."}
     </p>
   {/if}
   {#if single}

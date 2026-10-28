@@ -149,7 +149,9 @@
 
   /** Types de prises présents sur le pan (types connus d'abord). */
   const wallTags = $derived.by(() => {
-    const tags = new Set(app.wall?.holds.flatMap((h) => h.tags) ?? []);
+    // Poutre intégrée (et utilisée) : ses types (bac, plat…) se choisissent aussi.
+    const source = app.wall?.beam?.placement === "integree" && classicUseBeam ? app.playWall : app.wall;
+    const tags = new Set(source?.holds.flatMap((h) => h.tags) ?? []);
     const known = HOLD_TYPES.filter((t) => tags.has(t));
     return [...known, ...[...tags].filter((t) => !(HOLD_TYPES as readonly string[]).includes(t)).sort()];
   });
@@ -751,7 +753,9 @@
     </div>
 
     {#if mode === "poutre" && app.wall?.beam}
-      <BeamPanel beam={app.wall.beam} bind:left={beamLeft} bind:right={beamRight} bind:picking={beamPicking} />
+      {#key app.wall.id}
+        <BeamPanel beam={app.wall.beam} bind:left={beamLeft} bind:right={beamRight} bind:picking={beamPicking} />
+      {/key}
     {:else if mode === "bibliotheque"}
       <LibraryPanel onStart={(blocks, settings, name) => beginRun(blocks, settings, name)} onApplyTemplate={applyTemplate} onPreview={(b) => (previewBlock = b)} />
     {:else if mode === "carnet" && isGym}

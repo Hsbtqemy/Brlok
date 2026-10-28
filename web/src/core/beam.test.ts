@@ -67,6 +67,16 @@ describe("poutre : description", () => {
     expect(out.foot_grid).toEqual(catalog.foot_grid);
   });
 
+  it("sans poutre, une grille pieds vide (Brlok desktop ne remet pas la sienne) ; un type sans étiquette revient", () => {
+    const out = exportBrlok([pan()]).data.catalogs[0].catalog as { foot_grid?: string[][] };
+    expect(out.foot_grid).toHaveLength(4);
+    expect(out.foot_grid!.flat().every((c) => c === "")).toBe(true);
+    expect(beamFromDesktop(out.foot_grid, undefined)).toBeUndefined();
+    const typed = { ...beam, holds: [{ id: "PA1", level: 2, tags: ["pince"], position: { row: 0, col: 0 }, active: true }] };
+    const back = beamToDesktop(typed);
+    expect(beamFromDesktop(back.foot_grid, back.foot_levels)!.holds[0].tags).toEqual(["pince"]);
+  });
+
   it("une poutre plus grande que 4 × 6 est coupée à l'export", () => {
     const big = { ...beam, holds: [...beam.holds, { id: "PG5", level: 2, tags: [], position: { row: 4, col: 6 }, active: true }] };
     expect(beamToDesktop(big).cut).toBe(1);
@@ -159,6 +169,9 @@ describe("suspensions", () => {
     const wall = { ...pan(), beam };
     const b = hangBlock(beam, { left: "PA1", right: "PF1", seconds: 10 })!;
     expect(blockSignature("pan", b)).toBe("pan|poutre:PA1|PF1:10");
+    // Le même bloc avec ou sans sortie à la poutre : deux favoris différents.
+    const plain = { holds: [wall.holds[0]], estimatedRating: 1400, relaxations: [] };
+    expect(blockSignature("pan", plain)).not.toBe(blockSignature("pan", { ...plain, finish: b }));
     const harder = { ...wall, beam: { ...beam, holds: beam.holds.map((h) => (h.id === "PA1" ? { ...h, level: 3 } : h)) } };
     expect(refreshBlock(harder, b)?.estimatedRating).toBe(hangRating([3, 1], 10));
     expect(refreshBlock({ ...wall, beam: undefined }, b)).toBeNull();

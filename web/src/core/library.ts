@@ -156,7 +156,8 @@ export function blockLabel(block: Block): string {
 export function blockSignature(wallId: string, block: Block): string {
   if (block.hang) return `${wallId}|poutre:${block.hang.left}|${block.hang.right}:${block.hang.seconds}`;
   if (block.route) return `${wallId}|voie:${block.route.id}~${block.route.variant ?? ""}~${block.route.variantHold ?? ""}`;
-  return `${wallId}|${block.holds.map((h) => h.id).join("-")}~${block.feet ?? ""}~${block.noFootMove ?? ""}`;
+  const finish = block.finish?.hang ? `~sortie:${block.finish.hang.left}|${block.finish.hang.right}:${block.finish.hang.seconds}` : "";
+  return `${wallId}|${block.holds.map((h) => h.id).join("-")}~${block.feet ?? ""}~${block.noFootMove ?? ""}${finish}`;
 }
 
 // --- Séance en cours ---------------------------------------------------------------------------

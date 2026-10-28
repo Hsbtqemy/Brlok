@@ -27,7 +27,9 @@
     return () => clearInterval(id);
   });
 
-  const left = $derived(timeLimitMs === undefined ? undefined : Math.max(0, timeLimitMs - (now - startedAt)));
+  // Suspension : c'est son décompte qui décide ; la limite du bloc ne la coupe pas (on peut mettre du temps
+  // à rejoindre la poutre, et les deux résultats se croiseraient).
+  const left = $derived(timeLimitMs === undefined || block?.hang ? undefined : Math.max(0, timeLimitMs - (now - startedAt)));
   let timedOut = $state(false);
   $effect(() => {
     if (left === 0 && !timedOut) {

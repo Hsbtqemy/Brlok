@@ -53,6 +53,17 @@ describe("Chesscalade à la poutre (POUTRE.md §4)", () => {
     expect(requests.at(-1)).toMatchObject({ piece: "tour", beam: true, hangS: 10 });
   });
 
+  it("mêlée : une promotion (caractère de la tour) reste au pan", () => {
+    const { game, requests } = setup({ mode: "melee", seconds: 10, recharge: false, penalty: false });
+    for (const lan of ["h2h4", "g7g5", "h4g5", "a7a6", "g5g6", "a6a5", "g6h7", "a5a4"]) {
+      play(game, lan);
+      while (game.phase === "block") game.blockResult(true, 0);
+    }
+    game.play("h7", "g8", "q", 0); // hxg8=D : prise du cavalier + promotion
+    expect(requests.at(-1)).toMatchObject({ kind: "defi", piece: "tour", moved: "pion" });
+    expect(requests.at(-1)?.beam).toBeUndefined();
+  });
+
   it("recharge à la poutre", () => {
     const { game, requests } = setup({ mode: "aucun", seconds: 15, recharge: true, penalty: false });
     game.requestRecharge(false, 0);
@@ -112,6 +123,12 @@ describe("Chesscalade à la poutre (POUTRE.md §4)", () => {
     expect(game.chess.get("d5")?.color).toBe("w");
     expect(requests.at(-1)).toMatchObject({ climber: "w", kind: "penalite" });
     expect(game.pending?.debtMs).toBe(10_000);
+    // Le message ne dit pas « tu perds » : la pénalité attend la poutre.
+    expect(game.log.some((l) => l.text.includes("à racheter à la poutre") && !l.text.includes("tu perds"))).toBe(true);
+    // Une suspension de rachat ne compte pas pour la fatigue.
+    const climbed = game.blocksClimbed.w;
+    game.blockResult(true, 0);
+    expect(game.blocksClimbed.w).toBe(climbed);
   });
 
   it("la pénalité en attente survit à la sauvegarde", () => {
