@@ -3,6 +3,7 @@
   import { orderedMarks, sectorOf, type Route, type Sector, type Wall } from "../core/wall";
   import { app } from "./appState.svelte";
   import { photoFromFile } from "./photo";
+  import CameraCapture from "./CameraCapture.svelte";
   import RouteEditor from "./RouteEditor.svelte";
   import RouteMarks from "./RouteMarks.svelte";
 
@@ -43,11 +44,33 @@
   }
 
   /** Photo : `nouveau` crée un secteur, sinon remplace la photo du secteur ouvert. */
-  async function onPhoto(event: Event, nouveau: boolean) {
+  function onPhoto(event: Event, nouveau: boolean) {
     const input = event.currentTarget as HTMLInputElement;
     const file = input.files?.[0];
     input.value = "";
-    if (!file || !wall) return;
+    if (file) void usePhoto(file, nouveau);
+  }
+
+  // Appareil photo dans la page (sur Android, l'appareil photo du téléphone peut faire perdre la photo).
+  let camera = $state<{ nouveau: boolean } | null>(null);
+  /** Repli : appareil photo du téléphone (champ fichier caché). */
+  let nativeCamera = $state<HTMLInputElement | null>(null);
+  let nativeNouveau = false;
+
+  function openNativeCamera(nouveau: boolean) {
+    nativeNouveau = nouveau;
+    camera = null;
+    nativeCamera?.click();
+  }
+
+  function onCameraPhoto(file: File) {
+    const nouveau = camera?.nouveau ?? true;
+    camera = null;
+    void usePhoto(file, nouveau);
+  }
+
+  async function usePhoto(file: File, nouveau: boolean) {
+    if (!wall) return;
     busy = true;
     message = `Photo reçue (${(file.size / 1_000_000).toFixed(1)} Mo) : préparation…`;
     try {
@@ -114,6 +137,18 @@
   }
 </script>
 
+{#if camera}
+  <CameraCapture onCapture={onCameraPhoto} onCancel={() => (camera = null)} onFallback={() => openNativeCamera(camera?.nouveau ?? true)} />
+{/if}
+<input
+  class="hidden"
+  type="file"
+  accept="image/*"
+  capture="environment"
+  bind:this={nativeCamera}
+  onchange={(e) => onPhoto(e, nativeNouveau)}
+/>
+
 {#if editing}
   <RouteEditor routeId={editing.routeId} sectorId={sector?.id ?? null} onDone={closeEditor} />
 {:else if wall}
@@ -139,10 +174,7 @@
           {/each}
           <div class="sector-add">
             <span class="add-title">{busy ? "Analyse…" : sectors.length ? "+ Secteur" : "Premier secteur"}</span>
-            <label class="file small">
-              <input type="file" accept="image/*" capture="environment" onchange={(e) => onPhoto(e, true)} />
-              <span>📷 Photo</span>
-            </label>
+            <button class="file small" onclick={() => (camera = { nouveau: true })}>📷 Photo</button>
             <label class="file small">
               <input type="file" accept="image/*" onchange={(e) => onPhoto(e, true)} />
               <span>Image…</span>
@@ -155,10 +187,7 @@
         <div class="row sector-edit">
           <input type="text" aria-label="Nom du secteur" value={sector.name} onchange={(e) => renameSector((e.currentTarget as HTMLInputElement).value)} />
           <span class="hint">Changer la photo :</span>
-          <label class="file small">
-            <input type="file" accept="image/*" capture="environment" onchange={(e) => onPhoto(e, false)} />
-            <span>📷 Photo</span>
-          </label>
+          <button class="file small" onclick={() => (camera = { nouveau: false })}>📷 Photo</button>
           <label class="file small">
             <input type="file" accept="image/*" onchange={(e) => onPhoto(e, false)} />
             <span>Image…</span>
@@ -297,6 +326,12 @@
     font-size: 0.85rem;
     color: var(--accent);
     font-weight: 600;
+  }
+  .hidden {
+    display: none;
+  }
+  button.file {
+    background: none;
   }
   .sector-add .file {
     min-height: 36px;
