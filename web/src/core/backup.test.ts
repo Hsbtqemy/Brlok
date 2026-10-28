@@ -20,10 +20,10 @@ describe("sauvegarde complète", () => {
     let library = saveTemplate(emptyLibrary(), "Force", { kind: "pan", level: 4, pattern: "uniforme", blocks: 5, holds: 8, variety: true, requiredTags: [], excludedTags: [] });
     library = addFavorite(library, "pan", { holds: [], estimatedRating: 1500, relaxations: [], route: { id: "r", label: "Vert", color: "vert", grade: "5c", styles: [] } }, "Vert").lib;
     const back = parseBackup(JSON.stringify(makeBackup([], emptyRatingsState(), null, library)));
-    expect(back.library.templates.map((t) => t.name)).toEqual(["Force"]);
+    expect(back.library?.templates.map((t) => t.name)).toEqual(["Force"]);
     expect(describeBackup(back)).toContain("1 favori(s), 1 modèle(s)");
     const old = parseBackup(JSON.stringify({ app: "brlok-web", version: 1, walls: [], ratings: {} }));
-    expect(old.library).toEqual(emptyLibrary());
+    expect(old.library).toBeNull();
   });
 
   it("refuse ce qui n'est pas une sauvegarde", () => {

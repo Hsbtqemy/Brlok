@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { onDestroy } from "svelte";
   import type { Block } from "../core/generator";
   import { formatClock, planIntervals, timerState, TIMER_PRESETS, totalSeconds, type TimerConfig, type TimerMode } from "../core/intervals";
   import { app } from "./appState.svelte";
@@ -77,7 +78,17 @@
   let pauseAutostart = false;
   const pauseLeft = $derived(pauseUntil === null ? 0 : Math.max(0, pauseUntil - now));
 
+  // Enchaînement en attente (1,5 s après la fin) : annulé si l'on passe au bloc suivant à la main, ou si
+  // l'écran du minuteur disparaît (autre onglet) — sinon la séance avancerait toute seule, en arrière-plan.
+  let chainTimer: ReturnType<typeof setTimeout> | null = null;
+  function cancelChain() {
+    if (chainTimer !== null) clearTimeout(chainTimer);
+    chainTimer = null;
+  }
+  onDestroy(cancelChain);
+
   function goNext(autostart: boolean) {
+    cancelChain();
     if (!onNext) return;
     const seconds = Math.max(0, Math.round(pauseS || 0));
     if (seconds > 0) {
@@ -185,6 +196,7 @@
   }
 
   function reset() {
+    cancelChain();
     running = false;
     banked = 0;
     result = null;
@@ -194,7 +206,10 @@
     running = false;
     banked = totalSeconds(plan) * 1000;
     result = "Terminé !";
-    if (chained && onNext) setTimeout(() => goNext(true), 1500);
+    if (chained && onNext) {
+      cancelChain();
+      chainTimer = setTimeout(() => goNext(true), 1500);
+    }
   }
 
   /** Chrono : arrivé en haut. */
@@ -231,7 +246,7 @@
 {#snippet controls()}
   <div class="controls">
     {#if !running}
-      <button class="primary" onclick={start} disabled={timer.finished && config.mode !== "chrono"}>{started ? "Reprendre" : "Démarrer"}</button>
+      <button class="primary" onclick={start} disabled={(timer.finished && config.mode !== "chrono") || pauseUntil !== null}>{started ? "Reprendre" : "Démarrer"}</button>
     {:else if config.mode === "chrono"}
       <button class="primary" onclick={arrived}>Arrivé !</button>
     {:else}

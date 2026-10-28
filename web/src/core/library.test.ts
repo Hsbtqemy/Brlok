@@ -20,6 +20,7 @@ import {
   mergeTemplates,
   normalizeLibrary,
   refreshBlock,
+  renameTemplate,
   restartRun,
   runHasProgress,
   runSummary,
@@ -255,6 +256,15 @@ describe("modèles", () => {
     expect(saveTemplate(lib, "  ", panSettings)).toBe(lib);
   });
 
+  it("renommer : refusé si le nom est pris par un modèle du même type", () => {
+    let lib = saveTemplate(saveTemplate(emptyLibrary(), "A", panSettings), "B", panSettings);
+    lib = saveTemplate(lib, "C", { kind: "voies", target: 1500, pattern: "pyramide", count: 6, variants: null });
+    const [a] = lib.templates;
+    expect(renameTemplate(lib, a.id, "B")).toBe(lib);
+    expect(renameTemplate(lib, a.id, " ")).toBe(lib);
+    expect(renameTemplate(lib, a.id, "C").templates[0].name).toBe("C");
+  });
+
   it("décrit ses réglages", () => {
     expect(settingsText({ ...panSettings, requiredTags: ["réglette"], excludedTags: ["mono"] })).toBe(
       "Modéré · Uniforme · 3 bloc(s) de 4 prises · variété · types : réglette · sans : mono",
@@ -283,6 +293,18 @@ describe("Brlok desktop", () => {
     expect(blocks[0].block.holds[0].level).toBe(wall.holds.find((h) => h.id === blocks[0].block.holds[0].id)!.level);
     const small = { ...wall, holds: wall.holds.filter((h) => h.id !== desktopFavorites.blocks[0].holds[0].id) };
     expect(importDesktopFavorites(desktopFavorites, small).skipped).toBe(1);
+  });
+
+  it("lit aussi le fichier de données de Brlok desktop (favoris par catalogue)", () => {
+    const blocks = desktopFavorites.blocks;
+    const v2 = { version: 2, by_catalog: { autre: [{ holds: [{ id: "ZZ9" }] }], [wall.id]: blocks } };
+    expect(desktopFileKind(v2)).toBe("favoris");
+    expect(importDesktopFavorites(v2, wall).blocks).toHaveLength(blocks.length);
+    // Pan d'un autre identifiant : tous les catalogues, prises inconnues écartées.
+    const other = { ...wall, id: "ailleurs" };
+    const r = importDesktopFavorites(v2, other);
+    expect(r.blocks).toHaveLength(blocks.length);
+    expect(r.skipped).toBe(1);
   });
 
   it("importe les modèles du dépôt", () => {

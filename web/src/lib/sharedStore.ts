@@ -98,6 +98,8 @@ export class SharedStore {
   private liveGame: Body | null = null;
   private bestTimes: RatingsState["bestTimes"] = {};
   private library: Library = emptyLibrary();
+  /** Le stockage partagé a déjà une bibliothèque (au moins un document). */
+  private libraryLoadedFromRemote = false;
 
   constructor(private readonly handlers: Handlers) {}
 
@@ -155,6 +157,7 @@ export class SharedStore {
         this.liveGame = docs.find((d) => d.id === "current")?.body ?? null;
         break;
       case "library": {
+        if (docs.length > 0) this.libraryLoadedFromRemote = true;
         const items = (id: string) => docs.find((d) => d.id === id)?.body.items;
         this.library = normalizeLibrary({
           favorites: items("favorites"),
@@ -192,6 +195,11 @@ export class SharedStore {
         }
       }
       if (!init.exists) await this.write("meta/init", { at: new Date().toISOString() });
+      // Stockage déjà initialisé avant la bibliothèque : la sienne est vide, on y met celle de l'appareil.
+      else if (!this.libraryLoadedFromRemote) {
+        const library = local.library();
+        if (library.favorites.length || library.templates.length || library.history.length) await this.syncLibrary(emptyLibrary(), library);
+      }
       // Le stockage partagé fait foi.
       this.emit("players");
       this.emit("walls");

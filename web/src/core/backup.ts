@@ -18,8 +18,8 @@ export interface Backup {
   walls: Wall[];
   ratings: RatingsState;
   liveGame: unknown | null;
-  /** Absent des sauvegardes faites avant les favoris et l'historique. */
-  library: Library;
+  /** Null pour une sauvegarde faite avant les favoris et l'historique : la remettre garde la bibliothèque actuelle. */
+  library: Library | null;
 }
 
 export function makeBackup(walls: Wall[], ratings: RatingsState, liveGame: unknown | null, library: Library = emptyLibrary(), at = new Date().toISOString()): Backup {
@@ -57,7 +57,7 @@ export function parseBackup(text: string): Backup {
       bestTimes: r.bestTimes ?? empty.bestTimes,
     },
     liveGame: b.liveGame ?? null,
-    library: normalizeLibrary(b.library),
+    library: b.library === undefined || b.library === null ? null : normalizeLibrary(b.library),
   };
 }
 
@@ -71,9 +71,9 @@ export function describeBackup(b: Backup): string {
     `${b.ratings.attempts.length} tentative(s)`,
     `${b.ratings.games.length} partie(s)`,
     b.liveGame ? "une partie en cours" : "",
-    b.library.favorites.length ? `${b.library.favorites.length} favori(s)` : "",
-    b.library.templates.length ? `${b.library.templates.length} modèle(s)` : "",
-    b.library.history.length ? `${b.library.history.length} séance(s) à l'historique` : "",
+    b.library?.favorites.length ? `${b.library.favorites.length} favori(s)` : "",
+    b.library?.templates.length ? `${b.library.templates.length} modèle(s)` : "",
+    b.library?.history.length ? `${b.library.history.length} séance(s) à l'historique` : "",
   ]
     .filter(Boolean)
     .join(", ");

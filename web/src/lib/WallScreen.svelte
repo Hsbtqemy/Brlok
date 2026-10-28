@@ -42,6 +42,7 @@
     type TimerSettings,
   } from "../core/library";
   import { EXPORT_FORMATS, exportSession, type ExportFormat } from "./sessionFiles";
+  import { onDestroy } from "svelte";
 
   interface Props {
     /** Ouvrir le mur actif dans l'onglet Murs. */
@@ -182,6 +183,8 @@
     let lib = app.library;
     if (lib.current && runHasProgress(lib.current)) lib = archive(lib, lib.current);
     app.setLibrary({ ...lib, current: startRun(wall.id, blocks, settings, name) });
+    // Séance refaite depuis l'historique : le formulaire reprend ses réglages.
+    if (settings && settings.kind === wall.kind) loadSettings(settings);
     lastDelta = null;
     editing = false;
     sessionFailed = false;
@@ -224,6 +227,21 @@
     }
     setRun(next);
   }
+
+  // Commentaire : enregistré peu après la frappe (pour ne pas écrire à chaque lettre), et en quittant le champ.
+  let commentTimer: ReturnType<typeof setTimeout> | null = null;
+  function saveComment(index: number, text: string) {
+    if (commentTimer !== null) clearTimeout(commentTimer);
+    commentTimer = null;
+    if ((run?.blocks[index]?.comment ?? "") !== text.trim()) updateRun((r) => setBlockComment(r, index, text));
+  }
+  function saveCommentSoon(index: number, text: string) {
+    if (commentTimer !== null) clearTimeout(commentTimer);
+    commentTimer = setTimeout(() => saveComment(index, text), 600);
+  }
+  onDestroy(() => {
+    if (commentTimer !== null) clearTimeout(commentTimer);
+  });
 
   function toggleHold(id: string) {
     const wall = app.wall;
@@ -533,18 +551,21 @@
               {/if}
             </p>
           {/if}
-          <label class="field">
-            Commentaire
-            <input
-              type="text"
-              value={sel.comment ?? ""}
-              placeholder={isGym ? "Note ou retour sur cette voie…" : "Note ou retour sur ce bloc…"}
-              onchange={(e) => {
-                const i = run!.selected;
-                updateRun((r) => setBlockComment(r, i, (e.currentTarget as HTMLInputElement).value));
-              }}
-            />
-          </label>
+          <!-- Un champ par bloc : le commentaire va au bloc pour lequel il a été tapé, même si la séance passe
+               seule au bloc suivant (fin de pause, enchaînement) avant qu'on quitte le champ. -->
+          {#key run.selected}
+            {@const index = run.selected}
+            <label class="field">
+              Commentaire
+              <input
+                type="text"
+                value={sel.comment ?? ""}
+                placeholder={isGym ? "Note ou retour sur cette voie…" : "Note ou retour sur ce bloc…"}
+                oninput={(e) => saveCommentSoon(index, (e.currentTarget as HTMLInputElement).value)}
+                onchange={(e) => saveComment(index, (e.currentTarget as HTMLInputElement).value)}
+              />
+            </label>
+          {/key}
           <div class="row">
             <button class="fav" aria-pressed={!!favoriteOf(sel)} onclick={() => toggleFavorite(sel, favoriteTitle(run!.settings, run!.selected), sel.comment)}
               >{favoriteOf(sel) ? "★ Dans les favoris" : "☆ Favori"}</button

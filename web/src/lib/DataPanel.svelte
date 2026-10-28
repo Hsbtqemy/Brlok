@@ -55,7 +55,8 @@
     app.setWalls(b.walls, b.walls[0]?.id);
     app.setRatings(b.ratings);
     app.saveGame(b.liveGame as LiveGame | null);
-    app.setLibrary(b.library);
+    // Une sauvegarde d'avant la bibliothèque n'en a pas : on garde celle de l'appareil.
+    if (b.library) app.setLibrary(b.library);
     message = `Données remises : ${describeBackup(b)}.`;
     pending = null;
   }

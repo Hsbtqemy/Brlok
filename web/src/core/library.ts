@@ -382,9 +382,12 @@ export function removeTemplate(lib: Library, id: string): Library {
   return { ...lib, templates: lib.templates.filter((t) => t.id !== id) };
 }
 
+/** Renomme un modèle ; refusé (bibliothèque inchangée) si le nom est vide ou déjà pris par un modèle du même type. */
 export function renameTemplate(lib: Library, id: string, name: string): Library {
   const clean = name.trim();
-  if (!clean) return lib;
+  const target = lib.templates.find((t) => t.id === id);
+  if (!clean || !target) return lib;
+  if (lib.templates.some((t) => t.id !== id && t.name === clean && t.settings.kind === target.settings.kind)) return lib;
   return { ...lib, templates: lib.templates.map((t) => (t.id === id ? { ...t, name: clean } : t)) };
 }
 
@@ -434,12 +437,26 @@ export function desktopFileKind(data: unknown): "favoris" | "modeles" | null {
   const d = data as Record<string, unknown>;
   if (Array.isArray(d.templates)) return "modeles";
   if (Array.isArray(d.blocks) && !("constraints" in d)) return "favoris";
+  // Fichier de données de Brlok desktop (version 2) : favoris rangés par catalogue.
+  if (d.by_catalog && typeof d.by_catalog === "object") return "favoris";
   return null;
+}
+
+/** Blocs d'un fichier de favoris : export (`blocks`) ou fichier de données v2 (`by_catalog`, celui du pan s'il y est). */
+function desktopFavoriteBlocks(data: unknown, wallId: string): DesktopBlock[] {
+  const d = (data ?? {}) as { blocks?: unknown; by_catalog?: Record<string, unknown> };
+  if (Array.isArray(d.blocks)) return d.blocks as DesktopBlock[];
+  const byCatalog = d.by_catalog && typeof d.by_catalog === "object" ? d.by_catalog : {};
+  // Un pan importé de Brlok desktop garde l'identifiant de son catalogue ; sinon, tous les catalogues
+  // (les blocs dont les prises n'existent pas sur ce pan sont écartés ensuite).
+  const own = byCatalog[wallId];
+  const lists = Array.isArray(own) ? [own] : Object.values(byCatalog).filter(Array.isArray);
+  return lists.flat() as DesktopBlock[];
 }
 
 /** Favoris de Brlok desktop → blocs de ce pan (les prises inconnues du pan sont écartées). */
 export function importDesktopFavorites(data: unknown, wall: Wall): { blocks: { block: Block; title?: string; comment?: string }[]; skipped: number } {
-  const items = ((data as { blocks?: DesktopBlock[] })?.blocks ?? []).filter((b) => b && Array.isArray(b.holds));
+  const items = desktopFavoriteBlocks(data, wall.id).filter((b) => b && Array.isArray(b.holds));
   const blocks: { block: Block; title?: string; comment?: string }[] = [];
   let skipped = 0;
   for (const item of items) {

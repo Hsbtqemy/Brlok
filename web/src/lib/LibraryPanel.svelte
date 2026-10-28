@@ -246,7 +246,12 @@
                 class="row"
                 onsubmit={(e) => {
                   e.preventDefault();
-                  app.updateLibrary((l) => renameTemplate(l, t.id, renameText));
+                  const next = renameTemplate(app.library, t.id, renameText);
+                  if (next === app.library && renameText.trim() !== t.name) {
+                    message = renameText.trim() ? `Un autre modèle s'appelle déjà « ${renameText.trim()} ».` : "Le nom ne peut pas être vide.";
+                    return;
+                  }
+                  app.setLibrary(next);
                   renaming = null;
                 }}
               >
