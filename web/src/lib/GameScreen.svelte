@@ -17,6 +17,7 @@
   import { ROUTE_VARIANTS, routeHex, routeLabel, type RouteVariant } from "../core/gym";
   import { sectorOf } from "../core/wall";
   import { expressWall } from "../core/wallEdit";
+  import { LAYOUTS, type Layout } from "./layout";
   import { FAMILIES, cadenceText, intensityLines, recapLines } from "../core/setupText";
   import { loadRouteVariants, saveRouteVariants } from "./storage";
   import { PIECES } from "../core/pieces";
@@ -46,17 +47,6 @@
   const REASON_LABEL = { mat: "échec et mat", pat: "pat", nulle: "nulle", temps: "au temps", abandon: "abandon" } as const;
   const COLOR_LABEL: Record<Color, string> = { w: "Blancs", b: "Noirs" };
 
-  /**
-   * Disposition à deux sur un même écran : côte à côte (un seul sens), tour à tour (l'échiquier se tourne
-   * vers le joueur au trait), face à face (tablette à plat entre les joueurs : pièces et panneaux tournés
-   * vers chacun). Elle se change aussi en cours de partie.
-   */
-  type Layout = "cote" | "tour" | "face";
-  const LAYOUTS: { id: Layout; label: string; hint: string }[] = [
-    { id: "cote", label: "Côte à côte", hint: "Un seul sens d'échiquier, « Retourner » à la main." },
-    { id: "tour", label: "Tour à tour", hint: "L'échiquier se tourne vers celui qui joue : pour se passer la tablette." },
-    { id: "face", label: "Face à face", hint: "Tablette à plat entre vous : les pièces et la bande de chacun sont tournées vers lui." },
-  ];
 
   // --- Réglages (retenus d'une partie à l'autre, sur cet appareil) ---
   const SETUP_KEY = "brlok-web:game-setup";
@@ -657,7 +647,7 @@
 </script>
 
 {#if rounds}
-  <RoundsPlay game={rounds} {ids} onExit={() => (rounds = null)} />
+  <RoundsPlay game={rounds} {ids} bind:layout onExit={() => (rounds = null)} />
 {:else if !game || !view}
   <section class="panel setup">
     {#if app.liveGame}

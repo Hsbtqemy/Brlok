@@ -53,7 +53,7 @@ Prérequis, une fois : *Settings → Pages → Source : GitHub Actions*.
 | `public/` | Manifeste, icônes et service worker de l'app installée ; moteur d'échecs |
 | `public/engine/` | Stockfish.js 19 « lite » (GPLv3, voir son README) |
 
-## État (v0.2)
+## État (v0.3)
 
 - [x] Modèle de mur générique (grille de taille quelconque, niveaux 1–6, portée, enchaînements interdits)
 - [x] Import de `catalog_collection.json` (la « grille pieds », en fait la poutre, n'est pas fusionnée par défaut)
@@ -80,4 +80,16 @@ Prérequis, une fois : *Settings → Pages → Source : GitHub Actions*.
 - [x] Mode salle : mur à voies, photo du secteur, détection des prises par couleur, voies choisies selon la
       cote et le style de la pièce (voir [`docs/chesscalade/MURS.md`](../docs/chesscalade/MURS.md))
 - [x] Brlok en salle : séance de voies (répartitions Brlok), carnet de voies, pièce facultative
-- [ ] Pan en photo (attend une photo avec les 4 coins visibles)
+- [x] Plusieurs secteurs (une photo chacun) par mur à voies, photos rangées à part dans le stockage
+- [x] Éditeur de voie à part : pipette de couleur (blanc et noir compris), zone, départ et top, ordre des
+      prises, appareil photo dans l'app
+- [x] Variantes d'une voie selon la cote visée (pieds libres, jusqu'à la prise n° k, sans la prise n° k,
+      deux fois…), dans les parties, « Choisir une voie » et la séance
+- [x] Lancement de partie en étapes (qui joue, type, où, intensité, récapitulatif en phrases), « Rejouer
+      comme la dernière fois », pan rapide sans passer par Murs
+- [x] Passage au mur par séries de 3 (solo), densité de blocs, réussite et chute qui comptent en temps
+- [x] À deux sur un même écran : côte à côte, tour à tour, face à face (aussi en rounds)
+- [x] App installable (PWA) : hors ligne, barre de navigation en bas (téléphone, tablette), mise à jour
+      proposée, thème automatique / jour / nuit, sauvegarde complète
+- [ ] Synchronisation entre appareils par un serveur personnel (voir [`docs/SYNCHRO.md`](../docs/SYNCHRO.md))
+- [ ] Pan en photo (redressement aux 4 coins, positions réelles des prises)

@@ -15,14 +15,17 @@
   import Board from "./Board.svelte";
   import PanView from "./PanView.svelte";
   import { Stockfish } from "./stockfish";
+  import { LAYOUTS, type Layout } from "./layout";
 
   interface Props {
     game: RoundsGame;
     ids: Record<Color, string>;
+    /** Disposition à deux sur un même écran (voir layout.ts), partagée avec le lancement de partie. */
+    layout?: Layout;
     onExit: () => void;
   }
 
-  let { game, ids, onExit }: Props = $props();
+  let { game, ids, layout = $bindable("cote"), onExit }: Props = $props();
 
   const COLOR_LABEL: Record<Color, string> = { w: "Blancs", b: "Noirs" };
   const REASON_LABEL: Record<string, string> = {
@@ -316,6 +319,18 @@
   const pieceOf = (p: string | undefined) => PIECES.find((x) => x.id === p);
   const top: Color = $derived(flipped ? "w" : "b");
   const bottom: Color = $derived(flipped ? "b" : "w");
+
+  // À deux : qui a la main (coup, bonus, grimpeur du duel). Pendant un duel où les deux agissent
+  // (même bloc, bloc imposé), personne : le panneau reste dans le sens de l'écran.
+  const duo = $derived(!engine);
+  const actor = $derived<Color | null>(
+    view.stage === "echecs" ? view.turn : view.stage === "bonus" ? view.bonusFor : view.stage === "mur" && view.duel && "climber" in view.duel ? view.duel.climber : null,
+  );
+  const face = $derived(duo && layout === "face");
+  const actorUpside = $derived(face && actor === top);
+  $effect(() => {
+    if (duo && layout === "tour" && actor) flipped = actor === "b";
+  });
 </script>
 
 {#snippet blockView(ids: string[])}
@@ -329,7 +344,7 @@
 
 <div class="rounds">
   <section class="panel board-panel">
-    <div class="status">
+    <div class="status" class:upside={actorUpside}>
       <span>
         {#if view.stage === "echecs"}Round {view.round + 1}/{game.params.maxRounds} · <strong>Échecs</strong>
         {:else if view.stage === "mur"}Round {view.round + 1}/{game.params.maxRounds} · <strong>Mur</strong> (plateau figé)
@@ -340,19 +355,19 @@
         <strong class="round-timer">{clockText((void version, game.stageRemaining(now)))}</strong>
       {/if}
     </div>
-    <div class="clock" class:running={view.running === top}>
+    <div class="clock" class:running={view.running === top} class:upside={face}>
       <span>{name(top)} · {COLOR_LABEL[top]} · duels {view.wins[top]}</span>
       <strong>{clockText(game.clock.remainingAt(top, now))}</strong>
     </div>
     <div class:frozen={view.stage !== "echecs"}>
-      <Board board={view.board} {flipped} {selected} {targets} lastMove={view.lastMove} {onSquare} />
+      <Board board={view.board} {flipped} {selected} {targets} lastMove={view.lastMove} upsideDown={face ? top : null} {onSquare} />
     </div>
     <div class="clock" class:running={view.running === bottom}>
       <span>{name(bottom)} · {COLOR_LABEL[bottom]} · duels {view.wins[bottom]}</span>
       <strong>{clockText(game.clock.remainingAt(bottom, now))}</strong>
     </div>
     {#if promotionChoice}
-      <div class="row">
+      <div class="row" class:upside={actorUpside}>
         Promotion :
         {#each [["q", "Dame"], ["r", "Tour"], ["b", "Fou"], ["n", "Cavalier"]] as [p, label] (p)}
           <button onclick={() => play(promotionChoice!.from, promotionChoice!.to, p as PieceSymbol)}>{label}</button>
@@ -360,11 +375,18 @@
       </div>
     {/if}
     <div class="row">
-      <button onclick={() => (flipped = !flipped)}>Retourner</button>
+      {#if duo}
+        <div class="layout" role="group" aria-label="Disposition">
+          {#each LAYOUTS as l (l.id)}
+            <button aria-pressed={layout === l.id} title={l.hint} onclick={() => (layout = l.id)}>{l.label}</button>
+          {/each}
+        </div>
+      {/if}
+      {#if !duo || layout !== "tour"}<button onclick={() => (flipped = !flipped)}>Retourner</button>{/if}
     </div>
   </section>
 
-  <section class="panel side">
+  <section class="panel side" class:upside={actorUpside}>
     {#if view.stage === "over" && view.result}
       <h2>Partie terminée</h2>
       <p class="big">{view.result.winner ? `${name(view.result.winner)} gagne` : "Nulle"} — {REASON_LABEL[view.result.reason] ?? view.result.reason}</p>
@@ -538,6 +560,19 @@
 </div>
 
 <style>
+  .upside {
+    transform: rotate(180deg);
+  }
+  .layout {
+    display: flex;
+    flex: 1 1 100%;
+  }
+  .layout button {
+    flex: 1;
+    min-height: 40px;
+    font-size: 0.85rem;
+    padding: 0 6px;
+  }
   .rounds {
     display: grid;
     grid-template-columns: minmax(300px, 600px) minmax(280px, 1fr);
