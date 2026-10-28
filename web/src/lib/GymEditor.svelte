@@ -1,7 +1,8 @@
 <script lang="ts">
   import { countByColor, detectBlobs, findSimilar, inZone, nearestColorName, sampleColor, seedTolerance, type Blob, type Rgb } from "../core/colorDetect";
   import { GRADES, ROUTE_COLORS, routeHex, routeLabel, STYLES } from "../core/gym";
-  import { sectorOf, type Route, type RouteMark, type Sector, type Wall } from "../core/wall";
+  import { autoOrder, clearOrder, sectorOf, toggleOrder, type Route, type RouteMark, type Sector, type Wall } from "../core/wall";
+  import RouteMarks from "./RouteMarks.svelte";
   import { app } from "./appState.svelte";
 
   interface Props {
@@ -28,11 +29,12 @@
   let marks = $state<RouteMark[]>([]);
 
   // Outils sur la photo
-  type Tool = "pipette" | "ajuster" | "depart" | "zone";
+  type Tool = "pipette" | "ajuster" | "depart" | "ordre" | "zone";
   const TOOLS: { id: Tool; label: string; hint: string }[] = [
     { id: "pipette", label: "Pipette", hint: "Touche une prise : toutes les prises de sa couleur sont marquées (blanc, noir et gris compris)." },
     { id: "ajuster", label: "Ajouter / retirer", hint: "Touche la photo pour ajouter une prise, ou une prise marquée pour la retirer." },
     { id: "depart", label: "Départ / top", hint: "Touche une prise marquée : départ, puis top, puis prise ordinaire." },
+    { id: "ordre", label: "Ordre", hint: "Touche les prises dans l'ordre de l'enchaînement : 1, 2, 3… Touche un numéro pour le retirer. Les prises sans numéro restent libres." },
     { id: "zone", label: "Zone", hint: "Fais glisser pour encadrer la voie : seules les prises dans le cadre sont gardées, et la pipette s'y limite." },
   ];
   let tool = $state<Tool>("pipette");
@@ -200,8 +202,12 @@
     color = nearestColorName(rgb);
     colorHex = `#${rgb.map((c) => c.toString(16).padStart(2, "0")).join("")}`;
     // Les départs et le top déjà placés sont gardés s'ils tombent sur une prise retrouvée.
-    const roleAt = (b: Blob) => marks.find((m) => m.role && Math.abs(m.x - b.x) <= b.w / 2 + 0.01 && Math.abs(m.y - b.y) <= b.h / 2 + 0.01)?.role;
-    marks = found.map((b) => ({ x: b.x, y: b.y, ...(roleAt(b) ? { role: roleAt(b) } : {}) }));
+    // Départ, top et rang déjà donnés sont gardés s'ils tombent sur une prise retrouvée.
+    const kept = (b: Blob) => marks.find((m) => (m.role || m.n !== undefined) && Math.abs(m.x - b.x) <= b.w / 2 + 0.01 && Math.abs(m.y - b.y) <= b.h / 2 + 0.01);
+    marks = found.map((b) => {
+      const k = kept(b);
+      return { x: b.x, y: b.y, ...(k?.role ? { role: k.role } : {}), ...(k?.n !== undefined ? { n: k.n } : {}) };
+    });
     message = found.length
       ? `${found.length} prise(s) ${color} marquée(s). Ajuste la tolérance, ou retire les intruses avec « Ajouter / retirer ».`
       : "Aucune prise retrouvée de cette teinte : augmente la tolérance, ou place les prises à la main.";
@@ -238,21 +244,32 @@
       return;
     }
     const near = nearestMark(x, y, rect);
+    if (tool === "ordre") {
+      if (near >= 0) marks = toggleOrder(marks, near);
+      return;
+    }
     if (tool === "depart") {
       if (near < 0) return;
       const next = !marks[near].role ? "depart" : marks[near].role === "depart" ? "top" : undefined;
       // Un seul top par voie.
       marks = marks.map((m, i) =>
-        i === near ? { x: m.x, y: m.y, ...(next ? { role: next } : {}) } : next === "top" && m.role === "top" ? { x: m.x, y: m.y } : m,
+        i === near ? withRole(m, next) : next === "top" && m.role === "top" ? withRole(m, undefined) : m,
       );
       return;
     }
     if (near >= 0) {
-      marks = marks.filter((_, i) => i !== near);
+      // Retirer une prise numérotée fait remonter les suivantes.
+      const renumbered = marks[near].n !== undefined ? toggleOrder(marks, near) : marks;
+      marks = renumbered.filter((_, i) => i !== near);
       return;
     }
     const blob = blobs.find((b) => Math.abs(b.x - x) <= b.w / 2 + 0.01 && Math.abs(b.y - y) <= b.h / 2 + 0.01);
     marks = [...marks, blob ? { x: blob.x, y: blob.y } : { x, y }];
+  }
+
+  function withRole(m: RouteMark, role: RouteMark["role"]): RouteMark {
+    const { role: _old, ...rest } = m;
+    return role ? { ...rest, role } : rest;
   }
 
   function onPointerDown(event: PointerEvent) {
@@ -388,6 +405,12 @@
           <button class="zoom" aria-pressed={zoom} onclick={() => (zoom = !zoom)}>{zoom ? "Réduire" : "Agrandir"}</button>
         </div>
         <p class="hint">{TOOLS.find((t) => t.id === tool)?.hint}</p>
+        {#if tool === "ordre" && marks.length}
+          <div class="row">
+            <button class="small" onclick={() => (marks = autoOrder(marks))}>Numéroter de bas en haut</button>
+            {#if marks.some((m) => m.n !== undefined)}<button class="small" onclick={() => (marks = clearOrder(marks))}>Effacer l'ordre</button>{/if}
+          </div>
+        {/if}
         {#if tool === "pipette" || sampled}
           <label class="field tolerance">
             <span class="tol-head">
@@ -435,11 +458,7 @@
                 style:height={`${Math.abs(zone.y1 - zone.y0) * 100}%`}
               ></span>
             {/if}
-            {#each marks as m, i (i)}
-              <span class="mark" class:role={m.role} style:left={`${m.x * 100}%`} style:top={`${m.y * 100}%`} style:border-color={colorHex ?? "#fff"}
-                >{m.role === "depart" ? "D" : m.role === "top" ? "T" : ""}</span
-              >
-            {/each}
+            <RouteMarks {marks} color={colorHex ?? ROUTE_COLORS.find((c) => c.name === color)?.hex ?? "#fff"} />
           </div>
         </div>
         {#if marks.length}
@@ -506,7 +525,7 @@
     </div>
     {#if photo}
       <p class="hint">
-        {marks.length} prise(s) marquée(s) sur la photo{marks.some((m) => m.role === "depart") ? `, ${marks.filter((m) => m.role === "depart").length} départ(s)` : ""}{marks.some((m) => m.role === "top") ? ", top placé" : ""}.
+        {marks.length} prise(s) marquée(s) sur la photo{marks.some((m) => m.role === "depart") ? `, ${marks.filter((m) => m.role === "depart").length} départ(s)` : ""}{marks.some((m) => m.role === "top") ? ", top placé" : ""}{marks.some((m) => m.n !== undefined) ? `, ${marks.filter((m) => m.n !== undefined).length} dans l'ordre` : ""}.
         {#if marks.length && !marks.some((m) => m.role)}Outil « Départ / top » pour signaler le départ et la sortie.{/if}
       </p>
     {/if}
@@ -530,7 +549,7 @@
           <span class="dot big" style:background={routeHex(r)}></span>
           <div class="info">
             <strong>{routeLabel(r)}</strong>
-            <span class="hint">{r.styles.join(" · ") || "sans style"}{r.marks?.length ? ` · ${r.marks.length} prises` : ""}{r.archived ? " · démontée" : ""}</span>
+            <span class="hint">{r.styles.join(" · ") || "sans style"}{r.marks?.length ? ` · ${r.marks.length} prises` : ""}{r.marks?.some((m) => m.n !== undefined) ? " · ordre imposé" : ""}{r.archived ? " · démontée" : ""}</span>
           </div>
           <div class="actions">
             <button onclick={() => editRoute(r)}>Modifier</button>
@@ -724,31 +743,6 @@
     border-radius: 4px;
     opacity: 0.7;
     pointer-events: none;
-  }
-  .mark {
-    position: absolute;
-    width: 24px;
-    height: 24px;
-    margin: -12px 0 0 -12px;
-    border-radius: 50%;
-    border: 4px solid;
-    box-shadow:
-      0 0 0 2px #fff,
-      0 0 6px rgba(0, 0, 0, 0.6);
-    pointer-events: none;
-    display: grid;
-    place-items: center;
-    font-size: 0.7rem;
-    font-weight: 800;
-    color: #fff;
-    text-shadow: 0 0 3px #000;
-  }
-  .mark.role {
-    width: 30px;
-    height: 30px;
-    margin: -15px 0 0 -15px;
-    font-size: 0.85rem;
-    background: rgba(0, 0, 0, 0.45);
   }
   .chips {
     display: flex;

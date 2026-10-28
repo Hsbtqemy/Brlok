@@ -1,6 +1,7 @@
 <script lang="ts">
   import { routeHex, routeLabel } from "../core/gym";
-  import { routePhoto, sectorOf, type Route, type Wall } from "../core/wall";
+  import { orderedMarks, routePhoto, sectorOf, type Route, type Wall } from "../core/wall";
+  import RouteMarks from "./RouteMarks.svelte";
 
   interface Props {
     wall: Wall;
@@ -34,13 +35,10 @@
             if (img.naturalHeight) ratio = img.naturalWidth / img.naturalHeight;
           }}
         />
-        {#each route.marks ?? [] as m, i (i)}
-          <span class="mark" class:role={m.role} style:left={`${m.x * 100}%`} style:top={`${m.y * 100}%`} style:border-color={routeHex(route)}
-            >{m.role === "depart" ? "D" : m.role === "top" ? "T" : ""}</span
-          >
-        {/each}
+        <RouteMarks marks={route.marks ?? []} color={routeHex(route)} />
       </div>
-      {#if !route.marks?.length}<p class="hint">Les prises de cette voie ne sont pas placées sur la photo.</p>{/if}
+      {#if !route.marks?.length}<p class="hint">Les prises de cette voie ne sont pas placées sur la photo.</p>
+      {:else if orderedMarks(route.marks).length}<p class="hint">Enchaînement imposé : suis les numéros ({orderedMarks(route.marks).length} prises){route.marks.length > orderedMarks(route.marks).length ? ", les autres prises sont libres" : ""}.</p>{/if}
     {/if}
   </div>
 {:else}
@@ -85,28 +83,5 @@
     display: block;
     width: 100%;
     border-radius: 10px;
-  }
-  .mark {
-    position: absolute;
-    width: 26px;
-    height: 26px;
-    margin: -13px 0 0 -13px;
-    border-radius: 50%;
-    border: 4px solid;
-    box-shadow:
-      0 0 0 2px #fff,
-      0 0 6px rgba(0, 0, 0, 0.6);
-    pointer-events: none;
-    display: grid;
-    place-items: center;
-    font-weight: 800;
-    color: #fff;
-    text-shadow: 0 0 3px #000;
-  }
-  .mark.role {
-    width: 34px;
-    height: 34px;
-    margin: -17px 0 0 -17px;
-    background: rgba(0, 0, 0, 0.45);
   }
 </style>

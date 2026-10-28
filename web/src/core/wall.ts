@@ -28,6 +28,51 @@ export interface RouteMark {
   x: number;
   y: number;
   role?: "depart" | "top";
+  /** Rang dans l'enchaînement imposé (1, 2, 3…) ; absent : prise libre. */
+  n?: number;
+}
+
+/**
+ * Ordre des prises : toucher une prise sans numéro lui donne le suivant ; toucher une prise numérotée
+ * lui retire son numéro, et les suivantes remontent d'un cran.
+ */
+export function toggleOrder(marks: readonly RouteMark[], index: number): RouteMark[] {
+  const target = marks[index];
+  if (!target) return [...marks];
+  if (target.n === undefined) {
+    const next = Math.max(0, ...marks.map((m) => m.n ?? 0)) + 1;
+    return marks.map((m, i) => (i === index ? { ...m, n: next } : m));
+  }
+  const removed = target.n;
+  return marks.map((m, i) => {
+    if (i === index) {
+      const { n: _n, ...rest } = m;
+      return rest;
+    }
+    return m.n !== undefined && m.n > removed ? { ...m, n: m.n - 1 } : m;
+  });
+}
+
+/** Numérote toutes les prises de bas en haut ; les départs d'abord, le top en dernier. */
+export function autoOrder(marks: readonly RouteMark[]): RouteMark[] {
+  const rank = (m: RouteMark) => (m.role === "depart" ? 0 : m.role === "top" ? 2 : 1);
+  const sorted = marks.map((m, i) => ({ m, i })).sort((a, b) => rank(a.m) - rank(b.m) || b.m.y - a.m.y || a.m.x - b.m.x);
+  const n = new Map(sorted.map(({ i }, k) => [i, k + 1]));
+  return marks.map((m, i) => ({ ...m, n: n.get(i)! }));
+}
+
+export function clearOrder(marks: readonly RouteMark[]): RouteMark[] {
+  return marks.map(({ n: _n, ...m }) => m);
+}
+
+/** Prises numérotées, dans l'ordre de l'enchaînement. */
+export function orderedMarks(marks: readonly RouteMark[] | undefined): RouteMark[] {
+  return (marks ?? []).filter((m) => m.n !== undefined).sort((a, b) => a.n! - b.n!);
+}
+
+/** Libellé d'une prise sur la photo : son rang, sinon D (départ) ou T (top). */
+export function markLabel(m: RouteMark): string {
+  return m.n !== undefined ? String(m.n) : m.role === "depart" ? "D" : m.role === "top" ? "T" : "";
 }
 
 /** Voie d'un mur de salle (mode salle, MURS.md étape 3). */

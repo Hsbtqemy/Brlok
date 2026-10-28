@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createEmptyWall, joinPhotos, migrateWall, routePhoto, sectorOf, splitPhotos } from "./wall";
+import { autoOrder, clearOrder, createEmptyWall, joinPhotos, markLabel, migrateWall, orderedMarks, routePhoto, sectorOf, splitPhotos, toggleOrder } from "./wall";
 import { duplicateWall, linksOf, newWall, resizeWall, setHold, toggleForbiddenLink, toggleTag } from "./wallEdit";
 
 describe("édition du pan", () => {
@@ -85,5 +85,31 @@ describe("secteurs d'un mur à voies", () => {
     expect(sectorOf(w, r)?.id).toBe("s1");
     expect(sectorOf(w, { ...r, sectorId: "s2" })?.id).toBe("s2");
     expect(sectorOf(w, { ...r, sectorId: "supprimé" })?.id).toBe("s1");
+  });
+});
+
+describe("ordre des prises d'une voie", () => {
+  const marks = [
+    { x: 0.5, y: 0.2, role: "top" as const },
+    { x: 0.4, y: 0.9, role: "depart" as const },
+    { x: 0.6, y: 0.5 },
+    { x: 0.3, y: 0.7 },
+  ];
+
+  it("toucher numérote dans l'ordre, retoucher retire et renumérote", () => {
+    let m = toggleOrder(marks, 1);
+    m = toggleOrder(m, 3);
+    m = toggleOrder(m, 2);
+    expect(m.map((x) => x.n)).toEqual([undefined, 1, 3, 2]);
+    m = toggleOrder(m, 3); // retire le 2 : le 3 devient 2
+    expect(m.map((x) => x.n)).toEqual([undefined, 1, 2, undefined]);
+    expect(orderedMarks(m).map((x) => x.x)).toEqual([0.4, 0.6]);
+  });
+
+  it("de bas en haut : départ d'abord, top en dernier", () => {
+    const m = autoOrder(marks);
+    expect(m.map((x) => x.n)).toEqual([4, 1, 3, 2]);
+    expect(m.map(markLabel)).toEqual(["4", "1", "3", "2"]);
+    expect(clearOrder(m).map(markLabel)).toEqual(["T", "D", "", ""]);
   });
 });

@@ -107,6 +107,10 @@ Outils sur la photo (v2) :
 - **Ajouter / retirer** : retouches prise par prise ;
 - **Départ / top** : toucher une prise marquée la signale comme départ (D), puis top (T) ; affichés partout
   où la voie apparaît (blocs, minuteur grand écran) ;
+- **Ordre** : toucher les prises marquées dans l'ordre de l'enchaînement (1, 2, 3…) ; toucher un numéro le
+  retire et les suivants remontent. « Numéroter de bas en haut » fait tout d'un coup (départs d'abord, top
+  en dernier), à corriger ensuite. Les prises sans numéro restent libres. Une voie numérotée s'affiche avec
+  ses numéros reliés par un tracé (« Enchaînement imposé ») ;
 - **Agrandir** : photo deux fois plus grande, à faire défiler, pour viser juste sur téléphone ;
 - sous la photo, une barre courte (nombre de prises, couleur, cotation, **Créer la voie**) évite de
   descendre jusqu'au formulaire.
