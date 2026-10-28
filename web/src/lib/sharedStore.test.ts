@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { createPlayer, emptyRatingsState, recordBlockAttempt, type RatingsState } from "../core/players";
+import { addFavorite, emptyLibrary, saveTemplate, startRun, type Library } from "../core/library";
 import type { Wall } from "../core/wall";
 import { safeId, SharedStore, type SyncStatus } from "./sharedStore";
 
@@ -48,12 +49,13 @@ const tick = () => new Promise((r) => setTimeout(r, 10));
 
 function setup(db: unknown) {
   (globalThis as unknown as { window: unknown }).window = { claude: { use: async () => db } };
-  const seen = { ratings: null as RatingsState | null, walls: null as Wall[] | null, status: [] as SyncStatus[] };
+  const seen = { ratings: null as RatingsState | null, walls: null as Wall[] | null, library: null as Library | null, status: [] as SyncStatus[] };
   const store = new SharedStore({
     onRatings: (r) => (seen.ratings = r),
     onWalls: (w) => (seen.walls = w),
     onStatus: (s) => seen.status.push(s),
     onLiveGame: () => {},
+    onLibrary: (l) => (seen.library = l),
   });
   return { store, seen };
 }
@@ -70,8 +72,9 @@ describe("stockage partagé", () => {
     const fake = fakeDb();
     const { store, seen } = setup(fake.db);
     let local = createPlayer(emptyRatingsState(), "Alice", "a");
+    const localLibrary = saveTemplate(emptyLibrary(), "Force", { kind: "pan", level: 4, pattern: "uniforme", blocks: 5, holds: 8, variety: true, requiredTags: [], excludedTags: [] });
     local = recordBlockAttempt(local, "a", "default", block, true, "libre", "2026-10-27T10:00:00.000Z").state;
-    await store.connect({ ratings: () => local, walls: () => [wall] });
+    await store.connect({ ratings: () => local, walls: () => [wall], library: () => localLibrary });
     await tick();
     expect(seen.status.at(-1)).toBe("partage");
     expect(fake.docs.has("players/a")).toBe(true);
@@ -81,6 +84,7 @@ describe("stockage partagé", () => {
     expect(seen.ratings?.players.map((p) => p.name)).toEqual(["Alice"]);
     expect(seen.ratings?.attempts).toHaveLength(1);
     expect(seen.walls?.map((w) => w.id)).toEqual(["default"]);
+    expect(seen.library?.templates.map((t) => t.name)).toEqual(["Force"]);
   });
 
   it("ne réimporte pas les données locales d'un autre appareil une fois le stockage initialisé", async () => {
@@ -88,7 +92,7 @@ describe("stockage partagé", () => {
     fake.docs.set("meta/init", { at: "x" });
     const { store, seen } = setup(fake.db);
     const local = createPlayer(emptyRatingsState(), "Bruno", "b");
-    await store.connect({ ratings: () => local, walls: () => [] });
+    await store.connect({ ratings: () => local, walls: () => [], library: emptyLibrary });
     await tick();
     expect(fake.docs.has("players/b")).toBe(false);
     expect(seen.ratings?.players).toEqual([]);
@@ -97,7 +101,7 @@ describe("stockage partagé", () => {
   it("envoie seulement ce qui change et suit les suppressions", async () => {
     const fake = fakeDb();
     const { store, seen } = setup(fake.db);
-    await store.connect({ ratings: () => emptyRatingsState(), walls: () => [] });
+    await store.connect({ ratings: () => emptyRatingsState(), walls: () => [], library: emptyLibrary });
     await tick();
     const s1 = createPlayer(createPlayer(emptyRatingsState(), "Alice", "a"), "Bruno", "b");
     await store.syncRatings(emptyRatingsState(), s1);
@@ -122,7 +126,7 @@ describe("stockage partagé", () => {
     };
     const { store, seen } = setup(fake.db);
     const gym: Wall = { ...wall, id: "salle", name: "Salle", kind: "voies", photo: "data:image/jpeg;base64,AAA" };
-    await store.connect({ ratings: () => emptyRatingsState(), walls: () => [gym] });
+    await store.connect({ ratings: () => emptyRatingsState(), walls: () => [gym], library: emptyLibrary });
     await tick();
     expect(fake.docs.get("walls/salle")?.photo).toBeUndefined();
     expect(fake.docs.get("walls/salle")?.sectors).toEqual([{ id: "s1", name: "Secteur 1" }]);
@@ -146,11 +150,38 @@ describe("stockage partagé", () => {
     expect(fake.docs.has("photos/salle~s2")).toBe(false);
   });
 
+  it("bibliothèque : une liste par document, écrite seulement quand elle change", async () => {
+    const fake = fakeDb();
+    const writes: string[] = [];
+    const set = fake.db.doc;
+    fake.db.doc = (path: string) => {
+      const d = set(path);
+      return { ...d, set: async (data: Record<string, unknown>) => (writes.push(path), d.set(data)) };
+    };
+    const { store, seen } = setup(fake.db);
+    await store.connect({ ratings: () => emptyRatingsState(), walls: () => [], library: emptyLibrary });
+    await tick();
+    const l1 = addFavorite(emptyLibrary(), "default", block, "Bloc").lib;
+    writes.length = 0;
+    await store.syncLibrary(emptyLibrary(), l1);
+    expect(writes).toEqual(["library/favorites"]);
+    const l2 = { ...l1, current: startRun("default", [block]) };
+    writes.length = 0;
+    await store.syncLibrary(l1, l2);
+    expect(writes).toEqual(["library/current"]);
+    await tick();
+    expect(seen.library?.favorites).toHaveLength(1);
+    expect(seen.library?.current?.blocks).toHaveLength(1);
+    await store.syncLibrary(l2, { ...l2, current: null });
+    await tick();
+    expect(seen.library?.current).toBeNull();
+  });
+
   it("reste en local hors page claude.ai", async () => {
     (globalThis as unknown as { window: unknown }).window = {};
     const seen: SyncStatus[] = [];
-    const store = new SharedStore({ onRatings: () => {}, onWalls: () => {}, onStatus: (s) => seen.push(s), onLiveGame: () => {} });
-    await store.connect({ ratings: emptyRatingsState, walls: () => [] });
+    const store = new SharedStore({ onRatings: () => {}, onWalls: () => {}, onStatus: (s) => seen.push(s), onLiveGame: () => {}, onLibrary: () => {} });
+    await store.connect({ ratings: emptyRatingsState, walls: () => [], library: emptyLibrary });
     expect(seen).toEqual(["local"]);
     expect(store.shared).toBe(false);
   });

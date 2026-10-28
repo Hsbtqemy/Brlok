@@ -33,25 +33,46 @@ export interface ClassicOptions {
   holdsPerBlock?: number;
   pattern?: DistributionPattern;
   variety?: boolean;
+  /** Types de prises à inclure : chaque prise en porte au moins un (vide : aucun filtre). */
+  requiredTags?: readonly string[];
+  /** Types de prises exclus : aucune prise n'en porte. */
+  excludedTags?: readonly string[];
+  /** Niveau visé bloc par bloc (modèles de Brlok desktop) ; à défaut, `targetLevel` pour tous. */
+  blockLevels?: readonly number[];
   rng: Rng;
 }
 
 export function generateClassicSession(wall: Wall, options: ClassicOptions): Block[] {
   const { targetLevel, tolerance = 1, blocksCount = 5, holdsPerBlock = 10, pattern = "uniforme", variety = false, rng } = options;
-  const min = clampLevel(targetLevel - tolerance);
-  const max = clampLevel(targetLevel + tolerance);
-  const eligible = wall.holds.filter((h) => h.active && h.level >= min && h.level <= max);
+  const required = options.requiredTags ?? [];
+  const excluded = options.excludedTags ?? [];
+  // Un type à la fois exigé et exclu : contraintes incohérentes, pas de séance (comme Brlok desktop).
+  if (required.some((t) => excluded.includes(t))) return [];
+  const targets = Array.from({ length: blocksCount }, (_, b) => options.blockLevels?.[b] ?? targetLevel);
+  const min = Math.min(...targets.map((t) => clampLevel(t - tolerance)));
+  const max = Math.max(...targets.map((t) => clampLevel(t + tolerance)));
+  const eligible = wall.holds.filter(
+    (h) =>
+      h.active &&
+      h.level >= min &&
+      h.level <= max &&
+      (required.length === 0 || h.tags.some((t) => required.includes(t))) &&
+      !h.tags.some((t) => excluded.includes(t)),
+  );
   if (eligible.length === 0) return [];
 
   const usage = new Map<string, number>(eligible.map((h) => [h.id, 0]));
   const blocks: Block[] = [];
   for (let b = 0; b < blocksCount; b++) {
-    const n = Math.min(holdsPerBlock, eligible.length);
-    const levels = distributionLevels(pattern, n, targetLevel);
+    const target = targets[b];
+    const inRange = eligible.filter((h) => Math.abs(h.level - target) <= tolerance);
+    const pool = inRange.length > 0 ? inRange : eligible;
+    const n = Math.min(holdsPerBlock, pool.length);
+    const levels = distributionLevels(pattern, n, target);
     const chosen: Hold[] = [];
     for (let pos = 0; pos < n; pos++) {
       const req = levels[pos];
-      const free = eligible.filter((h) => !chosen.includes(h));
+      const free = pool.filter((h) => !chosen.includes(h));
       const atLevel = free.filter((h) => Math.abs(h.level - req) <= 1);
       const candidates = atLevel.length > 0 ? atLevel : free;
       if (candidates.length === 0) break;

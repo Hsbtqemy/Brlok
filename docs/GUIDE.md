@@ -46,7 +46,7 @@
 
 | Onglet | À quoi il sert |
 |---|---|
-| **Grimper** | Utiliser un mur : bloc-défi ou voie à la cote voulue, séance, carnet de voies, minuteur |
+| **Grimper** | Utiliser un mur : bloc-défi ou voie à la cote voulue, séance, carnet de voies, minuteur, bibliothèque (favoris, modèles, historique) |
 | **Partie** | Chesscalade : lancer une partie (en étapes), la jouer, la reprendre |
 | **Murs** | Décrire ses murs : créer, photographier, éditer les prises et les voies, importer / exporter |
 | **Joueurs** | Profils, trois cotes, placement, journal des blocs et des parties, sauvegarde, version de l'app |
@@ -173,7 +173,10 @@ cours numéroté.
   - un profil de niveau et une **répartition** (uniforme, progressive, pyramide, régressive, crux central,
     alternance) ;
   - un nombre de prises par bloc ;
-  - une option de variété.
+  - une option de variété ;
+  - des **types de prises** : toucher un type le rend exigé (✓, chaque prise du bloc a au moins un des
+    types exigés), puis exclu (✕, aucune prise de ce type), puis neutre. Les types se donnent dans
+    l'éditeur du pan.
 
 ### Sur un mur à voies
 
@@ -185,21 +188,67 @@ cours numéroté.
   tentée) et des boutons **Réussi / Raté** sur chaque ligne. Le filtre « Pas encore réussies » montre ce
   qui reste à faire.
 
+### La séance en cours
+
+Une séance (de blocs ou de voies) reste là quand on change d'onglet ou qu'on ferme l'app : on la retrouve
+en revenant sur ce mur. Pour chaque bloc ou voie :
+
+- **Réussi / Chute** : le résultat est noté dans la séance, avec ou sans joueur. Avec un joueur, la
+  tentative compte aussi pour les cotes, **une seule fois** : « changer » corrige le résultat de la séance
+  sans recompter la tentative ;
+- **Commentaire** : une note sur le bloc (elle le suit dans l'historique et les favoris) ;
+- **☆ Favori** : garder le bloc ou la voie (toucher encore l'enlève) ;
+- **Modifier la séquence** (pan) : toucher une prise du pan l'ajoute à la fin du bloc, ou la retire si elle
+  y est déjà. La cote estimée suit.
+
+Pour la séance entière :
+
+- **☆ Toute la séance** : tous ses blocs en favoris ;
+- **Recommencer** : les mêmes blocs, résultats remis à zéro ;
+- **Exporter** : en **PDF** (la feuille s'imprime, ou s'enregistre en PDF, avec la grille du pan pour
+  chaque bloc), en **texte**, en **Markdown** ou en **JSON** (au format de Brlok desktop pour un pan) ;
+- **Fin de séance** : la séance va à l'historique.
+
+Lancer une nouvelle séance range d'abord à l'historique celle en cours, si l'on y a noté quelque chose.
+
+### Les modèles de séance
+
+« **Enregistrer ces réglages comme modèle** » garde les réglages de la séance (niveau, répartition, nombre
+de blocs et de prises, variété, types de prises ; pour une salle : cote, répartition, voies, variantes) et
+ceux du **minuteur**. On les reprend ensuite d'un geste avec « Modèle » en haut du formulaire. Un modèle du
+même nom est remplacé. Les modèles de pan et ceux de salle sont séparés.
+
+### La bibliothèque
+
+L'onglet **Bibliothèque** de Grimper réunit :
+
+- les **favoris** du mur affiché : toucher un favori le montre sur le mur, « Grimper » le lance en séance,
+  « Grimper tous les favoris » en fait une séance. Titre et commentaire se modifient. Un favori dont une
+  prise a été retirée du pan (ou dont la voie est démontée) n'est plus proposé ;
+- les **modèles** : utiliser, renommer, supprimer ;
+- l'**historique** des séances terminées (les 100 dernières) : période (7 jours, 30 jours, tout),
+  recherche (mur, prise, voie, commentaire, modèle), « Ce mur seulement ». Chaque séance se déplie (blocs,
+  résultats, commentaires), se **refait**, s'exporte ou se supprime ;
+- l'**import de Brlok desktop** : `favorites.json` (favoris, sur le pan affiché ; les prises absentes du
+  pan sont écartées) ou `templates.json` (modèles). Les favoris d'un pan s'exportent aussi au format
+  desktop.
+
 ### Le minuteur
 
 Il est disponible sur chaque bloc ou voie, et sur une voie touchée dans le carnet :
 
 | Mode | Principe |
 |---|---|
-| **Travail / repos** | 40/20, 50/28… en boucle |
-| **Pyramide** | des durées qui montent puis redescendent |
+| **Travail / repos** | 40/20, 50/28… à chaque round |
+| **Pyramide** | un temps de travail qui augmente à chaque round (repos : la moitié) |
 | **EMOM** | un départ chaque minute |
 | **Chrono** | temps de la voie, avec tes **meilleurs temps** |
 
-Le **grand écran** montre le mur en grand à côté du minuteur, avec des signaux sonore et visuel, et
-enchaîne les blocs de la séance.
+Le **grand écran** montre le mur en grand à côté du minuteur, avec des signaux sonore et visuel.
+« **Enchaîner les blocs** » passe seul au bloc suivant de la séance, et la **pause entre les blocs** (en
+secondes) laisse souffler avant le suivant (« Passer » l'écourte).
 
-Chaque **Réussi / Chute** met à jour ta cote de grimpe et celle du bloc ou de la voie.
+Chaque tentative notée avec un joueur met à jour ta cote de grimpe et celle du bloc ou de la voie.
 
 ---
 
@@ -419,7 +468,8 @@ Les **blocs et les voies ont aussi une cote**, apprise au fil des réussites et 
   grimpe de départ. Il se lance depuis la liste des joueurs et peut se refaire.
 - **Journal des blocs** et **Parties** : l'historique du joueur actif.
 - **Données de l'app** :
-  - **Enregistrer une sauvegarde** : un fichier qui contient tout (murs, photos, joueurs, parties) ;
+  - **Enregistrer une sauvegarde** : un fichier qui contient tout (murs, photos, joueurs, parties, favoris,
+    modèles et historique des séances) ;
   - **Remettre une sauvegarde** : la recharger, par exemple sur un autre appareil ;
   - **Version** : la version de l'app, avec vérification des mises à jour.
 
@@ -455,3 +505,5 @@ Les **blocs et les voies ont aussi une cote**, apprise au fil des réussites et 
 | **Assouplissement** | ce que l'app relâche quand le mur n'offre pas de bloc idéal (tolérance, longueur, forme) |
 | **Pan express / Pan rapide** | pan où chaque case porte une prise de niveau 3, pour jouer tout de suite |
 | **Secteur** | une photo d'un mur à voies, et les voies qui y sont |
+| **Modèle de séance** | réglages d'une séance (et du minuteur) gardés sous un nom, à reprendre d'un geste |
+| **Favori** | bloc ou voie gardé pour être regrimpé ; « Grimper tous les favoris » en fait une séance |

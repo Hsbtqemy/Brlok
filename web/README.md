@@ -62,7 +62,9 @@ Prérequis, une fois : *Settings → Pages → Source : GitHub Actions*.
 - [x] Générateur de blocs-défis Chesscalade (caractère des pièces, cote visée, crux en dernier, assouplissements)
 - [x] Glicko-2 (vérifié sur l'exemple de Glickman)
 - [x] Minuteur (travail/repos 40/20, pyramide, EMOM, chrono et meilleurs temps), grand écran, enchaînement des blocs
-- [ ] Favoris et templates de séance (parité avec Brlok desktop)
+- [x] Favoris, modèles de séance, historique (période, recherche), commentaire et résultat par bloc,
+      séquence modifiable, types de prises exigés ou exclus, pause entre les blocs, export TXT / Markdown /
+      JSON / PDF, import et export des favoris et modèles de Brlok desktop (parité avec Brlok desktop)
 - [x] Profils de joueurs, trois cotes (grimpe, échecs, Chesscalade), cote des blocs, journal
 - [x] Partie Chesscalade en duo, famille D « intrication » : pendule verticale, recharges, coups en suspens,
       verdicts V0–V6, déviation courte/libre, parade, bloc du mat, fatigue, garde-fous §6

@@ -24,7 +24,7 @@
     busy = true;
     message = "";
     try {
-      const backup = makeBackup($state.snapshot(app.walls) as Wall[], $state.snapshot(app.ratings) as RatingsState, app.liveGame);
+      const backup = makeBackup($state.snapshot(app.walls) as Wall[], $state.snapshot(app.ratings) as RatingsState, app.liveGame, app.library);
       const day = new Date().toISOString().slice(0, 10);
       const result = await saveFile(`brlok-sauvegarde-${day}.json`, JSON.stringify(backup));
       message = result === "saved" ? `Sauvegarde enregistrée : ${describeBackup(backup)}.` : "Enregistrement annulé.";
@@ -55,6 +55,7 @@
     app.setWalls(b.walls, b.walls[0]?.id);
     app.setRatings(b.ratings);
     app.saveGame(b.liveGame as LiveGame | null);
+    app.setLibrary(b.library);
     message = `Données remises : ${describeBackup(b)}.`;
     pending = null;
   }
@@ -62,7 +63,7 @@
 
 <h2>Données de l'app</h2>
 <p class="hint">
-  Une sauvegarde contient tout : murs et photos, joueurs, cotes, journal, partie en cours. Pour passer d'un appareil à l'autre, ou
+  Une sauvegarde contient tout : murs et photos, joueurs, cotes, journal, partie en cours, favoris, modèles et historique des séances. Pour passer d'un appareil à l'autre, ou
   de la page claude.ai à l'app installée : enregistre-la ici, puis remets-la là-bas.
 </p>
 <div class="row">

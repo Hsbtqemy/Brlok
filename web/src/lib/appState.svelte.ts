@@ -6,6 +6,7 @@
 import { makeChallengeBlock, type ChallengeOptions } from "../core/challenge";
 import { routeSession, type RouteSessionOptions } from "../core/gym";
 import type { Block } from "../core/generator";
+import type { Library } from "../core/library";
 import { bestTimeKey, recordBlockAttempt, recordGame, recordGameVsEngine, recordTime, routeKey, type AttemptRecord, type BestTime, type RatingsState } from "../core/players";
 import type { Route, Wall } from "../core/wall";
 import type { SavedGame } from "../core/game";
@@ -14,11 +15,13 @@ import { SharedStore, type SyncStatus } from "./sharedStore";
 import {
   loadActivePlayerId,
   loadActiveWallId,
+  loadLibrary,
   loadLiveGame,
   loadRatings,
   loadWalls,
   saveActivePlayerId,
   saveActiveWallId,
+  saveLibrary,
   saveLiveGame,
   saveRatings,
   saveWalls,
@@ -33,6 +36,10 @@ class AppState {
   syncDetail = $state("");
   /** Partie en cours sauvegardée, avec qui joue quoi (identifiants des joueurs). */
   liveGame = $state.raw<LiveGame | null>(loadLiveGame<LiveGame>());
+  /** Favoris, modèles, historique et séance en cours (Brlok classique). */
+  library = $state.raw<Library>(loadLibrary());
+  /** Le stockage du navigateur a refusé la dernière écriture de la bibliothèque (plein ?). */
+  libraryStorageFull = $state(false);
 
   wall = $derived(this.walls.find((w) => w.id === this.activeWallId) ?? this.walls[0]);
   activePlayer = $derived(this.ratings.players.find((p) => p.id === this.activePlayerId) ?? this.ratings.players[0]);
@@ -54,10 +61,14 @@ class AppState {
       this.liveGame = game as LiveGame | null;
       saveLiveGame(game);
     },
+    onLibrary: (library) => {
+      this.library = library;
+      this.libraryStorageFull = !saveLibrary(library);
+    },
   });
 
   constructor() {
-    void this.store.connect({ ratings: () => this.snapshotRatings(), walls: () => $state.snapshot(this.walls) as Wall[] });
+    void this.store.connect({ ratings: () => this.snapshotRatings(), walls: () => $state.snapshot(this.walls) as Wall[], library: () => this.library });
   }
 
   private snapshotRatings(): RatingsState {
@@ -97,6 +108,19 @@ class AppState {
     this.liveGame = game;
     saveLiveGame(game);
     void this.store.saveLiveGame(game as unknown as Record<string, unknown> | null);
+  }
+
+  /** Remplace la bibliothèque (valeur neuve, jamais modifiée sur place). */
+  setLibrary(next: Library) {
+    const prev = this.library;
+    if (next === prev) return;
+    this.library = next;
+    this.libraryStorageFull = !saveLibrary(next);
+    void this.store.syncLibrary(prev, next);
+  }
+
+  updateLibrary(change: (library: Library) => Library) {
+    this.setLibrary(change(this.library));
   }
 
   selectPlayer(id: string | null) {

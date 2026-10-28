@@ -12,9 +12,12 @@
  *   journal/games                parties
  *   journal/best-times           meilleurs temps au chrono
  *   live/current                 partie en cours (pour la reprendre après un rechargement)
+ *   library/favorites            favoris ; library/templates : modèles de séance
+ *   library/history              séances terminées ; library/current : séance en cours
  *   meta/init                    marque la première mise en commun (reprise des données locales)
  */
 import type { Rating } from "../core/glicko2";
+import { emptyLibrary, normalizeLibrary, type Library } from "../core/library";
 import type { AttemptRecord, GameRecord, Player, RatingsState } from "../core/players";
 import { joinPhotos, splitPhotos, type Wall } from "../core/wall";
 
@@ -44,7 +47,7 @@ interface Db {
 
 export type SyncStatus = "local" | "connexion" | "partage" | "erreur";
 
-const COLLECTIONS = ["players", "blocks", "walls", "photos", "journal", "live"] as const;
+const COLLECTIONS = ["players", "blocks", "walls", "photos", "journal", "live", "library"] as const;
 type CollectionName = (typeof COLLECTIONS)[number];
 
 const MONTH_LIMIT = 1000;
@@ -69,6 +72,13 @@ interface Handlers {
   onWalls(walls: Wall[]): void;
   onStatus(status: SyncStatus, detail?: string): void;
   onLiveGame(game: Body | null): void;
+  onLibrary(library: Library): void;
+}
+
+interface Local {
+  ratings: () => RatingsState;
+  walls: () => Wall[];
+  library: () => Library;
 }
 
 export class SharedStore {
@@ -87,6 +97,7 @@ export class SharedStore {
   private games: GameRecord[] = [];
   private liveGame: Body | null = null;
   private bestTimes: RatingsState["bestTimes"] = {};
+  private library: Library = emptyLibrary();
 
   constructor(private readonly handlers: Handlers) {}
 
@@ -95,7 +106,7 @@ export class SharedStore {
   }
 
   /** Se connecte au stockage partagé s'il existe ; sinon reste en local. */
-  async connect(local: { ratings: () => RatingsState; walls: () => Wall[] }): Promise<void> {
+  async connect(local: Local): Promise<void> {
     const claude = (window as unknown as { claude?: { use?: (name: string) => Promise<unknown> } }).claude;
     if (typeof claude?.use !== "function") {
       this.handlers.onStatus("local");
@@ -116,7 +127,7 @@ export class SharedStore {
     }
   }
 
-  private onSnapshot(name: CollectionName, snap: QuerySnap, local: { ratings: () => RatingsState; walls: () => Wall[] }) {
+  private onSnapshot(name: CollectionName, snap: QuerySnap, local: Local) {
     const docs = snap.docs.filter((d) => d.exists).map((d) => ({ id: d.id, body: d.data() ?? {} }));
     switch (name) {
       case "players":
@@ -143,6 +154,16 @@ export class SharedStore {
       case "live":
         this.liveGame = docs.find((d) => d.id === "current")?.body ?? null;
         break;
+      case "library": {
+        const items = (id: string) => docs.find((d) => d.id === id)?.body.items;
+        this.library = normalizeLibrary({
+          favorites: items("favorites"),
+          templates: items("templates"),
+          history: items("history"),
+          current: docs.find((d) => d.id === "current")?.body.run ?? null,
+        });
+        break;
+      }
     }
     if (!snap.metadata.fromCache) this.loaded.add(name);
 
@@ -154,7 +175,7 @@ export class SharedStore {
   }
 
   /** Première connexion complète : reprise des données locales si le stockage partagé est neuf. */
-  private async start(local: { ratings: () => RatingsState; walls: () => Wall[] }) {
+  private async start(local: Local) {
     if (this.ready || !this.db) return;
     this.ready = true;
     try {
@@ -163,9 +184,11 @@ export class SharedStore {
       if (!init.exists && remoteEmpty) {
         const ratings = local.ratings();
         const walls = local.walls();
+        const library = local.library();
         if (ratings.players.length > 0 || walls.length > 0 || ratings.attempts.length > 0) {
           await this.syncRatings({ players: [], blocks: {}, attempts: [], games: [], bestTimes: {} }, ratings);
           await this.syncWalls([], walls);
+          await this.syncLibrary(emptyLibrary(), library);
         }
       }
       if (!init.exists) await this.write("meta/init", { at: new Date().toISOString() });
@@ -173,6 +196,7 @@ export class SharedStore {
       this.emit("players");
       this.emit("walls");
       this.emit("live");
+      this.emit("library");
       this.handlers.onStatus("partage");
     } catch (e) {
       this.handlers.onStatus("erreur", e instanceof Error ? e.message : String((e as { message?: string })?.message ?? e));
@@ -182,6 +206,10 @@ export class SharedStore {
   private emit(name: CollectionName) {
     if (name === "live") {
       this.handlers.onLiveGame(this.liveGame);
+      return;
+    }
+    if (name === "library") {
+      this.handlers.onLibrary(this.library);
       return;
     }
     if (name === "walls") {
@@ -260,6 +288,18 @@ export class SharedStore {
     if (!this.db) return;
     this.liveGame = game;
     await this.write("live/current", game);
+  }
+
+  /** Bibliothèque : un document par liste, écrit seulement quand elle change. */
+  async syncLibrary(prev: Library, next: Library): Promise<void> {
+    if (!this.db) return;
+    const writes: Promise<void>[] = [];
+    for (const key of ["favorites", "templates", "history"] as const) {
+      if (!same(prev[key], next[key])) writes.push(this.write(`library/${key}`, { items: next[key] as unknown as Body[] }));
+    }
+    if (!same(prev.current, next.current)) writes.push(this.write("library/current", { run: (next.current ?? null) as unknown as Body | null }));
+    this.library = next;
+    await Promise.all(writes);
   }
 
   async syncWalls(prev: Wall[], next: Wall[]): Promise<void> {
